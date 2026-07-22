@@ -5,6 +5,7 @@ import { env } from "./env";
 import api from "./routes";
 import { errorHandler } from "./routes/helpers";
 import { startJobs } from "./jobs";
+import { waitForDatabase } from "./db";
 import { runMigrations } from "./migrate";
 import { bootstrap } from "./bootstrap";
 import { configureBot, configureMenuButton } from "./bot/bot";
@@ -34,9 +35,11 @@ async function main() {
     }
   }
 
-  // Create/upgrade the schema, then ensure settings + first CEO exist. This
-  // makes a fresh deploy self-provisioning: set the env vars and it just works,
-  // no manual `db:push` / `seed` step required.
+  // Wait for the database (Railway's private network can lag a few seconds
+  // after deploy), then create/upgrade the schema and ensure settings + first
+  // CEO exist. This makes a fresh deploy self-provisioning: set the env vars
+  // and it just works — no manual `db:push` / `seed` step required.
+  await waitForDatabase();
   await runMigrations();
   const boot = await bootstrap();
   if (boot.ceoCreated) console.log(`👑 Seeded first CEO (Telegram ID ${env.seedCeoTelegramId}).`);
@@ -47,12 +50,19 @@ async function main() {
   // Run the companion bot in-process via long polling when a token is present,
   // so a single deployed service handles both the API and the bot. Set
   // RUN_BOT_IN_PROCESS=0 if you run `npm run bot` as a separate process (only
-  // one long-polling consumer may be active per bot).
+  // one long-polling consumer may be active per bot). A bad/expired token must
+  // never take down the finance API, so bot startup is fully isolated.
   if (bot && env.runBotInProcess) {
-    configureBot();
-    void configureMenuButton();
-    void bot.start();
-    console.log("🤖 Bot started (long polling).");
+    try {
+      configureBot();
+      void configureMenuButton().catch(() => undefined);
+      bot.start().catch((err) => {
+        console.error("[bot] failed to start (API keeps running):", (err as Error).message);
+      });
+      console.log("🤖 Bot started (long polling).");
+    } catch (err) {
+      console.error("[bot] startup error (API keeps running):", (err as Error).message);
+    }
   }
 
   app.listen(env.port, () => {
@@ -62,6 +72,12 @@ async function main() {
     }
   });
 }
+
+// A rejected promise somewhere in the app (e.g. a dropped bot connection)
+// should be logged, not crash the whole service.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
 
 main().catch((err) => {
   console.error(err);
