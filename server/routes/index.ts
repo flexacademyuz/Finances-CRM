@@ -8,6 +8,7 @@ import salariesRouter from "./salaries";
 import dashboardRouter from "./dashboard";
 import pricingRouter from "./pricing";
 import expensesRouter from "./expenses";
+import analyticsRouter from "./analytics";
 
 const api = Router();
 
@@ -25,5 +26,6 @@ api.use(salariesRouter);
 api.use(dashboardRouter);
 api.use(pricingRouter);
 api.use(expensesRouter);
+api.use(analyticsRouter);
 
 export default api;

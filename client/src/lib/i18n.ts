@@ -110,6 +110,19 @@ const dict = {
   showDeleted: { en: "Show deleted", uz: "O'chirilganlarni ko'rsatish" },
   academicYear: { en: "Academic year", uz: "O'quv yili" },
   profile: { en: "Profile", uz: "Profil" },
+  analytics: { en: "Analytics", uz: "Tahlil" },
+  daily: { en: "Daily", uz: "Kunlik" },
+  monthly: { en: "Monthly", uz: "Oylik" },
+  yearly: { en: "Yearly", uz: "Yillik" },
+  average: { en: "Average", uz: "O'rtacha" },
+  transactions: { en: "Transactions", uz: "Tranzaksiyalar" },
+  avgPayment: { en: "Avg payment", uz: "O'rtacha to'lov" },
+  newEnrollments: { en: "New enrollments", uz: "Yangi o'quvchilar" },
+  activeDiscounts: { en: "Active discounts", uz: "Faol chegirmalar" },
+  activeFreezes: { en: "Active freezes", uz: "Faol muzlatishlar" },
+  complianceRate: { en: "Paid on time", uz: "O'z vaqtida to'lagan" },
+  salaryRatio: { en: "Salary/revenue", uz: "Maosh/daromad" },
+  groupCount: { en: "Groups", uz: "Guruhlar" },
 } as const;
 
 export type StringKey = keyof typeof dict;

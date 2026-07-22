@@ -12,6 +12,7 @@ import {
   Clock,
   Receipt,
   TrendingUp,
+  BarChart3,
 } from "lucide-react";
 import type { Role } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -29,6 +30,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/payments", label: "payments", icon: <ClipboardList size={20} /> },
     { href: "/expenses", label: "expenses", icon: <Receipt size={20} /> },
     { href: "/finances", label: "finances", icon: <TrendingUp size={20} /> },
+    { href: "/analytics", label: "analytics", icon: <BarChart3 size={20} /> },
     { href: "/users", label: "users", icon: <UserCog size={20} /> },
   ],
   accountant: [

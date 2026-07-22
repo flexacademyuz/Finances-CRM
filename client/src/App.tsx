@@ -14,6 +14,7 @@ import { ClassesPage } from "./pages/ceo/Classes";
 import { PayrollPage } from "./pages/ceo/Payroll";
 import { UsersPage } from "./pages/ceo/Users";
 import { FinancesPage } from "./pages/ceo/Finances";
+import { AnalyticsPage } from "./pages/ceo/Analytics";
 // Shared / accountant
 import { PaymentsLog } from "./pages/PaymentsLog";
 import { ExpensesPage } from "./pages/Expenses";
@@ -52,6 +53,7 @@ function Routes({ me }: { me: Me }) {
           <Route path="/payments" component={PaymentsLog} />
           <Route path="/expenses" component={ExpensesPage} />
           <Route path="/finances" component={FinancesPage} />
+          <Route path="/analytics" component={AnalyticsPage} />
           <Route path="/users" component={UsersPage} />
           <Route><Redirect to="/" /></Route>
         </Switch>
