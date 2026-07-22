@@ -86,6 +86,7 @@ function GroupModal({
   const [room, setRoom] = useState(group?.room ?? "");
   const [maxStudents, setMaxStudents] = useState(group?.maxStudents ? String(group.maxStudents) : "");
   const [startDate, setStartDate] = useState(group?.startDate ?? "");
+  const [perStudentRate, setPerStudentRate] = useState("");
 
   const body = () => ({
     name,
@@ -99,10 +100,19 @@ function GroupModal({
   });
 
   const save = useMutation({
-    mutationFn: () =>
-      editing
-        ? api(`/api/classes/${group!.id}`, { method: "PATCH", body: body() })
-        : api("/api/classes", { method: "POST", body: body() }),
+    mutationFn: async () => {
+      const saved = editing
+        ? await api<Class>(`/api/classes/${group!.id}`, { method: "PATCH", body: body() })
+        : await api<Class>("/api/classes", { method: "POST", body: body() });
+      // Optionally set the teacher's fixed per-student rate for this group.
+      if (perStudentRate) {
+        await api("/api/teacher-salary-rules", {
+          method: "PUT",
+          body: { groupId: saved.id, fixedSalaryPerStudent: Number(perStudentRate) },
+        });
+      }
+      return saved;
+    },
     onSuccess: onSaved,
   });
 
@@ -141,6 +151,14 @@ function GroupModal({
         </div>
         <Field label="Schedule">
           <Input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="Mon/Wed 18:00" />
+        </Field>
+        <Field label={`${t("teacher")} ${t("perStudentRate")} (UZS)`}>
+          <Input
+            type="number"
+            value={perStudentRate}
+            onChange={(e) => setPerStudentRate(e.target.value)}
+            placeholder="leave blank to keep current"
+          />
         </Field>
         {save.isError && (
           <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>

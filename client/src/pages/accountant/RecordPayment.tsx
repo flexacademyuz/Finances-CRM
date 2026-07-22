@@ -131,7 +131,26 @@ export function RecordPayment() {
         <Card className="space-y-4">
           {preview.data?.alreadyPaid && (
             <div className="rounded-lg bg-status-awaiting/15 px-3 py-2 text-xs text-status-awaiting">
-              ⚠️ This student already has a payment for this month.
+              ⚠️ {t("alreadyPaidMonth")}.
+            </div>
+          )}
+          {preview.data?.frozen && (
+            <div className="rounded-lg bg-status-frozen/15 px-3 py-2 text-xs text-status-frozen">
+              🔵 {t("frozenThisMonth")}.
+            </div>
+          )}
+          {preview.data?.discount && (
+            <div className="space-y-1 rounded-lg bg-status-discount/10 px-3 py-2 text-xs">
+              <div className="font-semibold text-status-discount">
+                🏷️ {preview.data.discount.label} {t("discount")}
+              </div>
+              <div className="text-tg-hint">
+                {t("fullTuition")}: {money(preview.data.fullTuition)} → {t("afterDiscount")}:{" "}
+                <span className="font-medium text-tg-text">{money(preview.data.defaultAmount)}</span>
+              </div>
+              <div className="text-tg-hint">
+                {t("teacherCredit")}: {money(preview.data.teacherCredit)} (unaffected)
+              </div>
             </div>
           )}
           <Field label={`4. ${t("amount")}`}>

@@ -8,9 +8,13 @@ import {
   payments,
   salaryRecords,
   settings,
+  paymentFreezes,
+  discounts,
+  teacherSalaryRules,
   type Role,
   type PaymentEdit,
   type StudentStatus,
+  type DiscountType,
 } from "@shared/schema";
 import { monthKey } from "@shared/date";
 
@@ -333,6 +337,9 @@ export async function recordPayment(input: {
   method: "cash" | "online";
   billingMonth: string;
   recordedBy: string;
+  fullTuitionAmount?: number;
+  discountId?: string | null;
+  teacherCreditAmount?: number;
 }) {
   return db.transaction(async (tx) => {
     const [student] = await tx.select().from(students).where(eq(students.id, input.studentId));
@@ -347,6 +354,11 @@ export async function recordPayment(input: {
         classId: cls.id,
         teacherId: cls.teacherId,
         amount: String(input.amount),
+        fullTuitionAmount:
+          input.fullTuitionAmount != null ? String(input.fullTuitionAmount) : null,
+        discountId: input.discountId ?? null,
+        teacherCreditAmount:
+          input.teacherCreditAmount != null ? String(input.teacherCreditAmount) : null,
         method: input.method,
         billingMonth: input.billingMonth,
         recordedBy: input.recordedBy,
@@ -525,4 +537,135 @@ export async function updateSettings(patch: { gracePeriodDays?: number; currency
 export async function setStudentsStatus(ids: string[], status: StudentStatus) {
   if (ids.length === 0) return;
   await db.update(students).set({ status }).where(inArray(students.id, ids));
+}
+
+/* ─────────────────────────── Payment freezes ───────────────────────── */
+
+export async function createFreeze(input: {
+  studentId: string;
+  groupId: string;
+  freezeFrom: string;
+  freezeTo: string;
+  reason: string;
+  createdBy: string;
+}) {
+  const [f] = await db.insert(paymentFreezes).values(input).returning();
+  return f;
+}
+
+export async function listFreezesForStudent(studentId: string) {
+  return db
+    .select()
+    .from(paymentFreezes)
+    .where(eq(paymentFreezes.studentId, studentId))
+    .orderBy(desc(paymentFreezes.createdAt));
+}
+
+export async function liftFreeze(id: string) {
+  const [f] = await db
+    .update(paymentFreezes)
+    .set({ status: "lifted" })
+    .where(eq(paymentFreezes.id, id))
+    .returning();
+  return f;
+}
+
+export async function getFreezeById(id: string) {
+  const [f] = await db.select().from(paymentFreezes).where(eq(paymentFreezes.id, id));
+  return f;
+}
+
+/** All currently-active freezes (status active), for status recomputation. */
+export async function listActiveFreezes() {
+  return db.select().from(paymentFreezes).where(eq(paymentFreezes.status, "active"));
+}
+
+/* ────────────────────────────── Discounts ──────────────────────────── */
+
+export async function createDiscount(input: {
+  studentId: string;
+  groupId: string;
+  discountType: DiscountType;
+  discountValue: number;
+  validFrom: string;
+  validTo?: string | null;
+  reason: string;
+  createdBy: string;
+}) {
+  const [d] = await db
+    .insert(discounts)
+    .values({ ...input, discountValue: String(input.discountValue) })
+    .returning();
+  return d;
+}
+
+export async function listDiscountsForStudent(studentId: string) {
+  return db
+    .select()
+    .from(discounts)
+    .where(eq(discounts.studentId, studentId))
+    .orderBy(desc(discounts.createdAt));
+}
+
+export async function setDiscountActive(id: string, isActive: boolean) {
+  const [d] = await db
+    .update(discounts)
+    .set({ isActive })
+    .where(eq(discounts.id, id))
+    .returning();
+  return d;
+}
+
+/** Active discounts for a student in a group (most recent first). */
+export async function activeDiscountsFor(studentId: string, groupId: string) {
+  return db
+    .select()
+    .from(discounts)
+    .where(
+      and(
+        eq(discounts.studentId, studentId),
+        eq(discounts.groupId, groupId),
+        eq(discounts.isActive, true),
+      ),
+    )
+    .orderBy(desc(discounts.createdAt));
+}
+
+/* ───────────────────────── Teacher salary rules ────────────────────── */
+
+export async function upsertTeacherSalaryRule(input: {
+  groupId: string;
+  teacherId: string;
+  fixedSalaryPerStudent: number;
+  effectiveFrom: string;
+  createdBy: string;
+}) {
+  const [r] = await db
+    .insert(teacherSalaryRules)
+    .values({ ...input, fixedSalaryPerStudent: String(input.fixedSalaryPerStudent) })
+    .onConflictDoUpdate({
+      target: teacherSalaryRules.groupId,
+      set: {
+        fixedSalaryPerStudent: String(input.fixedSalaryPerStudent),
+        effectiveFrom: input.effectiveFrom,
+        teacherId: input.teacherId,
+      },
+    })
+    .returning();
+  return r;
+}
+
+export async function getSalaryRuleForGroup(groupId: string) {
+  const [r] = await db
+    .select()
+    .from(teacherSalaryRules)
+    .where(eq(teacherSalaryRules.groupId, groupId));
+  return r;
+}
+
+export async function listSalaryRulesForTeacher(teacherId: string) {
+  return db
+    .select()
+    .from(teacherSalaryRules)
+    .where(eq(teacherSalaryRules.teacherId, teacherId));
 }

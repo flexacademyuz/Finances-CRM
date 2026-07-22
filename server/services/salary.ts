@@ -69,6 +69,9 @@ export async function estimateSalary(
       collected: sql<string>`coalesce(sum(${payments.amount}), 0)`,
       cash: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.method} = 'cash'), 0)`,
       online: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.method} = 'online'), 0)`,
+      // Teacher's credited amount is discount-independent (V2 1C). Falls back to
+      // full tuition, then amount paid, for legacy rows without a stored credit.
+      credit: sql<string>`coalesce(sum(coalesce(${payments.teacherCreditAmount}, ${payments.fullTuitionAmount}, ${payments.amount})), 0)`,
     })
     .from(classes)
     .leftJoin(
@@ -90,16 +93,19 @@ export async function estimateSalary(
   let cashTotal = 0;
   let onlineTotal = 0;
   let paidStudentsTotal = 0;
+  let creditTotal = 0;
 
   const breakdown: ClassBreakdown[] = rows.map((r) => {
     const collected = Number(r.collected);
     const cash = Number(r.cash);
     const online = Number(r.online);
     const paidStudents = Number(r.paidStudents);
+    const credit = Number(r.credit);
     collectedTotal += collected;
     cashTotal += cash;
     onlineTotal += online;
     paidStudentsTotal += paidStudents;
+    creditTotal += credit;
     return {
       classId: r.classId,
       className: r.className,
@@ -107,13 +113,16 @@ export async function estimateSalary(
       collected,
       cash,
       online,
-      // Per-class share for percentage/per_student; fixed is not per-class.
-      teacherShare:
-        model === "fixed" ? 0 : applySalaryRule(model, value, collected, paidStudents),
+      // Teacher's earned share for this class: the sum of per-payment credits
+      // (fixed model contributes flat monthly, not per-class).
+      teacherShare: model === "fixed" ? 0 : credit,
     };
   });
 
-  const estimatedSalary = applySalaryRule(model, value, collectedTotal, paidStudentsTotal);
+  // Salary = flat value for the fixed model; otherwise the sum of per-student
+  // teacher credits (which already encode the per-group rate or the teacher's
+  // percentage/per-student rule, applied at payment time — see recordPayment).
+  const estimatedSalary = model === "fixed" ? value : +creditTotal.toFixed(2);
 
   return {
     teacherId,

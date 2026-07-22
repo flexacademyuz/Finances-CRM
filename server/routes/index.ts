@@ -6,6 +6,7 @@ import studentsRouter from "./students";
 import paymentsRouter from "./payments";
 import salariesRouter from "./salaries";
 import dashboardRouter from "./dashboard";
+import pricingRouter from "./pricing";
 
 const api = Router();
 
@@ -21,5 +22,6 @@ api.use(studentsRouter);
 api.use(paymentsRouter);
 api.use(salariesRouter);
 api.use(dashboardRouter);
+api.use(pricingRouter);
 
 export default api;

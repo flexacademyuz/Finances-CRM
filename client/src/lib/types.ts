@@ -58,7 +58,7 @@ export type UserRow = {
 export type DashboardData = {
   month: string;
   revenue: { total: number; cash: number; online: number; count: number };
-  statusCounts: { paid: number; awaiting_payment: number; overdue: number };
+  statusCounts: { paid: number; awaiting_payment: number; overdue: number; frozen: number };
   totalStudents: number;
   payrollObligation: number;
   trend: { month: string; label: string; total: number; cash: number; online: number }[];
@@ -103,5 +103,41 @@ export type PaymentPreview = {
   studentId: string;
   billingMonth: string;
   defaultAmount: number;
+  fullTuition: number;
+  discount: { id: string; type: "percentage" | "fixed"; value: number; label: string } | null;
+  teacherCredit: number;
   alreadyPaid: boolean;
+  frozen: boolean;
+};
+
+export type DiscountRow = {
+  id: string;
+  studentId: string;
+  groupId: string;
+  discountType: "percentage" | "fixed";
+  discountValue: string;
+  validFrom: string;
+  validTo: string | null;
+  reason: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type FreezeRow = {
+  id: string;
+  studentId: string;
+  groupId: string;
+  freezeFrom: string;
+  freezeTo: string;
+  reason: string;
+  status: "active" | "lifted" | "expired";
+  createdAt: string;
+};
+
+export type TeacherSalaryRuleRow = {
+  id: string;
+  groupId: string;
+  teacherId: string;
+  fixedSalaryPerStudent: string;
+  effectiveFrom: string;
 };

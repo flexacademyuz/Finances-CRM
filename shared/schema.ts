@@ -28,8 +28,14 @@ export const studentStatusEnum = pgEnum("student_status", [
   "paid",
   "awaiting_payment",
   "overdue",
+  "frozen",
 ]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "online"]);
+export const discountTypeEnum = pgEnum("discount_type", ["percentage", "fixed"]);
+export const freezeStatusEnum = pgEnum("freeze_status", ["active", "lifted", "expired"]);
+
+export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
+export type FreezeStatus = (typeof freezeStatusEnum.enumValues)[number];
 
 export type Role = (typeof roleEnum.enumValues)[number];
 export type SalaryModel = (typeof salaryModelEnum.enumValues)[number];
@@ -128,7 +134,15 @@ export const payments = pgTable(
     teacherId: uuid("teacher_id")
       .notNull()
       .references(() => teachers.id, { onDelete: "restrict" }),
+    // `amount` is what the student actually paid (amount_paid).
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    // Original tuition before any discount (V2 Change 1C). Null for legacy rows.
+    fullTuitionAmount: numeric("full_tuition_amount", { precision: 14, scale: 2 }),
+    // The discount applied at record time, if any.
+    discountId: uuid("discount_id"),
+    // What the teacher is credited for salary — independent of student discount.
+    // Falls back to fullTuitionAmount (then amount) for legacy rows.
+    teacherCreditAmount: numeric("teacher_credit_amount", { precision: 14, scale: 2 }),
     method: paymentMethodEnum("method").notNull(),
     // First day (YYYY-MM-01) of the month this payment covers.
     billingMonth: date("billing_month").notNull(),
@@ -200,6 +214,84 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Excused absence: while a freeze is active for a student in a group, the
+ * months it covers generate no due/overdue flag and show as "Frozen" (V2 1B).
+ */
+export const paymentFreezes = pgTable(
+  "payment_freezes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    freezeFrom: date("freeze_from").notNull(),
+    freezeTo: date("freeze_to").notNull(),
+    reason: text("reason").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    status: freezeStatusEnum("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byStudent: index("freezes_student_idx").on(t.studentId) }),
+);
+
+/**
+ * Student discount: reduces what the student pays. The teacher's credited
+ * amount is unaffected (V2 1C) — the center absorbs the difference.
+ */
+export const discounts = pgTable(
+  "discounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    discountType: discountTypeEnum("discount_type").notNull(),
+    discountValue: numeric("discount_value", { precision: 14, scale: 2 }).notNull(),
+    validFrom: date("valid_from").notNull(),
+    validTo: date("valid_to"), // null = indefinite
+    reason: text("reason").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byStudent: index("discounts_student_idx").on(t.studentId) }),
+);
+
+/**
+ * Per-group teacher pay rate: the fixed amount a teacher earns per paid student
+ * per month, regardless of student discounts (V2 1C).
+ */
+export const teacherSalaryRules = pgTable(
+  "teacher_salary_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teachers.id, { onDelete: "cascade" }),
+    fixedSalaryPerStudent: numeric("fixed_salary_per_student", { precision: 14, scale: 2 }).notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byGroup: unique("salary_rule_group_uniq").on(t.groupId) }),
+);
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const usersRelations = relations(users, ({ one }) => ({
@@ -238,6 +330,9 @@ export type Student = typeof students.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type SalaryRecord = typeof salaryRecords.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
+export type PaymentFreeze = typeof paymentFreezes.$inferSelect;
+export type Discount = typeof discounts.$inferSelect;
+export type TeacherSalaryRule = typeof teacherSalaryRules.$inferSelect;
 
 /* ───────────────────── Zod validation schemas ────────────────────── */
 
@@ -304,3 +399,30 @@ export const settingsSchema = z.object({
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 export type SalaryRuleInput = z.infer<typeof salaryRuleSchema>;
+
+export const createFreezeSchema = z.object({
+  studentId: z.string().uuid(),
+  groupId: z.string().uuid(),
+  freezeFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  freezeTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.string().min(1),
+});
+
+export const createDiscountSchema = z.object({
+  studentId: z.string().uuid(),
+  groupId: z.string().uuid(),
+  discountType: z.enum(discountTypeEnum.enumValues),
+  discountValue: z.coerce.number().positive(),
+  validFrom: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/),
+  validTo: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/).nullable().optional(),
+  reason: z.string().min(1),
+});
+
+export const teacherSalaryRuleSchema = z.object({
+  groupId: z.string().uuid(),
+  fixedSalaryPerStudent: z.coerce.number().nonnegative(),
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/).optional(),
+});
+
+export type CreateFreezeInput = z.infer<typeof createFreezeSchema>;
+export type CreateDiscountInput = z.infer<typeof createDiscountSchema>;

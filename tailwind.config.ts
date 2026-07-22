@@ -23,6 +23,8 @@ export default {
           paid: "#16a34a",
           awaiting: "#d97706",
           overdue: "#dc2626",
+          frozen: "#0ea5e9",
+          discount: "#8b5cf6",
         },
       },
       borderRadius: {

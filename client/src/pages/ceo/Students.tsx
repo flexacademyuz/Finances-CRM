@@ -7,6 +7,7 @@ import { money } from "../../lib/format";
 import type { StudentRow, Class, TeacherRow } from "../../lib/types";
 import type { StudentStatus } from "@shared/schema";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner, StatusBadge } from "../../components/ui";
+import { StudentActions } from "../../components/StudentActions";
 
 const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overdue"];
 
@@ -54,14 +55,17 @@ export function StudentsPage() {
       ) : students.data?.length ? (
         <div className="space-y-2">
           {students.data.map((s) => (
-            <Card key={s.id} className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{s.fullName}</div>
+            <Card key={s.id} className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate font-semibold">{s.fullName}</div>
                 <div className="text-xs text-tg-hint">
                   {s.className} · {money(s.effectiveFee)}
                 </div>
               </div>
-              <StatusBadge status={s.status} />
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusBadge status={s.status} />
+                <StudentActions student={s} />
+              </div>
             </Card>
           ))}
         </div>

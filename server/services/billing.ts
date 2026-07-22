@@ -1,14 +1,16 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { students, payments } from "@shared/schema";
+import { students, payments, paymentFreezes } from "@shared/schema";
 import { monthKey } from "@shared/date";
-import { getSettings, setStudentsStatus } from "../storage";
+import { getSettings, setStudentsStatus, listActiveFreezes } from "../storage";
+import { monthInRange } from "./pricing";
 import { env } from "../env";
 
 export type StatusBucket = {
   paid: string[];
   awaiting: string[];
   overdue: string[];
+  frozen: string[];
 };
 
 /**
@@ -56,20 +58,41 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     .from(students)
     .where(eq(students.active, true));
 
-  const bucket: StatusBucket = { paid: [], awaiting: [], overdue: [] };
+  // Expire freezes whose end date is fully in the past (before this month).
+  await db
+    .update(paymentFreezes)
+    .set({ status: "expired" })
+    .where(and(eq(paymentFreezes.status, "active"), lt(paymentFreezes.freezeTo, currentMonth)));
+
+  // A student is frozen this month if an active freeze covers it (V2 1B).
+  // Freeze takes priority over awaiting/overdue (but not over an actual payment).
+  const freezes = await listActiveFreezes();
+  const frozenStudentIds = new Set(
+    freezes
+      .filter((f) => monthInRange(currentMonth, f.freezeFrom, f.freezeTo))
+      .map((f) => f.studentId),
+  );
+
+  const bucket: StatusBucket = { paid: [], awaiting: [], overdue: [], frozen: [] };
   for (const r of rows) {
     const paidInAdvance = !!r.paidThroughMonth && r.paidThroughMonth >= currentMonth;
     const hasPaidCurrentMonth = r.hasPayment || paidInAdvance;
-    const status = decideStatus({ hasPaidCurrentMonth, dayOfMonth, gracePeriodDays });
-    if (status === "paid") bucket.paid.push(r.id);
-    else if (status === "overdue") bucket.overdue.push(r.id);
-    else bucket.awaiting.push(r.id);
+    if (hasPaidCurrentMonth) {
+      bucket.paid.push(r.id);
+    } else if (frozenStudentIds.has(r.id)) {
+      bucket.frozen.push(r.id);
+    } else {
+      const status = decideStatus({ hasPaidCurrentMonth, dayOfMonth, gracePeriodDays });
+      if (status === "overdue") bucket.overdue.push(r.id);
+      else bucket.awaiting.push(r.id);
+    }
   }
 
   await Promise.all([
     setStudentsStatus(bucket.paid, "paid"),
     setStudentsStatus(bucket.awaiting, "awaiting_payment"),
     setStudentsStatus(bucket.overdue, "overdue"),
+    setStudentsStatus(bucket.frozen, "frozen"),
   ]);
 
   return bucket;
@@ -87,5 +110,10 @@ export async function listAwaitingAndOverdue(now: Date = new Date()) {
       currentMonth: sql<string>`${currentMonth}`,
     })
     .from(students)
-    .where(and(eq(students.active, true), sql`${students.status} <> 'paid'`));
+    .where(
+      and(
+        eq(students.active, true),
+        sql`${students.status} not in ('paid', 'frozen')`,
+      ),
+    );
 }

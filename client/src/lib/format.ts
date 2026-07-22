@@ -9,6 +9,7 @@ export const statusColor: Record<StudentStatus, string> = {
   paid: "bg-status-paid/15 text-status-paid",
   awaiting_payment: "bg-status-awaiting/15 text-status-awaiting",
   overdue: "bg-status-overdue/15 text-status-overdue",
+  frozen: "bg-status-frozen/15 text-status-frozen",
 };
 
 export function formatDate(iso: string | Date, locale = "en"): string {

@@ -57,7 +57,7 @@ router.get(
       payrollForMonth(month),
     ]);
 
-    const statusCounts = { paid: 0, awaiting_payment: 0, overdue: 0 };
+    const statusCounts = { paid: 0, awaiting_payment: 0, overdue: 0, frozen: 0 };
     for (const r of statusRows) statusCounts[r.status] = Number(r.n);
 
     const trend = await Promise.all(
@@ -132,7 +132,8 @@ router.get(
   asyncHandler(async (req, res) => {
     await recomputeStatuses();
     const all = await listStudents({ activeOnly: true });
-    const filtered = all.filter((s) => s.status !== "paid");
+    // Frozen students are excused — they don't belong in the awaiting/overdue list.
+    const filtered = all.filter((s) => s.status !== "paid" && s.status !== "frozen");
     const { classId, teacherId } = req.query;
     const scoped = filtered.filter(
       (s) =>

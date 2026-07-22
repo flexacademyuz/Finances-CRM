@@ -18,7 +18,7 @@ export function AwaitingPage() {
     queryFn: () => api<StudentRow[]>("/api/awaiting", { query: { classId: classId || undefined } }),
   });
 
-  const order = { overdue: 0, awaiting_payment: 1, paid: 2 } as const;
+  const order = { overdue: 0, awaiting_payment: 1, frozen: 2, paid: 3 } as const;
   const rows = [...(list.data ?? [])].sort((a, b) =>
     sort === "name" ? a.fullName.localeCompare(b.fullName) : order[a.status] - order[b.status],
   );

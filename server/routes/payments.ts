@@ -21,6 +21,7 @@ import {
 } from "../storage";
 import { monthKey, normalizeMonth } from "@shared/date";
 import { notifyPaymentRecorded } from "../bot/notifications";
+import { buildPaymentContext } from "../services/payment-context";
 
 const router = Router();
 
@@ -60,13 +61,17 @@ router.get(
     const student = await getStudentById(req.params.studentId);
     if (!student) return res.status(404).json({ error: "not_found" });
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
-    const fee = await effectiveFee(student.id);
-    const existing = await getActivePaymentForMonth(student.id, month);
+    const ctx = await buildPaymentContext(student.id, month);
     res.json({
       studentId: student.id,
       billingMonth: month,
-      defaultAmount: fee,
-      alreadyPaid: !!existing,
+      // Pre-fill with the discounted amount the student should pay.
+      defaultAmount: ctx.amountToPay,
+      fullTuition: ctx.fullTuition,
+      discount: ctx.discount,
+      teacherCredit: ctx.teacherCredit,
+      alreadyPaid: ctx.alreadyPaid,
+      frozen: ctx.frozen,
     });
   }),
 );
@@ -95,12 +100,19 @@ router.post(
       });
     }
 
+    // Resolve discount + teacher credit for this student/month. The accountant
+    // may override `amount`, but full tuition and teacher credit are derived
+    // server-side so the teacher's pay stays discount-independent (V2 1C).
+    const ctx = await buildPaymentContext(student.id, billingMonth);
     const payment = await recordPayment({
       studentId: student.id,
       amount: input.amount,
       method: input.method,
       billingMonth,
       recordedBy: req.authUser!.id,
+      fullTuitionAmount: ctx.fullTuition,
+      discountId: ctx.discount?.id ?? null,
+      teacherCreditAmount: ctx.teacherCredit,
     });
 
     // Fire-and-forget notification via the companion bot.
