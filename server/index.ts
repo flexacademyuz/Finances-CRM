@@ -66,7 +66,7 @@ async function main() {
   }
 
   app.listen(env.port, () => {
-    console.log(`🚀 Flex Academy Finances API listening on :${env.port}`);
+    console.log(`🚀 Flex Academy Finances API v2.0.0 listening on :${env.port}`);
     if (env.devAuthBypass) {
       console.warn(`⚠️  DEV_AUTH_BYPASS enabled — authenticating as ${env.devTelegramId}`);
     }

@@ -12,8 +12,9 @@ import analyticsRouter from "./analytics";
 
 const api = Router();
 
-// Public health check (no auth) for hosting platforms.
-api.get("/health", (_req, res) => res.json({ ok: true }));
+// Public health check (no auth) for hosting platforms. `version` lets you
+// confirm which build is live: open <your-url>/api/health in a browser.
+api.get("/health", (_req, res) => res.json({ ok: true, version: "2.0.0" }));
 
 // Everything else requires a verified Telegram user.
 api.use(authenticate);

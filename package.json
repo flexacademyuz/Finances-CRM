@@ -1,6 +1,6 @@
 {
   "name": "flex-academy-finances",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Flex Academy — Financial Telegram Mini-App (student payments, teacher salaries, class enrollment, awaiting-payment automation).",
   "license": "MIT",
   "type": "module",
