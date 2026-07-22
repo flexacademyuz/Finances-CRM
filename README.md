@@ -52,23 +52,23 @@ Fill in `.env`:
 | `SEED_CEO_TELEGRAM_ID` | Telegram ID of the first CEO (for the seed script) |
 | `DEV_AUTH_BYPASS` / `DEV_TELEGRAM_ID` | Local-only: skip `initData` verification and act as a given Telegram ID. **Never enable in production.** |
 
-### 2. Create the database schema
+### 2. Database schema + first CEO — automatic on startup
+
+**You normally don't need to run anything by hand.** On boot the server:
+1. applies the SQL migrations in [`drizzle/`](drizzle/) (creating all tables), and
+2. creates the first CEO from `SEED_CEO_TELEGRAM_ID` if that user doesn't exist.
+
+So a fresh deploy is self-provisioning: set the environment variables and start
+it. To find your Telegram ID, message [@userinfobot](https://t.me/userinfobot)
+(or your bot with `/whoami` once it's running) and put it in
+`SEED_CEO_TELEGRAM_ID`. From then on the CEO invites everyone else in-app.
+
+If you prefer to do it explicitly (or run it locally before starting), you can:
 
 ```bash
-npm run db:push        # push the Drizzle schema to Postgres
+npm run db:push   # push schema directly (dev convenience), OR
+npm run seed      # apply migrations + create the first CEO
 ```
-
-### 3. Seed the first CEO
-
-Message your bot with `/whoami` to get your Telegram ID, set `SEED_CEO_TELEGRAM_ID`
-in `.env`, then:
-
-```bash
-npm run seed
-```
-
-This creates the first CEO account and the global settings row. From then on the
-CEO invites everyone else in-app (Users screen).
 
 ### 4. Configure the bot in BotFather
 
@@ -114,7 +114,7 @@ move the scheduled jobs (see `server/jobs.ts`) to an external cron hitting
 2. Set all `.env` variables in the host's environment.
 3. Build command: `npm run build` · Start command: `npm run start`.
 4. Ensure the public URL is HTTPS and matches `WEB_APP_URL`.
-5. Run `npm run db:push` and `npm run seed` once against the production DB.
+5. That's it — the server migrates the schema and seeds the first CEO on boot.
 
 ## Scripts
 

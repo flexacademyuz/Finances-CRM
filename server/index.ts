@@ -4,8 +4,9 @@ import fs from "node:fs";
 import { env } from "./env";
 import api from "./routes";
 import { errorHandler } from "./routes/helpers";
-import { ensureSettings } from "./storage";
 import { startJobs } from "./jobs";
+import { runMigrations } from "./migrate";
+import { bootstrap } from "./bootstrap";
 import { configureBot, configureMenuButton } from "./bot/bot";
 import { bot } from "./bot/client";
 
@@ -33,20 +34,25 @@ async function main() {
     }
   }
 
-  // Ensure settings row + start background jobs.
-  await ensureSettings({
-    gracePeriodDays: env.defaultGracePeriodDays,
-    currency: env.defaultCurrency,
-  });
+  // Create/upgrade the schema, then ensure settings + first CEO exist. This
+  // makes a fresh deploy self-provisioning: set the env vars and it just works,
+  // no manual `db:push` / `seed` step required.
+  await runMigrations();
+  const boot = await bootstrap();
+  if (boot.ceoCreated) console.log(`👑 Seeded first CEO (Telegram ID ${env.seedCeoTelegramId}).`);
+  else console.log(`• CEO seed skipped: ${boot.ceoSkipped}.`);
+
   startJobs();
 
-  // Run the bot in-process via long polling when a token is present. For
-  // production webhook setups, run `npm run bot` separately instead.
-  if (bot && !env.isProd) {
+  // Run the companion bot in-process via long polling when a token is present,
+  // so a single deployed service handles both the API and the bot. Set
+  // RUN_BOT_IN_PROCESS=0 if you run `npm run bot` as a separate process (only
+  // one long-polling consumer may be active per bot).
+  if (bot && env.runBotInProcess) {
     configureBot();
     void configureMenuButton();
     void bot.start();
-    console.log("🤖 Bot started (long polling, dev).");
+    console.log("🤖 Bot started (long polling).");
   }
 
   app.listen(env.port, () => {

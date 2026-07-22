@@ -17,6 +17,9 @@ export const env = {
 
   botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   webAppUrl: optional("WEB_APP_URL", ""),
+  // Run the bot inside the API process (default). Disable if you run the bot
+  // as a separate service to avoid two long-polling consumers.
+  runBotInProcess: optional("RUN_BOT_IN_PROCESS", "1") !== "0",
 
   initDataMaxAgeSeconds: Number(optional("INIT_DATA_MAX_AGE_SECONDS", "86400")),
   devAuthBypass: optional("DEV_AUTH_BYPASS", "0") === "1",
