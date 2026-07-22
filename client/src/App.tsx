@@ -43,6 +43,7 @@ function Routes({ me }: { me: Me }) {
       <Layout role="ceo">
         <Switch>
           <Route path="/" component={CeoDashboard} />
+          <Route path="/record" component={RecordPayment} />
           <Route path="/students" component={StudentsPage} />
           <Route path="/classes" component={ClassesPage} />
           <Route path="/payroll" component={PayrollPage} />
@@ -59,6 +60,8 @@ function Routes({ me }: { me: Me }) {
       <Layout role="accountant">
         <Switch>
           <Route path="/" component={RecordPayment} />
+          <Route path="/students" component={StudentsPage} />
+          <Route path="/groups" component={ClassesPage} />
           <Route path="/payments" component={PaymentsLog} />
           <Route path="/awaiting" component={AwaitingPage} />
           <Route><Redirect to="/" /></Route>

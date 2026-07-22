@@ -21,14 +21,17 @@ type NavItem = { href: string; label: StringKey; icon: ReactNode };
 const NAV: Record<Role, NavItem[]> = {
   ceo: [
     { href: "/", label: "dashboard", icon: <LayoutDashboard size={20} /> },
+    { href: "/record", label: "recordPayment", icon: <Wallet size={20} /> },
     { href: "/students", label: "students", icon: <GraduationCap size={20} /> },
-    { href: "/classes", label: "classes", icon: <BookOpen size={20} /> },
+    { href: "/classes", label: "groups", icon: <BookOpen size={20} /> },
     { href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={20} /> },
-    { href: "/payments", label: "payments", icon: <Wallet size={20} /> },
+    { href: "/payments", label: "payments", icon: <ClipboardList size={20} /> },
     { href: "/users", label: "users", icon: <UserCog size={20} /> },
   ],
   accountant: [
     { href: "/", label: "recordPayment", icon: <Wallet size={20} /> },
+    { href: "/students", label: "students", icon: <GraduationCap size={20} /> },
+    { href: "/groups", label: "groups", icon: <BookOpen size={20} /> },
     { href: "/payments", label: "payments", icon: <ClipboardList size={20} /> },
     { href: "/awaiting", label: "awaiting", icon: <Clock size={20} /> },
   ],
@@ -57,7 +60,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
 
       <main className="flex-1 px-4 pb-24 pt-1">{children}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-md justify-around border-t border-tg-hint/15 bg-tg-bg/95 px-2 py-2 backdrop-blur">
+      <nav className="fixed inset-x-0 bottom-0 z-10 mx-auto flex max-w-md justify-around gap-1 overflow-x-auto border-t border-tg-hint/15 bg-tg-bg/95 px-2 py-2 backdrop-blur">
         {items.map((item) => {
           const active = location === item.href;
           return (
@@ -65,7 +68,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
               key={item.href}
               href={item.href}
               onClick={() => haptic("light")}
-              className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1 text-[10px] font-medium ${
+              className={`flex min-w-[58px] flex-1 shrink-0 flex-col items-center gap-0.5 rounded-lg py-1 text-[10px] font-medium ${
                 active ? "text-tg-link" : "text-tg-hint"
               }`}
             >

@@ -77,6 +77,10 @@ export const classes = pgTable("classes", {
     .notNull()
     .default("0"),
   schedule: text("schedule"),
+  // Group metadata (V2): physical room, capacity, and when the group started.
+  room: text("room"),
+  maxStudents: bigint("max_students", { mode: "number" }),
+  startDate: date("start_date"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -246,12 +250,16 @@ export const insertUserSchema = createInsertSchema(users, {
 export const insertClassSchema = createInsertSchema(classes, {
   name: z.string().min(1),
   defaultFee: z.coerce.number().nonnegative(),
+  maxStudents: z.coerce.number().int().positive().optional(),
 }).pick({
   name: true,
   subject: true,
   teacherId: true,
   defaultFee: true,
   schedule: true,
+  room: true,
+  maxStudents: true,
+  startDate: true,
 });
 
 export const insertStudentSchema = createInsertSchema(students, {

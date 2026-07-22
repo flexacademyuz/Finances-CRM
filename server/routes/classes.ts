@@ -38,6 +38,9 @@ router.post(
       teacherId: input.teacherId,
       defaultFee: input.defaultFee ?? 0,
       schedule: input.schedule ?? null,
+      room: input.room ?? null,
+      maxStudents: input.maxStudents ?? null,
+      startDate: input.startDate ?? null,
     });
     res.status(201).json(created);
   }),
@@ -54,6 +57,9 @@ router.patch(
         teacherId: z.string().uuid().optional(),
         defaultFee: z.coerce.number().nonnegative().optional(),
         schedule: z.string().nullable().optional(),
+        room: z.string().nullable().optional(),
+        maxStudents: z.coerce.number().int().positive().nullable().optional(),
+        startDate: z.string().nullable().optional(),
         active: z.boolean().optional(),
       })
       .parse(req.body);

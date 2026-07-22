@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../../components/ui";
 
+/**
+ * Groups (classes) management. Available to CEO and Accountant: both can create
+ * and edit any group; only the CEO deletes/archives (V2 Change 1A).
+ */
 export function ClassesPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Class | null | "new">(null);
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
   const teachers = useQuery({ queryKey: ["teachers"], queryFn: () => api<TeacherRow[]>("/api/teachers") });
@@ -19,8 +23,8 @@ export function ClassesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("classes")}</h1>
-        <Button onClick={() => setAdding(true)}>
+        <h1 className="text-xl font-bold">{t("groups")}</h1>
+        <Button onClick={() => setEditing("new")}>
           <Plus size={18} /> {t("add")}
         </Button>
       </div>
@@ -35,10 +39,13 @@ export function ClassesPage() {
                 <div className="font-semibold">{c.name}</div>
                 <div className="text-xs text-tg-hint">
                   {teacherName(c.teacherId)} · {money(c.defaultFee)}
+                  {c.room ? ` · ${c.room}` : ""}
                   {c.schedule ? ` · ${c.schedule}` : ""}
                 </div>
               </div>
-              {!c.active && <span className="text-xs text-tg-hint">archived</span>}
+              <button className="text-tg-link" onClick={() => setEditing(c)} aria-label={t("edit")}>
+                <Pencil size={16} />
+              </button>
             </Card>
           ))}
         </div>
@@ -46,56 +53,63 @@ export function ClassesPage() {
         <Empty />
       )}
 
-      <AddClassModal
-        open={adding}
-        onClose={() => setAdding(false)}
-        teachers={teachers.data ?? []}
-        onSaved={() => { setAdding(false); qc.invalidateQueries({ queryKey: ["classes"] }); }}
-      />
+      {editing !== null && (
+        <GroupModal
+          group={editing === "new" ? null : editing}
+          teachers={teachers.data ?? []}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["classes"] }); }}
+        />
+      )}
     </div>
   );
 }
 
-function AddClassModal({
-  open,
-  onClose,
+function GroupModal({
+  group,
   teachers,
+  onClose,
   onSaved,
 }: {
-  open: boolean;
-  onClose: () => void;
+  group: Class | null;
   teachers: TeacherRow[];
+  onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
-  const [subject, setSubject] = useState("");
-  const [teacherId, setTeacherId] = useState("");
-  const [defaultFee, setDefaultFee] = useState("");
-  const [schedule, setSchedule] = useState("");
+  const editing = !!group;
+  const [name, setName] = useState(group?.name ?? "");
+  const [subject, setSubject] = useState(group?.subject ?? "");
+  const [teacherId, setTeacherId] = useState(group?.teacherId ?? "");
+  const [defaultFee, setDefaultFee] = useState(group ? String(group.defaultFee) : "");
+  const [schedule, setSchedule] = useState(group?.schedule ?? "");
+  const [room, setRoom] = useState(group?.room ?? "");
+  const [maxStudents, setMaxStudents] = useState(group?.maxStudents ? String(group.maxStudents) : "");
+  const [startDate, setStartDate] = useState(group?.startDate ?? "");
 
-  const create = useMutation({
+  const body = () => ({
+    name,
+    subject: subject || undefined,
+    teacherId,
+    defaultFee: Number(defaultFee || 0),
+    schedule: schedule || undefined,
+    room: room || undefined,
+    maxStudents: maxStudents ? Number(maxStudents) : undefined,
+    startDate: startDate || undefined,
+  });
+
+  const save = useMutation({
     mutationFn: () =>
-      api("/api/classes", {
-        method: "POST",
-        body: {
-          name,
-          subject: subject || undefined,
-          teacherId,
-          defaultFee: Number(defaultFee || 0),
-          schedule: schedule || undefined,
-        },
-      }),
-    onSuccess: () => {
-      setName(""); setSubject(""); setTeacherId(""); setDefaultFee(""); setSchedule("");
-      onSaved();
-    },
+      editing
+        ? api(`/api/classes/${group!.id}`, { method: "PATCH", body: body() })
+        : api("/api/classes", { method: "POST", body: body() }),
+    onSuccess: onSaved,
   });
 
   return (
-    <Modal open={open} onClose={onClose} title={`${t("add")} — ${t("class")}`}>
-      <div className="space-y-3">
-        <Field label={t("class")}>
+    <Modal open onClose={onClose} title={`${editing ? t("edit") : t("add")} — ${t("groups")}`}>
+      <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+        <Field label={t("groups")}>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Subject / level">
@@ -109,19 +123,32 @@ function AddClassModal({
             ))}
           </Select>
         </Field>
-        <Field label={t("fee")}>
-          <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} />
-        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t("fee")}>
+            <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} />
+          </Field>
+          <Field label="Room">
+            <Input value={room} onChange={(e) => setRoom(e.target.value)} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Max students">
+            <Input type="number" value={maxStudents} onChange={(e) => setMaxStudents(e.target.value)} />
+          </Field>
+          <Field label="Start date">
+            <Input type="date" value={startDate ?? ""} onChange={(e) => setStartDate(e.target.value)} />
+          </Field>
+        </div>
         <Field label="Schedule">
           <Input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="Mon/Wed 18:00" />
         </Field>
-        {create.isError && (
-          <div className="text-sm text-status-overdue">{(create.error as Error).message}</div>
+        {save.isError && (
+          <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>
         )}
         <Button
           className="w-full"
-          disabled={!name || !teacherId || create.isPending}
-          onClick={() => create.mutate()}
+          disabled={!name || !teacherId || save.isPending}
+          onClick={() => save.mutate()}
         >
           {t("save")}
         </Button>
