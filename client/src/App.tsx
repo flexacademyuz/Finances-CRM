@@ -13,8 +13,10 @@ import { StudentsPage } from "./pages/ceo/Students";
 import { ClassesPage } from "./pages/ceo/Classes";
 import { PayrollPage } from "./pages/ceo/Payroll";
 import { UsersPage } from "./pages/ceo/Users";
+import { FinancesPage } from "./pages/ceo/Finances";
 // Shared / accountant
 import { PaymentsLog } from "./pages/PaymentsLog";
+import { ExpensesPage } from "./pages/Expenses";
 import { RecordPayment } from "./pages/accountant/RecordPayment";
 import { AwaitingPage } from "./pages/accountant/Awaiting";
 // Teacher
@@ -48,6 +50,8 @@ function Routes({ me }: { me: Me }) {
           <Route path="/classes" component={ClassesPage} />
           <Route path="/payroll" component={PayrollPage} />
           <Route path="/payments" component={PaymentsLog} />
+          <Route path="/expenses" component={ExpensesPage} />
+          <Route path="/finances" component={FinancesPage} />
           <Route path="/users" component={UsersPage} />
           <Route><Redirect to="/" /></Route>
         </Switch>
@@ -64,6 +68,7 @@ function Routes({ me }: { me: Me }) {
           <Route path="/groups" component={ClassesPage} />
           <Route path="/payments" component={PaymentsLog} />
           <Route path="/awaiting" component={AwaitingPage} />
+          <Route path="/expenses" component={ExpensesPage} />
           <Route><Redirect to="/" /></Route>
         </Switch>
       </Layout>

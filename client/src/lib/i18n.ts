@@ -94,6 +94,22 @@ const dict = {
   active: { en: "Active", uz: "Faol" },
   alreadyPaidMonth: { en: "Already paid this month", uz: "Bu oy to'langan" },
   frozenThisMonth: { en: "This month is frozen (excused)", uz: "Bu oy muzlatilgan" },
+  expenses: { en: "Expenses", uz: "Xarajatlar" },
+  finances: { en: "Finances", uz: "Moliya" },
+  addExpense: { en: "Add expense", uz: "Xarajat qo'shish" },
+  category: { en: "Category", uz: "Kategoriya" },
+  subCategory: { en: "Sub-category", uz: "Kichik kategoriya" },
+  vendor: { en: "Vendor", uz: "Yetkazib beruvchi" },
+  description: { en: "Description", uz: "Izoh" },
+  receiptUrl: { en: "Receipt URL", uz: "Chek havolasi" },
+  bank_transfer: { en: "Bank transfer", uz: "Bank o'tkazmasi" },
+  card: { en: "Card", uz: "Karta" },
+  totalExpenses: { en: "Total expenses", uz: "Jami xarajatlar" },
+  netProfit: { en: "Net profit", uz: "Sof foyda" },
+  revenue: { en: "Revenue", uz: "Daromad" },
+  showDeleted: { en: "Show deleted", uz: "O'chirilganlarni ko'rsatish" },
+  academicYear: { en: "Academic year", uz: "O'quv yili" },
+  profile: { en: "Profile", uz: "Profil" },
 } as const;
 
 export type StringKey = keyof typeof dict;

@@ -141,3 +141,37 @@ export type TeacherSalaryRuleRow = {
   fixedSalaryPerStudent: string;
   effectiveFrom: string;
 };
+
+export type ExpenseRow = {
+  id: string;
+  category: string;
+  subCategory: string | null;
+  vendor: string | null;
+  amount: string;
+  expenseDate: string;
+  month: string;
+  paymentMethod: "cash" | "bank_transfer" | "card";
+  receiptUrl: string | null;
+  description: string | null;
+  recordedBy: string;
+  recorderName: string;
+  isDeleted: boolean;
+  createdAt: string;
+};
+
+export type ExpenseSummary = {
+  month: string;
+  total: number;
+  byCategory: Record<string, number>;
+};
+
+export type FinanceOverview = {
+  startYear: number;
+  label: string;
+  months: { month: string; label: string }[];
+  revenue: number[];
+  expensesByCategory: Record<string, number[]>;
+  totalExpenses: number[];
+  netProfit: number[];
+  yearTotals: { revenue: number; expenses: number; netProfit: number };
+};

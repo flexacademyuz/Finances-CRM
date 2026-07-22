@@ -31,6 +31,11 @@ export const studentStatusEnum = pgEnum("student_status", [
   "frozen",
 ]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "online"]);
+export const expensePaymentMethodEnum = pgEnum("expense_payment_method", [
+  "cash",
+  "bank_transfer",
+  "card",
+]);
 export const discountTypeEnum = pgEnum("discount_type", ["percentage", "fixed"]);
 export const freezeStatusEnum = pgEnum("freeze_status", ["active", "lifted", "expired"]);
 
@@ -292,6 +297,34 @@ export const teacherSalaryRules = pgTable(
   (t) => ({ byGroup: unique("salary_rule_group_uniq").on(t.groupId) }),
 );
 
+/** Center expenses (V2 Change 5). Soft-deleted, never hard-deleted. */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    category: text("category").notNull(),
+    subCategory: text("sub_category"),
+    vendor: text("vendor"),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    expenseDate: date("expense_date").notNull(),
+    // First day (YYYY-MM-01) of the expense's month, for fast grouping.
+    month: date("month").notNull(),
+    paymentMethod: expensePaymentMethodEnum("payment_method").notNull(),
+    receiptUrl: text("receipt_url"),
+    description: text("description"),
+    recordedBy: uuid("recorded_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    isDeleted: boolean("is_deleted").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byMonth: index("expenses_month_idx").on(t.month),
+    byCategory: index("expenses_category_idx").on(t.category),
+  }),
+);
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const usersRelations = relations(users, ({ one }) => ({
@@ -333,6 +366,7 @@ export type Settings = typeof settings.$inferSelect;
 export type PaymentFreeze = typeof paymentFreezes.$inferSelect;
 export type Discount = typeof discounts.$inferSelect;
 export type TeacherSalaryRule = typeof teacherSalaryRules.$inferSelect;
+export type Expense = typeof expenses.$inferSelect;
 
 /* ───────────────────── Zod validation schemas ────────────────────── */
 
@@ -426,3 +460,18 @@ export const teacherSalaryRuleSchema = z.object({
 
 export type CreateFreezeInput = z.infer<typeof createFreezeSchema>;
 export type CreateDiscountInput = z.infer<typeof createDiscountSchema>;
+
+export const createExpenseSchema = z.object({
+  category: z.string().min(1),
+  subCategory: z.string().optional(),
+  vendor: z.string().optional(),
+  amount: z.coerce.number().positive(),
+  expenseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  paymentMethod: z.enum(expensePaymentMethodEnum.enumValues),
+  receiptUrl: z.string().url().optional().or(z.literal("")),
+  description: z.string().optional(),
+});
+
+export const updateExpenseSchema = createExpenseSchema.partial();
+
+export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;

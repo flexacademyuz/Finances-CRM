@@ -11,6 +11,7 @@ import {
   paymentFreezes,
   discounts,
   teacherSalaryRules,
+  expenses,
   type Role,
   type PaymentEdit,
   type StudentStatus,
@@ -668,4 +669,129 @@ export async function listSalaryRulesForTeacher(teacherId: string) {
     .select()
     .from(teacherSalaryRules)
     .where(eq(teacherSalaryRules.teacherId, teacherId));
+}
+
+/* ─────────────────────────────── Expenses ──────────────────────────── */
+
+type ExpMethod = "cash" | "bank_transfer" | "card";
+
+export async function createExpense(input: {
+  category: string;
+  subCategory?: string | null;
+  vendor?: string | null;
+  amount: number;
+  expenseDate: string;
+  month: string;
+  paymentMethod: ExpMethod;
+  receiptUrl?: string | null;
+  description?: string | null;
+  recordedBy: string;
+}) {
+  const [e] = await db
+    .insert(expenses)
+    .values({ ...input, amount: String(input.amount) })
+    .returning();
+  return e;
+}
+
+export type ExpenseFilter = {
+  month?: string;
+  category?: string;
+  subCategory?: string;
+  paymentMethod?: ExpMethod;
+  recordedBy?: string;
+  includeDeleted?: boolean;
+};
+
+export async function listExpenses(filter: ExpenseFilter = {}) {
+  const conds = [];
+  if (!filter.includeDeleted) conds.push(eq(expenses.isDeleted, false));
+  if (filter.month) conds.push(eq(expenses.month, filter.month));
+  if (filter.category) conds.push(eq(expenses.category, filter.category));
+  if (filter.subCategory) conds.push(eq(expenses.subCategory, filter.subCategory));
+  if (filter.paymentMethod) conds.push(eq(expenses.paymentMethod, filter.paymentMethod));
+  if (filter.recordedBy) conds.push(eq(expenses.recordedBy, filter.recordedBy));
+
+  return db
+    .select({
+      id: expenses.id,
+      category: expenses.category,
+      subCategory: expenses.subCategory,
+      vendor: expenses.vendor,
+      amount: expenses.amount,
+      expenseDate: expenses.expenseDate,
+      month: expenses.month,
+      paymentMethod: expenses.paymentMethod,
+      receiptUrl: expenses.receiptUrl,
+      description: expenses.description,
+      recordedBy: expenses.recordedBy,
+      recorderName: users.fullName,
+      isDeleted: expenses.isDeleted,
+      createdAt: expenses.createdAt,
+    })
+    .from(expenses)
+    .innerJoin(users, eq(expenses.recordedBy, users.id))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(expenses.expenseDate));
+}
+
+export async function getExpenseById(id: string) {
+  const [e] = await db.select().from(expenses).where(eq(expenses.id, id));
+  return e;
+}
+
+export async function updateExpense(
+  id: string,
+  patch: Partial<{
+    category: string;
+    subCategory: string | null;
+    vendor: string | null;
+    amount: number;
+    expenseDate: string;
+    month: string;
+    paymentMethod: ExpMethod;
+    receiptUrl: string | null;
+    description: string | null;
+  }>,
+) {
+  const values: Record<string, unknown> = { ...patch, updatedAt: new Date() };
+  if (patch.amount !== undefined) values.amount = String(patch.amount);
+  const [e] = await db.update(expenses).set(values).where(eq(expenses.id, id)).returning();
+  return e;
+}
+
+/** Soft delete — never remove the row (V2 auditability). */
+export async function softDeleteExpense(id: string) {
+  const [e] = await db
+    .update(expenses)
+    .set({ isDeleted: true, updatedAt: new Date() })
+    .where(eq(expenses.id, id))
+    .returning();
+  return e;
+}
+
+/** Current-month category totals for the summary cards. */
+export async function expenseTotalsByCategory(month: string) {
+  return db
+    .select({
+      category: expenses.category,
+      total: sql<string>`coalesce(sum(${expenses.amount}), 0)`,
+    })
+    .from(expenses)
+    .where(and(eq(expenses.month, month), eq(expenses.isDeleted, false)))
+    .groupBy(expenses.category);
+}
+
+/** Per-month, per-category expense totals across a set of months (for grids). */
+export async function expenseMatrix(months: string[]) {
+  if (months.length === 0) return [];
+  return db
+    .select({
+      month: expenses.month,
+      category: expenses.category,
+      total: sql<string>`coalesce(sum(${expenses.amount}), 0)`,
+    })
+    .from(expenses)
+    .where(and(inArray(expenses.month, months), eq(expenses.isDeleted, false)))
+    .groupBy(expenses.month, expenses.category);
 }

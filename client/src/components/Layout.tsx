@@ -10,7 +10,8 @@ import {
   ClipboardList,
   UserCog,
   Clock,
-  Settings as SettingsIcon,
+  Receipt,
+  TrendingUp,
 } from "lucide-react";
 import type { Role } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -26,6 +27,8 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/classes", label: "groups", icon: <BookOpen size={20} /> },
     { href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={20} /> },
     { href: "/payments", label: "payments", icon: <ClipboardList size={20} /> },
+    { href: "/expenses", label: "expenses", icon: <Receipt size={20} /> },
+    { href: "/finances", label: "finances", icon: <TrendingUp size={20} /> },
     { href: "/users", label: "users", icon: <UserCog size={20} /> },
   ],
   accountant: [
@@ -34,6 +37,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/groups", label: "groups", icon: <BookOpen size={20} /> },
     { href: "/payments", label: "payments", icon: <ClipboardList size={20} /> },
     { href: "/awaiting", label: "awaiting", icon: <Clock size={20} /> },
+    { href: "/expenses", label: "expenses", icon: <Receipt size={20} /> },
   ],
   teacher: [
     { href: "/", label: "myClasses", icon: <Users size={20} /> },
