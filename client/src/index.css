@@ -2,15 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/* V2 design system tokens (Change 3). Light by default; a dark variant follows
+   the OS / Telegram color scheme. The deep-indigo sidebar is dark in both. */
 :root {
-  /* Fallbacks; overwritten at runtime from Telegram themeParams. */
-  --tg-bg: #ffffff;
-  --tg-secondary-bg: #f1f3f5;
-  --tg-text: #111418;
-  --tg-hint: #8a949e;
-  --tg-link: #2481cc;
-  --tg-button: #2481cc;
-  --tg-button-text: #ffffff;
+  --bg: #f8fafc; /* slate-50 */
+  --surface: #ffffff;
+  --border: #e2e8f0; /* slate-200 */
+  --text: #1e293b; /* slate-800 */
+  --text-muted: #64748b; /* slate-500 */
+  --primary: #4f46e5; /* indigo-600 */
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f172a; /* slate-900 */
+  --surface: #1e293b; /* slate-800 */
+  --border: #334155; /* slate-700 */
+  --text: #f1f5f9; /* slate-100 */
+  --text-muted: #94a3b8; /* slate-400 */
+  --primary: #818cf8; /* indigo-400 */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --primary: #818cf8;
+  }
 }
 
 html,
@@ -21,30 +41,32 @@ body,
 
 body {
   margin: 0;
-  background: var(--tg-bg);
-  color: var(--tg-text);
+  background: var(--bg);
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 
 @layer components {
   .card {
-    @apply bg-tg-secondary-bg rounded-card p-4;
+    @apply rounded-card border border-border bg-surface p-4 shadow-card transition-shadow;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition active:scale-[0.98] disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50;
   }
   .btn-primary {
-    background: var(--tg-button);
-    color: var(--tg-button-text);
+    @apply bg-primary text-white shadow-sm hover:-translate-y-px hover:brightness-110;
   }
   .btn-ghost {
-    @apply bg-tg-secondary-bg text-tg-text;
+    @apply bg-surface text-text ring-1 ring-border hover:bg-bg;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:brightness-110;
   }
   .input {
-    @apply w-full rounded-xl bg-tg-secondary-bg px-3.5 py-2.5 text-tg-text outline-none ring-1 ring-transparent focus:ring-tg-link;
+    @apply w-full rounded-btn border border-border bg-surface px-3.5 py-2.5 text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30;
   }
   .label {
-    @apply mb-1.5 block text-sm font-medium text-tg-hint;
+    @apply mb-1.5 block text-sm font-medium text-muted;
   }
 }

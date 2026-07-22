@@ -41,14 +41,14 @@ export function CeoDashboard() {
       </Card>
 
       <div className="flex gap-3">
-        <Stat label={t("paid")} value={data.statusCounts.paid} />
-        <Stat label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} />
-        <Stat label={t("overdue")} value={data.statusCounts.overdue} />
+        <Stat label={t("paid")} value={data.statusCounts.paid} accent="accent" />
+        <Stat label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} accent="warning" />
+        <Stat label={t("overdue")} value={data.statusCounts.overdue} accent="danger" />
       </div>
 
       <div className="flex gap-3">
-        <Stat label={t("totalStudents")} value={data.totalStudents} />
-        <Stat label={t("payrollObligation")} value={money(data.payrollObligation)} />
+        <Stat label={t("totalStudents")} value={data.totalStudents} accent="primary" />
+        <Stat label={t("payrollObligation")} value={money(data.payrollObligation)} accent="discount" />
       </div>
 
       <Card>

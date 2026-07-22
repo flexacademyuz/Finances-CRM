@@ -31,24 +31,14 @@ declare global {
 
 export const tg = (): TelegramWebApp | undefined => window.Telegram?.WebApp;
 
-const THEME_MAP: Record<string, string> = {
-  bg_color: "--tg-bg",
-  secondary_bg_color: "--tg-secondary-bg",
-  text_color: "--tg-text",
-  hint_color: "--tg-hint",
-  link_color: "--tg-link",
-  button_color: "--tg-button",
-  button_text_color: "--tg-button-text",
-};
-
+/**
+ * The V2 design system uses a fixed indigo brand palette rather than Telegram's
+ * per-client theme colors, so we only mirror the light/dark *scheme* onto the
+ * root (our tokens in index.css handle the actual colors).
+ */
 function applyTheme() {
-  const params = tg()?.themeParams ?? {};
-  const root = document.documentElement;
-  for (const [tgKey, cssVar] of Object.entries(THEME_MAP)) {
-    const value = params[tgKey];
-    if (value) root.style.setProperty(cssVar, value);
-  }
-  root.dataset.theme = tg()?.colorScheme ?? "light";
+  const scheme = tg()?.colorScheme;
+  if (scheme) document.documentElement.dataset.theme = scheme;
 }
 
 export function initTelegram() {
