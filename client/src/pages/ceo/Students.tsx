@@ -101,10 +101,15 @@ function AddStudentModal({
   const [classId, setClassId] = useState("");
   const [monthlyFee, setMonthlyFee] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [markPaid, setMarkPaid] = useState(false);
+  const [payMethod, setPayMethod] = useState<"cash" | "online">("cash");
+
+  const classFee = classes.find((c) => c.id === classId)?.defaultFee;
+  const payAmount = Number(monthlyFee) || Number(classFee) || 0;
 
   const create = useMutation({
-    mutationFn: () =>
-      api("/api/students", {
+    mutationFn: async () => {
+      const student = await api<{ id: string }>("/api/students", {
         method: "POST",
         body: {
           fullName,
@@ -113,10 +118,20 @@ function AddStudentModal({
           monthlyFee: monthlyFee ? Number(monthlyFee) : undefined,
           enrolledAt: startDate || undefined,
         },
-      }),
+      });
+      // Optionally record the first month's payment in the same step.
+      if (markPaid && payAmount > 0) {
+        await api("/api/payments", {
+          method: "POST",
+          body: { studentId: student.id, amount: payAmount, method: payMethod },
+        });
+      }
+      return student;
+    },
     onSuccess: () => {
       setFullName(""); setPhone(""); setClassId(""); setMonthlyFee("");
       setStartDate(new Date().toISOString().slice(0, 10));
+      setMarkPaid(false); setPayMethod("cash");
       onSaved();
     },
   });
@@ -149,6 +164,32 @@ function AddStudentModal({
             onChange={(e) => setMonthlyFee(e.target.value)}
           />
         </Field>
+
+        {/* Optional: record the first month's payment right away */}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={markPaid} onChange={(e) => setMarkPaid(e.target.checked)} />
+          {t("markFirstPaid")}
+        </label>
+        {markPaid && (
+          <div className="rounded-btn border border-border p-3">
+            <div className="mb-2 text-sm text-tg-hint">
+              {t("amount")}: <span className="figure font-semibold text-tg-text">{payAmount.toLocaleString()} UZS</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["cash", "online"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPayMethod(m)}
+                  className={`btn ${payMethod === m ? "btn-primary" : "btn-ghost"}`}
+                >
+                  {t(m)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {create.isError && (
           <div className="text-sm text-status-overdue">{(create.error as Error).message}</div>
         )}

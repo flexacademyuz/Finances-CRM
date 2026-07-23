@@ -32,6 +32,7 @@ const dict = {
   startDate: { en: "Start date", uz: "Boshlanish sanasi" },
   studentProfile: { en: "Student profile", uz: "O'quvchi profili" },
   back: { en: "Back", uz: "Orqaga" },
+  markFirstPaid: { en: "First month already paid", uz: "Birinchi oy to'langan" },
   paidThrough: { en: "Paid through", uz: "To'langan (gacha)" },
   nextPayment: { en: "Next payment due", uz: "Keyingi to'lov" },
   monthsEnrolled: { en: "Months enrolled", uz: "O'qigan oylar" },

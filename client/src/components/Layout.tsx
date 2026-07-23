@@ -60,8 +60,14 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
   const [drawer, setDrawer] = useState(false);
   const items = NAV[role];
 
-  const current = items.find((i) => i.href === location) ?? items[0];
-  const title = t(current.label);
+  // Title from the matching nav item, with sensible fallbacks for detail pages.
+  let titleKey = items.find((i) => i.href === location)?.label;
+  if (!titleKey) {
+    if (location.startsWith("/class")) titleKey = "groups";
+    else if (location.startsWith("/student")) titleKey = "students";
+    else titleKey = items[0].label;
+  }
+  const title = t(titleKey);
 
   const nav = (
     <SidebarContent

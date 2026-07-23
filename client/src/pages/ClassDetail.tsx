@@ -124,6 +124,7 @@ export function ClassDetail() {
         <AddStudentModal
           classId={cls.id}
           className={cls.name}
+          defaultFee={cls.defaultFee}
           onClose={() => setAdding(false)}
           onSaved={() => { setAdding(false); qc.invalidateQueries({ queryKey: ["class-ledger", classId] }); }}
         />
@@ -155,11 +156,13 @@ function PaidCell({ state }: { state: "paid" | "unpaid" | "frozen" }) {
 function AddStudentModal({
   classId,
   className,
+  defaultFee,
   onClose,
   onSaved,
 }: {
   classId: string;
   className: string;
+  defaultFee: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -168,10 +171,14 @@ function AddStudentModal({
   const [phone, setPhone] = useState("");
   const [monthlyFee, setMonthlyFee] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [markPaid, setMarkPaid] = useState(false);
+  const [payMethod, setPayMethod] = useState<"cash" | "online">("cash");
+
+  const payAmount = Number(monthlyFee) || Number(defaultFee) || 0;
 
   const create = useMutation({
-    mutationFn: () =>
-      api("/api/students", {
+    mutationFn: async () => {
+      const student = await api<{ id: string }>("/api/students", {
         method: "POST",
         body: {
           fullName,
@@ -180,7 +187,15 @@ function AddStudentModal({
           monthlyFee: monthlyFee ? Number(monthlyFee) : undefined,
           enrolledAt: startDate || undefined,
         },
-      }),
+      });
+      if (markPaid && payAmount > 0) {
+        await api("/api/payments", {
+          method: "POST",
+          body: { studentId: student.id, amount: payAmount, method: payMethod },
+        });
+      }
+      return student;
+    },
     onSuccess: onSaved,
   });
 
@@ -199,6 +214,31 @@ function AddStudentModal({
         <Field label={`${t("fee")} (optional)`}>
           <Input type="number" placeholder="class default" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} />
         </Field>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={markPaid} onChange={(e) => setMarkPaid(e.target.checked)} />
+          {t("markFirstPaid")}
+        </label>
+        {markPaid && (
+          <div className="rounded-btn border border-border p-3">
+            <div className="mb-2 text-sm text-tg-hint">
+              {t("amount")}: <span className="figure font-semibold text-tg-text">{payAmount.toLocaleString()} UZS</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["cash", "online"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPayMethod(m)}
+                  className={`btn ${payMethod === m ? "btn-primary" : "btn-ghost"}`}
+                >
+                  {t(m)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {create.isError && (
           <div className="text-sm text-status-overdue">{(create.error as Error).message}</div>
         )}
