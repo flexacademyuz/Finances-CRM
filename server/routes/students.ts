@@ -55,7 +55,7 @@ router.get(
     const todayIso = now.toISOString().slice(0, 10);
     const isFrozenNow = activeFreezes.some((f) => todayIso >= f.freezeFrom && todayIso <= f.freezeTo);
     let frozenDueCount = 0;
-    for (let k = 1; k <= monthsElapsed; k++) {
+    for (let k = 0; k <= monthsElapsed; k++) {
       const due = addMonths(start, k).toISOString().slice(0, 10);
       if (activeFreezes.some((f) => due >= f.freezeFrom && due <= f.freezeTo)) frozenDueCount++;
     }
@@ -84,9 +84,10 @@ router.get(
         paymentsMade,
         effectiveFee: feeVal,
         currency,
-        // Date the student is paid up to, and when the next payment is due.
+        // Advance billing: `paymentsMade` payments cover through start + N months,
+        // and the next payment is due on that same date (paid up front).
         paidThrough: addMonths(start, paymentsMade).toISOString().slice(0, 10),
-        nextDueDate: addMonths(start, paymentsMade + 1).toISOString().slice(0, 10),
+        nextDueDate: addMonths(start, paymentsMade).toISOString().slice(0, 10),
         status,
       },
       payments,

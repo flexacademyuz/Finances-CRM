@@ -89,10 +89,10 @@ export function Stat({
   return (
     <Card className={twMerge("flex-1", accent && `border-l-4 ${ACCENTS[accent]}`)}>
       <div className="flex items-start justify-between">
-        <div className="text-xs text-muted">{label}</div>
+        <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
         {icon}
       </div>
-      <div className="mt-1 text-xl font-bold">{value}</div>
+      <div className="figure mt-1 text-xl font-bold">{value}</div>
       {sub != null && <div className="mt-0.5 text-xs text-muted">{sub}</div>}
     </Card>
   );

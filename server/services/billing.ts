@@ -27,19 +27,19 @@ export function decideStatus(args: {
 }
 
 /**
- * Decide a student's status anchored to THEIR start date (V2 change): each
- * student owes one payment per whole month elapsed since they started. They are
- * only flagged once a full month has passed from their start date, and the
- * awaiting → overdue escalation is measured from each monthly anniversary.
+ * Decide a student's status anchored to THEIR start date, billed IN ADVANCE:
+ * the first payment is due on the start date (paying up front for the first
+ * month), and each subsequent payment is due on the monthly anniversary. So a
+ * student who starts on the 23rd owes again on the 23rd of each month.
  *
- *  - hasn't reached their first monthly due date       → "not_due"
- *  - paid up (payments >= months owed)                 → "paid"
- *  - behind, within the grace period after the due day → "awaiting_payment"
- *  - behind, past the grace period                     → "overdue"
+ *  - start date is in the future                       → "not_due"
+ *  - paid up / paid in advance                         → "paid"
+ *  - a payment is due, within the grace period         → "awaiting_payment"
+ *  - a payment is due, past the grace period           → "overdue"
  *  - a freeze currently covers today                   → "frozen"
  *
- * `frozenDueCount` = how many of the elapsed monthly due dates fall inside a
- * freeze window, so excused months don't count as owed.
+ * Payment k (0-indexed) is due on start + k months. By today, months-elapsed+1
+ * payments are due. `frozenDueCount` excuses due dates that fall in a freeze.
  */
 export function decideStudentStatus(args: {
   startDate: string; // YYYY-MM-DD
@@ -52,19 +52,18 @@ export function decideStudentStatus(args: {
   const start = parseDate(args.startDate);
   const startMidnight = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
   const todayMidnight = Date.UTC(args.today.getUTCFullYear(), args.today.getUTCMonth(), args.today.getUTCDate());
-  if (todayMidnight < startMidnight) return "not_due"; // hasn't started yet
+  if (todayMidnight < startMidnight) return "not_due"; // enrolment starts later
 
   if (args.isFrozenNow) return "frozen";
 
   const monthsElapsed = fullMonthsBetween(start, args.today);
-  const owed = Math.max(0, monthsElapsed - (args.frozenDueCount ?? 0));
+  // Payments due so far = one at the start + one per elapsed month.
+  const owed = Math.max(0, monthsElapsed + 1 - (args.frozenDueCount ?? 0));
 
-  if (args.paymentsMade >= owed) {
-    return owed === 0 && args.paymentsMade === 0 ? "not_due" : "paid";
-  }
+  if (args.paymentsMade >= owed) return "paid";
 
-  // Behind by at least one payment: escalate based on the oldest unpaid due date.
-  const oldestUnpaidDue = addMonths(start, args.paymentsMade + 1);
+  // A payment is due. Escalate based on the oldest unpaid due date.
+  const oldestUnpaidDue = addMonths(start, args.paymentsMade);
   const daysLate = daysBetween(oldestUnpaidDue, args.today);
   return daysLate > args.gracePeriodDays ? "overdue" : "awaiting_payment";
 }
@@ -125,11 +124,11 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     const studentFreezes = freezesByStudent.get(r.id) ?? [];
     const isFrozenNow = studentFreezes.some((f) => todayIso >= f.from && todayIso <= f.to);
 
-    // Count elapsed monthly due dates that fall inside a freeze window.
+    // Count due dates (start + 0..monthsElapsed) that fall inside a freeze.
     const start = parseDate(r.startDate);
     const monthsElapsed = fullMonthsBetween(start, now);
     let frozenDueCount = 0;
-    for (let k = 1; k <= monthsElapsed; k++) {
+    for (let k = 0; k <= monthsElapsed; k++) {
       const dueIso = addMonths(start, k).toISOString().slice(0, 10);
       if (studentFreezes.some((f) => dueIso >= f.from && dueIso <= f.to)) frozenDueCount++;
     }

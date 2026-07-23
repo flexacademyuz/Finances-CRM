@@ -10,7 +10,7 @@ import type { StudentStatus } from "@shared/schema";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner, StatusBadge } from "../../components/ui";
 import { StudentActions } from "../../components/StudentActions";
 
-const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overdue"];
+const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overdue", "frozen", "not_due"];
 
 export function StudentsPage() {
   const { t } = useI18n();

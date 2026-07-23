@@ -28,8 +28,8 @@ export function CeoDashboard() {
       <h1 className="text-xl font-bold">{t("dashboard")}</h1>
 
       <Card>
-        <div className="text-xs text-tg-hint">{t("totalRevenue")}</div>
-        <div className="mt-1 text-3xl font-bold">{money(data.revenue.total)}</div>
+        <div className="text-xs uppercase tracking-wide text-tg-hint">{t("totalRevenue")}</div>
+        <div className="figure mt-1 text-3xl font-bold text-primary">{money(data.revenue.total)}</div>
         <div className="mt-2 flex gap-4 text-sm">
           <span className="text-tg-hint">
             {t("cash")}: <span className="font-semibold text-tg-text">{money(data.revenue.cash)}</span>

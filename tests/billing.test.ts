@@ -53,63 +53,61 @@ describe("decideStatus — monthly billing cycle", () => {
   });
 });
 
-/** Per-student, start-date-anchored billing (each student billed from their start). */
-describe("decideStudentStatus — anchored to start date", () => {
+/** Per-student billing, paid IN ADVANCE from each student's start date. */
+describe("decideStudentStatus — advance billing from start date", () => {
   const grace = 5;
   const d = (s: string) => parseDate(s);
 
-  it("a brand-new student is not due (no flag in the first month)", () => {
+  it("a future start date is not due yet", () => {
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-07-10"), gracePeriodDays: grace, paymentsMade: 0 }),
-    ).toBe("not_due");
-    expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-07-30"), gracePeriodDays: grace, paymentsMade: 0 }),
+      decideStudentStatus({ startDate: "2026-08-01", today: d("2026-07-23"), gracePeriodDays: grace, paymentsMade: 0 }),
     ).toBe("not_due");
   });
 
-  it("becomes awaiting on the monthly anniversary when unpaid", () => {
+  it("the first payment is due on the start date (pay up front)", () => {
+    // Starts 23 Jul, no payment yet → awaiting from day one (within grace).
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-08-10"), gracePeriodDays: grace, paymentsMade: 0 }),
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-07-23"), gracePeriodDays: grace, paymentsMade: 0 }),
     ).toBe("awaiting_payment");
-  });
-
-  it("becomes overdue past the grace period after the anniversary", () => {
+    // Past the grace period, still unpaid → overdue.
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-08-16"), gracePeriodDays: grace, paymentsMade: 0 }),
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-07-29"), gracePeriodDays: grace, paymentsMade: 0 }),
     ).toBe("overdue");
-    // Exactly at the grace boundary is still awaiting.
-    expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-08-15"), gracePeriodDays: grace, paymentsMade: 0 }),
-    ).toBe("awaiting_payment");
   });
 
-  it("is paid when payments cover the months elapsed (incl. paid in advance)", () => {
+  it("after paying the first month, is paid until the next anniversary", () => {
+    // Paid once (covers 23 Jul → 23 Aug). Mid-cycle → paid.
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-08-20"), gracePeriodDays: grace, paymentsMade: 1 }),
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-08-10"), gracePeriodDays: grace, paymentsMade: 1 }),
     ).toBe("paid");
+    // On the next anniversary (23 Aug), the second payment is due → awaiting.
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-08-20"), gracePeriodDays: grace, paymentsMade: 3 }),
-    ).toBe("paid");
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-08-23"), gracePeriodDays: grace, paymentsMade: 1 }),
+    ).toBe("awaiting_payment");
+    // Past grace on the second cycle → overdue.
+    expect(
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-08-30"), gracePeriodDays: grace, paymentsMade: 1 }),
+    ).toBe("overdue");
   });
 
-  it("two months in with one payment is behind again (next anniversary)", () => {
+  it("paying ahead keeps the student paid", () => {
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-09-10"), gracePeriodDays: grace, paymentsMade: 1 }),
-    ).toBe("awaiting_payment");
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-07-23"), gracePeriodDays: grace, paymentsMade: 2 }),
+    ).toBe("paid");
   });
 
   it("an active freeze wins over everything", () => {
     expect(
-      decideStudentStatus({ startDate: "2026-07-10", today: d("2026-09-20"), gracePeriodDays: grace, paymentsMade: 0, isFrozenNow: true }),
+      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-09-20"), gracePeriodDays: grace, paymentsMade: 0, isFrozenNow: true }),
     ).toBe("frozen");
   });
 
   it("excused (frozen) due dates don't count as owed", () => {
-    // 2 months elapsed, 1 due date frozen, 1 payment → paid up.
+    // 1 month elapsed → 2 due dates; 1 excused by a freeze; 1 payment → paid up.
     expect(
       decideStudentStatus({
-        startDate: "2026-07-10",
-        today: d("2026-09-12"),
+        startDate: "2026-07-23",
+        today: d("2026-08-25"),
         gracePeriodDays: grace,
         paymentsMade: 1,
         frozenDueCount: 1,

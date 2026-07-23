@@ -2,34 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* V2 design system tokens (Change 3). Light by default; a dark variant follows
-   the OS / Telegram color scheme. The deep-indigo sidebar is dark in both. */
+/* Design direction C — "Console": a dark operations terminal. Slate ground,
+   cyan accent, monospace data. Dark is the primary identity; a light-terminal
+   variant keeps light-theme clients legible. */
 :root {
-  --bg: #f8fafc; /* slate-50 */
+  --bg: #0e141b;
+  --surface: #131c26;
+  --border: #1f2b38;
+  --text: #e6edf3;
+  --text-muted: #7d8b9d;
+  --primary: #16b3b1;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Light terminal */
+:root[data-theme="light"] {
+  --bg: #eef1f5;
   --surface: #ffffff;
-  --border: #e2e8f0; /* slate-200 */
-  --text: #1e293b; /* slate-800 */
-  --text-muted: #64748b; /* slate-500 */
-  --primary: #4f46e5; /* indigo-600 */
+  --border: #dde3ea;
+  --text: #15202b;
+  --text-muted: #5a6b7b;
+  --primary: #0d8a88;
 }
-
-:root[data-theme="dark"] {
-  --bg: #0f172a; /* slate-900 */
-  --surface: #1e293b; /* slate-800 */
-  --border: #334155; /* slate-700 */
-  --text: #f1f5f9; /* slate-100 */
-  --text-muted: #94a3b8; /* slate-400 */
-  --primary: #818cf8; /* indigo-400 */
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --border: #334155;
-    --text: #f1f5f9;
-    --text-muted: #94a3b8;
-    --primary: #818cf8;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --border: #dde3ea;
+    --text: #15202b;
+    --text-muted: #5a6b7b;
+    --primary: #0d8a88;
   }
 }
 
@@ -44,29 +46,36 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
   -webkit-tap-highlight-color: transparent;
 }
 
 @layer components {
   .card {
-    @apply rounded-card border border-border bg-surface p-4 shadow-card transition-shadow;
+    @apply rounded-card border border-border bg-surface p-4 transition-colors;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50;
   }
   .btn-primary {
-    @apply bg-primary text-white shadow-sm hover:-translate-y-px hover:brightness-110;
+    @apply bg-primary font-bold text-[#04231f] hover:brightness-110;
   }
   .btn-ghost {
-    @apply bg-surface text-text ring-1 ring-border hover:bg-bg;
+    @apply border border-border bg-surface text-text hover:border-primary/50;
   }
   .btn-danger {
     @apply bg-danger text-white hover:brightness-110;
   }
   .input {
-    @apply w-full rounded-btn border border-border bg-surface px-3.5 py-2.5 text-text outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30;
+    @apply w-full rounded-btn border border-border bg-bg px-3.5 py-2.5 text-text outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/40;
   }
   .label {
-    @apply mb-1.5 block text-sm font-medium text-muted;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
+  }
+  /* Monospace, tabular figures for money and metrics. */
+  .figure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 }

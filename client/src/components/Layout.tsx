@@ -103,7 +103,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
           >
             {locale === "en" ? "UZ" : "EN"}
           </button>
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-bold text-white">
+          <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-bold text-[#04231f]">
             {initials(user.fullName)}
           </div>
         </header>
@@ -136,7 +136,7 @@ function SidebarContent({
     <div className="flex h-full flex-col bg-sidebar-bg text-sidebar-text">
       {/* Brand / role */}
       <div className="flex items-center gap-3 px-4 py-4">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-active text-sm font-bold text-white">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-active text-sm font-bold text-[#04231f]">
           {initials(userName)}
         </div>
         <div className="min-w-0">
@@ -156,8 +156,8 @@ function SidebarContent({
               onClick={() => { haptic("light"); onNavigate(); }}
               className={`flex items-center gap-3 rounded-btn px-3 py-2 text-sm font-medium transition-colors duration-150 ${
                 active
-                  ? "bg-sidebar-active text-white shadow-sm"
-                  : "text-sidebar-text hover:bg-white/10 hover:text-white"
+                  ? "bg-sidebar-active font-semibold text-[#04231f]"
+                  : "text-sidebar-text hover:bg-white/5 hover:text-white"
               }`}
             >
               {item.icon}
