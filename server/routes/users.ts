@@ -23,8 +23,13 @@ router.get(
   }),
 );
 
-/* Everything below is CEO-only user & role management (spec §2). */
-router.use(requireRole("ceo"));
+/*
+ * User & role management is CEO-only (spec §2). Scope the guard to the
+ * `/users` paths — a path-less `router.use(requireRole("ceo"))` here would
+ * leak onto every other API route (this router is mounted first), which would
+ * 403 accountants/teachers on students, classes, etc.
+ */
+router.use("/users", requireRole("ceo"));
 
 router.get(
   "/users",
