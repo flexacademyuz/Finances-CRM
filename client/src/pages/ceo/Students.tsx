@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { api } from "../../lib/api";
@@ -56,12 +57,12 @@ export function StudentsPage() {
         <div className="space-y-2">
           {students.data.map((s) => (
             <Card key={s.id} className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-semibold">{s.fullName}</div>
+              <Link href={`/student/${s.id}`} className="min-w-0 flex-1">
+                <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
                 <div className="text-xs text-tg-hint">
                   {s.className} · {money(s.effectiveFee)}
                 </div>
-              </div>
+              </Link>
               <div className="flex shrink-0 items-center gap-2">
                 <StatusBadge status={s.status} />
                 <StudentActions student={s} />

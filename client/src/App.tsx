@@ -19,6 +19,7 @@ import { AnalyticsPage } from "./pages/ceo/Analytics";
 import { PaymentsLog } from "./pages/PaymentsLog";
 import { ExpensesPage } from "./pages/Expenses";
 import { ClassDetail } from "./pages/ClassDetail";
+import { StudentDetail } from "./pages/StudentDetail";
 import { RecordPayment } from "./pages/accountant/RecordPayment";
 import { AwaitingPage } from "./pages/accountant/Awaiting";
 // Teacher
@@ -51,6 +52,7 @@ function Routes({ me }: { me: Me }) {
           <Route path="/students" component={StudentsPage} />
           <Route path="/classes" component={ClassesPage} />
           <Route path="/class/:id" component={ClassDetail} />
+          <Route path="/student/:id" component={StudentDetail} />
           <Route path="/payroll" component={PayrollPage} />
           <Route path="/payments" component={PaymentsLog} />
           <Route path="/expenses" component={ExpensesPage} />
@@ -71,6 +73,7 @@ function Routes({ me }: { me: Me }) {
           <Route path="/students" component={StudentsPage} />
           <Route path="/groups" component={ClassesPage} />
           <Route path="/class/:id" component={ClassDetail} />
+          <Route path="/student/:id" component={StudentDetail} />
           <Route path="/payments" component={PaymentsLog} />
           <Route path="/awaiting" component={AwaitingPage} />
           <Route path="/expenses" component={ExpensesPage} />
@@ -85,6 +88,7 @@ function Routes({ me }: { me: Me }) {
       <Switch>
         <Route path="/" component={MyClasses} />
         <Route path="/class/:id" component={ClassDetail} />
+        <Route path="/student/:id" component={StudentDetail} />
         <Route path="/salary" component={MySalary} />
         <Route><Redirect to="/" /></Route>
       </Switch>

@@ -8,10 +8,93 @@ import {
   createStudent,
   updateStudent,
   getClassById,
+  effectiveFee,
+  listPayments,
+  listDiscountsForStudent,
+  listFreezesForStudent,
+  getSettings,
   type StudentFilter,
 } from "../storage";
+import { parseDate, addMonths, fullMonthsBetween } from "@shared/date";
+import { decideStudentStatus } from "../services/billing";
+import { env } from "../env";
 
 const router = Router();
+
+/**
+ * GET /api/students/:id/detail — full student profile: start date, billing
+ * summary (paid-through, next-due), status, active discounts/freezes, and the
+ * complete payment history. Teachers may only view their own class's students.
+ */
+router.get(
+  "/students/:id/detail",
+  asyncHandler(async (req, res) => {
+    const student = await getStudentById(req.params.id);
+    if (!student) return res.status(404).json({ error: "not_found" });
+    const cls = await getClassById(student.classId);
+    if (req.authUser!.role === "teacher" && cls?.teacherId !== req.teacherId) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+
+    const [feeVal, payments, discounts, freezes, settings] = await Promise.all([
+      effectiveFee(student.id),
+      listPayments({ studentId: student.id, includeVoided: true }),
+      listDiscountsForStudent(student.id),
+      listFreezesForStudent(student.id),
+      getSettings(),
+    ]);
+
+    const grace = settings?.gracePeriodDays ?? env.defaultGracePeriodDays;
+    const currency = settings?.currency ?? env.defaultCurrency;
+    const now = new Date();
+    const start = parseDate(student.enrolledAt);
+    const monthsElapsed = fullMonthsBetween(start, now);
+    const paymentsMade = payments.filter((p) => !p.voided).length;
+
+    const activeFreezes = freezes.filter((f) => f.status === "active");
+    const todayIso = now.toISOString().slice(0, 10);
+    const isFrozenNow = activeFreezes.some((f) => todayIso >= f.freezeFrom && todayIso <= f.freezeTo);
+    let frozenDueCount = 0;
+    for (let k = 1; k <= monthsElapsed; k++) {
+      const due = addMonths(start, k).toISOString().slice(0, 10);
+      if (activeFreezes.some((f) => due >= f.freezeFrom && due <= f.freezeTo)) frozenDueCount++;
+    }
+
+    const status = decideStudentStatus({
+      startDate: student.enrolledAt,
+      today: now,
+      gracePeriodDays: grace,
+      paymentsMade,
+      frozenDueCount,
+      isFrozenNow,
+    });
+
+    res.json({
+      student: {
+        id: student.id,
+        fullName: student.fullName,
+        phone: student.phone,
+        classId: student.classId,
+        className: cls?.name ?? null,
+        active: student.active,
+      },
+      billing: {
+        startDate: student.enrolledAt,
+        monthsEnrolled: monthsElapsed,
+        paymentsMade,
+        effectiveFee: feeVal,
+        currency,
+        // Date the student is paid up to, and when the next payment is due.
+        paidThrough: addMonths(start, paymentsMade).toISOString().slice(0, 10),
+        nextDueDate: addMonths(start, paymentsMade + 1).toISOString().slice(0, 10),
+        status,
+      },
+      payments,
+      discounts: discounts.filter((d) => d.isActive),
+      freezes: activeFreezes,
+    });
+  }),
+);
 
 /**
  * GET /api/students — CEO/Accountant see all (filterable by class/teacher/

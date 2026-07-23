@@ -165,6 +165,30 @@ export type ExpenseSummary = {
   byCategory: Record<string, number>;
 };
 
+export type StudentDetail = {
+  student: {
+    id: string;
+    fullName: string;
+    phone: string | null;
+    classId: string;
+    className: string | null;
+    active: boolean;
+  };
+  billing: {
+    startDate: string;
+    monthsEnrolled: number;
+    paymentsMade: number;
+    effectiveFee: number;
+    currency: string;
+    paidThrough: string;
+    nextDueDate: string;
+    status: StudentStatus;
+  };
+  payments: PaymentRow[];
+  discounts: DiscountRow[];
+  freezes: FreezeRow[];
+};
+
 export type ClassLedger = {
   class: {
     id: string;
