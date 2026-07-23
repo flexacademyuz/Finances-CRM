@@ -111,7 +111,6 @@ const dict = {
   academicYear: { en: "Academic year", uz: "O'quv yili" },
   profile: { en: "Profile", uz: "Profil" },
   analytics: { en: "Analytics", uz: "Tahlil" },
-  debug: { en: "Diagnostics", uz: "Diagnostika" },
   daily: { en: "Daily", uz: "Kunlik" },
   monthly: { en: "Monthly", uz: "Oylik" },
   yearly: { en: "Yearly", uz: "Yillik" },

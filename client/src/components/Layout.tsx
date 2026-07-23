@@ -14,7 +14,6 @@ import {
   TrendingUp,
   BarChart3,
   Menu,
-  Bug,
 } from "lucide-react";
 import type { Role } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -35,7 +34,6 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/finances", label: "finances", icon: <TrendingUp size={18} /> },
     { href: "/analytics", label: "analytics", icon: <BarChart3 size={18} /> },
     { href: "/users", label: "users", icon: <UserCog size={18} /> },
-    { href: "/debug", label: "debug", icon: <Bug size={18} /> },
   ],
   accountant: [
     { href: "/", label: "recordPayment", icon: <Wallet size={18} /> },
@@ -44,7 +42,6 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/payments", label: "payments", icon: <ClipboardList size={18} /> },
     { href: "/awaiting", label: "awaiting", icon: <Clock size={18} /> },
     { href: "/expenses", label: "expenses", icon: <Receipt size={18} /> },
-    { href: "/debug", label: "debug", icon: <Bug size={18} /> },
   ],
   teacher: [
     { href: "/", label: "myClasses", icon: <Users size={18} /> },
