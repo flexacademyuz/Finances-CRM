@@ -40,3 +40,34 @@ export function monthLabel(monthKeyStr: string, locale = "en"): string {
 export function recentMonths(n: number, end: string = monthKey()): string[] {
   return Array.from({ length: n }, (_, i) => shiftMonth(end, -(n - 1 - i)));
 }
+
+/* ─────────────── Anchor-based (per-student) billing helpers ────────────── */
+
+/** Parse a `YYYY-MM-DD` (or longer) date string to a UTC Date at midnight. */
+export function parseDate(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/** Add `k` months to a date, clamping the day to the target month's length. */
+export function addMonths(d: Date, k: number): Date {
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const day = d.getUTCDate();
+  const target = new Date(Date.UTC(y, m + k, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDay));
+  return target;
+}
+
+/** Whole months elapsed from `start` to `today` (0 if `today` precedes it). */
+export function fullMonthsBetween(start: Date, today: Date): number {
+  let months = (today.getUTCFullYear() - start.getUTCFullYear()) * 12 + (today.getUTCMonth() - start.getUTCMonth());
+  if (today.getUTCDate() < start.getUTCDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+/** Whole days from `a` to `b` (b - a). */
+export function daysBetween(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
+}

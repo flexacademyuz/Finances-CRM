@@ -1,9 +1,8 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { students, payments, paymentFreezes } from "@shared/schema";
-import { monthKey } from "@shared/date";
-import { getSettings, setStudentsStatus, listActiveFreezes } from "../storage";
-import { monthInRange } from "./pricing";
+import { students, payments, paymentFreezes, type StudentStatus } from "@shared/schema";
+import { monthKey, parseDate, addMonths, fullMonthsBetween, daysBetween } from "@shared/date";
+import { getSettings, setStudentsStatus } from "../storage";
 import { env } from "../env";
 
 export type StatusBucket = {
@@ -11,15 +10,12 @@ export type StatusBucket = {
   awaiting: string[];
   overdue: string[];
   frozen: string[];
+  not_due: string[];
 };
 
 /**
- * Decide a student's status for `currentMonth` given whether they've paid and
- * how far into the month we are. Pure so it can be unit-tested directly.
- *
- *  - paid this month (or paid in advance)  → "paid"
- *  - unpaid & past the grace period        → "overdue"
- *  - unpaid & within the grace period      → "awaiting_payment"
+ * Legacy calendar-month decision (kept for reference/tests). Superseded by
+ * `decideStudentStatus`, which anchors billing to each student's start date.
  */
 export function decideStatus(args: {
   hasPaidCurrentMonth: boolean;
@@ -31,6 +27,49 @@ export function decideStatus(args: {
 }
 
 /**
+ * Decide a student's status anchored to THEIR start date (V2 change): each
+ * student owes one payment per whole month elapsed since they started. They are
+ * only flagged once a full month has passed from their start date, and the
+ * awaiting → overdue escalation is measured from each monthly anniversary.
+ *
+ *  - hasn't reached their first monthly due date       → "not_due"
+ *  - paid up (payments >= months owed)                 → "paid"
+ *  - behind, within the grace period after the due day → "awaiting_payment"
+ *  - behind, past the grace period                     → "overdue"
+ *  - a freeze currently covers today                   → "frozen"
+ *
+ * `frozenDueCount` = how many of the elapsed monthly due dates fall inside a
+ * freeze window, so excused months don't count as owed.
+ */
+export function decideStudentStatus(args: {
+  startDate: string; // YYYY-MM-DD
+  today: Date;
+  gracePeriodDays: number;
+  paymentsMade: number;
+  frozenDueCount?: number;
+  isFrozenNow?: boolean;
+}): StudentStatus {
+  const start = parseDate(args.startDate);
+  const startMidnight = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const todayMidnight = Date.UTC(args.today.getUTCFullYear(), args.today.getUTCMonth(), args.today.getUTCDate());
+  if (todayMidnight < startMidnight) return "not_due"; // hasn't started yet
+
+  if (args.isFrozenNow) return "frozen";
+
+  const monthsElapsed = fullMonthsBetween(start, args.today);
+  const owed = Math.max(0, monthsElapsed - (args.frozenDueCount ?? 0));
+
+  if (args.paymentsMade >= owed) {
+    return owed === 0 && args.paymentsMade === 0 ? "not_due" : "paid";
+  }
+
+  // Behind by at least one payment: escalate based on the oldest unpaid due date.
+  const oldestUnpaidDue = addMonths(start, args.paymentsMade + 1);
+  const daysLate = daysBetween(oldestUnpaidDue, args.today);
+  return daysLate > args.gracePeriodDays ? "overdue" : "awaiting_payment";
+}
+
+/**
  * Recompute every active student's status for the current billing month.
  * Idempotent: safe to run daily (or on demand). Handles both the 1st-of-month
  * reset to "awaiting_payment" and the escalation to "overdue" after the grace
@@ -38,21 +77,18 @@ export function decideStatus(args: {
  */
 export async function recomputeStatuses(now: Date = new Date()): Promise<StatusBucket> {
   const currentMonth = monthKey(now);
-  const dayOfMonth = now.getUTCDate();
+  const todayIso = now.toISOString().slice(0, 10);
   const settings = await getSettings();
   const gracePeriodDays = settings?.gracePeriodDays ?? env.defaultGracePeriodDays;
 
-  // Active students + whether they have an active (non-voided) payment whose
-  // billing_month is at or before the current month AND paid_through covers it.
+  // Active students with their start date (enrolledAt) and non-voided payment count.
   const rows = await db
     .select({
       id: students.id,
-      paidThroughMonth: students.paidThroughMonth,
-      hasPayment: sql<boolean>`exists (
-        select 1 from ${payments} p
-        where p.student_id = ${students.id}
-          and p.billing_month = ${currentMonth}
-          and p.voided = false
+      startDate: students.enrolledAt,
+      paymentsMade: sql<number>`(
+        select count(*) from ${payments} p
+        where p.student_id = ${students.id} and p.voided = false
       )`,
     })
     .from(students)
@@ -64,28 +100,49 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     .set({ status: "expired" })
     .where(and(eq(paymentFreezes.status, "active"), lt(paymentFreezes.freezeTo, currentMonth)));
 
-  // A student is frozen this month if an active freeze covers it (V2 1B).
-  // Freeze takes priority over awaiting/overdue (but not over an actual payment).
-  const freezes = await listActiveFreezes();
-  const frozenStudentIds = new Set(
-    freezes
-      .filter((f) => monthInRange(currentMonth, f.freezeFrom, f.freezeTo))
-      .map((f) => f.studentId),
-  );
+  // Active freezes grouped by student, for excused-month accounting.
+  const freezes = await db
+    .select({
+      studentId: paymentFreezes.studentId,
+      from: paymentFreezes.freezeFrom,
+      to: paymentFreezes.freezeTo,
+    })
+    .from(paymentFreezes)
+    .where(eq(paymentFreezes.status, "active"));
+  const freezesByStudent = new Map<string, { from: string; to: string }[]>();
+  for (const f of freezes) {
+    const list = freezesByStudent.get(f.studentId) ?? [];
+    list.push({ from: f.from, to: f.to });
+    freezesByStudent.set(f.studentId, list);
+  }
 
-  const bucket: StatusBucket = { paid: [], awaiting: [], overdue: [], frozen: [] };
+  const bucket: StatusBucket = { paid: [], awaiting: [], overdue: [], frozen: [], not_due: [] };
   for (const r of rows) {
-    const paidInAdvance = !!r.paidThroughMonth && r.paidThroughMonth >= currentMonth;
-    const hasPaidCurrentMonth = r.hasPayment || paidInAdvance;
-    if (hasPaidCurrentMonth) {
-      bucket.paid.push(r.id);
-    } else if (frozenStudentIds.has(r.id)) {
-      bucket.frozen.push(r.id);
-    } else {
-      const status = decideStatus({ hasPaidCurrentMonth, dayOfMonth, gracePeriodDays });
-      if (status === "overdue") bucket.overdue.push(r.id);
-      else bucket.awaiting.push(r.id);
+    if (!r.startDate) {
+      bucket.not_due.push(r.id);
+      continue;
     }
+    const studentFreezes = freezesByStudent.get(r.id) ?? [];
+    const isFrozenNow = studentFreezes.some((f) => todayIso >= f.from && todayIso <= f.to);
+
+    // Count elapsed monthly due dates that fall inside a freeze window.
+    const start = parseDate(r.startDate);
+    const monthsElapsed = fullMonthsBetween(start, now);
+    let frozenDueCount = 0;
+    for (let k = 1; k <= monthsElapsed; k++) {
+      const dueIso = addMonths(start, k).toISOString().slice(0, 10);
+      if (studentFreezes.some((f) => dueIso >= f.from && dueIso <= f.to)) frozenDueCount++;
+    }
+
+    const status = decideStudentStatus({
+      startDate: r.startDate,
+      today: now,
+      gracePeriodDays,
+      paymentsMade: Number(r.paymentsMade),
+      frozenDueCount,
+      isFrozenNow,
+    });
+    bucket[status === "awaiting_payment" ? "awaiting" : status].push(r.id);
   }
 
   await Promise.all([
@@ -93,6 +150,7 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     setStudentsStatus(bucket.awaiting, "awaiting_payment"),
     setStudentsStatus(bucket.overdue, "overdue"),
     setStudentsStatus(bucket.frozen, "frozen"),
+    setStudentsStatus(bucket.not_due, "not_due"),
   ]);
 
   return bucket;
@@ -113,7 +171,7 @@ export async function listAwaitingAndOverdue(now: Date = new Date()) {
     .where(
       and(
         eq(students.active, true),
-        sql`${students.status} not in ('paid', 'frozen')`,
+        sql`${students.status} not in ('paid', 'frozen', 'not_due')`,
       ),
     );
 }

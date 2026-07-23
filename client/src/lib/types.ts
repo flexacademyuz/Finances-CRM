@@ -58,7 +58,7 @@ export type UserRow = {
 export type DashboardData = {
   month: string;
   revenue: { total: number; cash: number; online: number; count: number };
-  statusCounts: { paid: number; awaiting_payment: number; overdue: number; frozen: number };
+  statusCounts: { paid: number; awaiting_payment: number; overdue: number; frozen: number; not_due: number };
   totalStudents: number;
   payrollObligation: number;
   trend: { month: string; label: string; total: number; cash: number; online: number }[];

@@ -99,6 +99,7 @@ function AddStudentModal({
   const [phone, setPhone] = useState("");
   const [classId, setClassId] = useState("");
   const [monthlyFee, setMonthlyFee] = useState("");
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
 
   const create = useMutation({
     mutationFn: () =>
@@ -109,9 +110,14 @@ function AddStudentModal({
           phone: phone || undefined,
           classId,
           monthlyFee: monthlyFee ? Number(monthlyFee) : undefined,
+          enrolledAt: startDate || undefined,
         },
       }),
-    onSuccess: () => { setFullName(""); setPhone(""); setClassId(""); setMonthlyFee(""); onSaved(); },
+    onSuccess: () => {
+      setFullName(""); setPhone(""); setClassId(""); setMonthlyFee("");
+      setStartDate(new Date().toISOString().slice(0, 10));
+      onSaved();
+    },
   });
 
   return (
@@ -130,6 +136,9 @@ function AddStudentModal({
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
+        </Field>
+        <Field label={t("startDate")}>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </Field>
         <Field label={`${t("fee")} (${t("value")})`}>
           <Input

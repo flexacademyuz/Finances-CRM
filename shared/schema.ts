@@ -29,6 +29,7 @@ export const studentStatusEnum = pgEnum("student_status", [
   "awaiting_payment",
   "overdue",
   "frozen",
+  "not_due",
 ]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "online"]);
 export const expensePaymentMethodEnum = pgEnum("expense_payment_method", [

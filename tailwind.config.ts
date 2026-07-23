@@ -47,6 +47,7 @@ export default {
           overdue: "#e11d48",
           frozen: "#0ea5e9",
           discount: "#8b5cf6",
+          notdue: "#64748b",
         },
       },
       borderRadius: {

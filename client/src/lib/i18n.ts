@@ -28,6 +28,8 @@ const dict = {
   awaiting_payment: { en: "Awaiting", uz: "Kutilmoqda" },
   overdue: { en: "Overdue", uz: "Muddati o'tgan" },
   frozen: { en: "Frozen", uz: "Muzlatilgan" },
+  not_due: { en: "Not due", uz: "Muddati kelmagan" },
+  startDate: { en: "Start date", uz: "Boshlanish sanasi" },
   totalStudents: { en: "Total students", uz: "Jami o'quvchilar" },
   payrollObligation: { en: "Payroll estimate", uz: "Maosh hisob-kitobi" },
 
