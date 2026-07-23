@@ -5,14 +5,17 @@ import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { money } from "../lib/format";
 import { monthKey } from "@shared/date";
-import type { StudentRow, FreezeRow, DiscountRow } from "../lib/types";
+import type { FreezeRow, DiscountRow } from "../lib/types";
 import { Button, Field, Input, Modal, Select } from "./ui";
+
+/** Minimal student shape the freeze/discount actions need. */
+type ActionStudent = { id: string; classId: string; fullName: string; effectiveFee: string };
 
 /**
  * Freeze / discount actions for a single student (V2 1B, 1C). Available to
  * Accountant and CEO from any student row.
  */
-export function StudentActions({ student }: { student: StudentRow }) {
+export function StudentActions({ student }: { student: ActionStudent }) {
   const { t } = useI18n();
   const [open, setOpen] = useState<null | "freeze" | "discount">(null);
 
@@ -40,7 +43,7 @@ export function StudentActions({ student }: { student: StudentRow }) {
   );
 }
 
-function FreezeModal({ student, onClose }: { student: StudentRow; onClose: () => void }) {
+function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
   const { t } = useI18n();
   const qc = useQueryClient();
   const firstOfMonth = monthKey();
@@ -111,7 +114,7 @@ function FreezeModal({ student, onClose }: { student: StudentRow; onClose: () =>
   );
 }
 
-function DiscountModal({ student, onClose }: { student: StudentRow; onClose: () => void }) {
+function DiscountModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
   const { t } = useI18n();
   const qc = useQueryClient();
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");

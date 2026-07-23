@@ -540,6 +540,73 @@ export async function setStudentsStatus(ids: string[], status: StudentStatus) {
   await db.update(students).set({ status }).where(inArray(students.id, ids));
 }
 
+/**
+ * Per-class ledger: the class's active students plus a paid/unpaid/frozen
+ * status for each of the given billing months — the class "folder" view.
+ */
+export async function classLedger(classId: string, months: string[]) {
+  const roster = await db
+    .select({
+      id: students.id,
+      fullName: students.fullName,
+      phone: students.phone,
+      status: students.status,
+      effectiveFee: sql<string>`coalesce(${students.monthlyFee}, ${classes.defaultFee})`,
+    })
+    .from(students)
+    .innerJoin(classes, eq(students.classId, classes.id))
+    .where(and(eq(students.classId, classId), eq(students.active, true)))
+    .orderBy(students.fullName);
+
+  const studentIds = roster.map((s) => s.id);
+
+  // Which (student, month) pairs have a non-voided payment.
+  const paidRows = studentIds.length
+    ? await db
+        .select({ studentId: payments.studentId, month: payments.billingMonth })
+        .from(payments)
+        .where(
+          and(
+            inArray(payments.studentId, studentIds),
+            inArray(payments.billingMonth, months),
+            eq(payments.voided, false),
+          ),
+        )
+    : [];
+  const paidSet = new Set(paidRows.map((r) => `${r.studentId}|${r.month}`));
+
+  // Active freezes for these students, to mark frozen months.
+  const freezeRows = studentIds.length
+    ? await db
+        .select({
+          studentId: paymentFreezes.studentId,
+          freezeFrom: paymentFreezes.freezeFrom,
+          freezeTo: paymentFreezes.freezeTo,
+        })
+        .from(paymentFreezes)
+        .where(
+          and(inArray(paymentFreezes.studentId, studentIds), eq(paymentFreezes.status, "active")),
+        )
+    : [];
+
+  const students_ = roster.map((s) => {
+    const monthly: Record<string, "paid" | "unpaid" | "frozen"> = {};
+    for (const m of months) {
+      if (paidSet.has(`${s.id}|${m}`)) monthly[m] = "paid";
+      else if (
+        freezeRows.some(
+          (f) => f.studentId === s.id && m >= f.freezeFrom.slice(0, 7) + "-01" && m <= f.freezeTo,
+        )
+      )
+        monthly[m] = "frozen";
+      else monthly[m] = "unpaid";
+    }
+    return { ...s, monthly };
+  });
+
+  return students_;
+}
+
 /* ─────────────────────────── Payment freezes ───────────────────────── */
 
 export async function createFreeze(input: {

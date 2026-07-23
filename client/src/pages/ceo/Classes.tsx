@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Folder, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
@@ -34,18 +35,27 @@ export function ClassesPage() {
       ) : classes.data?.length ? (
         <div className="space-y-2">
           {classes.data.map((c) => (
-            <Card key={c.id} className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{c.name}</div>
-                <div className="text-xs text-tg-hint">
-                  {teacherName(c.teacherId)} · {money(c.defaultFee)}
-                  {c.room ? ` · ${c.room}` : ""}
-                  {c.schedule ? ` · ${c.schedule}` : ""}
-                </div>
+            <Card key={c.id} className="flex items-center justify-between gap-2">
+              <Link href={`/class/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Folder size={18} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{c.name}</span>
+                  <span className="block truncate text-xs text-tg-hint">
+                    {teacherName(c.teacherId)} · {money(c.defaultFee)}
+                    {c.room ? ` · ${c.room}` : ""}
+                  </span>
+                </span>
+              </Link>
+              <div className="flex shrink-0 items-center gap-1">
+                <button className="p-1 text-tg-link" onClick={() => setEditing(c)} aria-label={t("edit")}>
+                  <Pencil size={16} />
+                </button>
+                <Link href={`/class/${c.id}`} className="p-1 text-tg-hint">
+                  <ChevronRight size={18} />
+                </Link>
               </div>
-              <button className="text-tg-link" onClick={() => setEditing(c)} aria-label={t("edit")}>
-                <Pencil size={16} />
-              </button>
             </Card>
           ))}
         </div>

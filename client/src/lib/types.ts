@@ -165,6 +165,30 @@ export type ExpenseSummary = {
   byCategory: Record<string, number>;
 };
 
+export type ClassLedger = {
+  class: {
+    id: string;
+    name: string;
+    subject: string | null;
+    room: string | null;
+    schedule: string | null;
+    defaultFee: string;
+    maxStudents: number | null;
+    teacherId: string;
+    teacherName: string | null;
+    perStudentRate: string | null;
+  };
+  months: { key: string; label: string }[];
+  students: {
+    id: string;
+    fullName: string;
+    phone: string | null;
+    status: StudentStatus;
+    effectiveFee: string;
+    monthly: Record<string, "paid" | "unpaid" | "frozen">;
+  }[];
+};
+
 export type FinanceOverview = {
   startYear: number;
   label: string;
