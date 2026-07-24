@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { decideStatus, decideStudentStatus } from "../server/services/billing";
+import { decideStatus } from "../server/services/billing";
+import { computePaidThrough, decideStudentStatus } from "@shared/billing";
 import { monthKey, shiftMonth, normalizeMonth, recentMonths, addMonths, fullMonthsBetween, parseDate } from "@shared/date";
 
 /**
@@ -53,66 +54,106 @@ describe("decideStatus — monthly billing cycle", () => {
   });
 });
 
-/** Per-student billing, paid IN ADVANCE from each student's start date. */
-describe("decideStudentStatus — advance billing from start date", () => {
+/** Per-student billing: every payment buys one month forward. */
+describe("computePaidThrough — one month of coverage per payment", () => {
+  const through = (startDate: string, paymentDates: string[], frozenDays?: number) =>
+    computePaidThrough({ startDate, paymentDates, frozenDays }).toISOString().slice(0, 10);
+
+  it("covers a month from the start date when they pay up front", () => {
+    expect(through("2026-07-23", ["2026-07-23"])).toBe("2026-08-23");
+  });
+
+  it("gives no coverage at all before the first payment", () => {
+    expect(through("2026-07-23", [])).toBe("2026-07-23");
+  });
+
+  it("stacks advance payments onto existing coverage, not onto today", () => {
+    // Paid 23 Jul (→ 23 Aug), then again early on 20 Aug: the unused days are
+    // not forfeited, so coverage runs to 23 Sep rather than 20 Sep.
+    expect(through("2026-07-23", ["2026-07-23", "2026-08-20"])).toBe("2026-09-23");
+  });
+
+  it("counts a late payment forward from the day it was actually paid", () => {
+    // Due 23 Aug, paid 30 Aug → a full month from the 30th; the billing day moves.
+    expect(through("2026-07-23", ["2026-07-23", "2026-08-30"])).toBe("2026-09-30");
+  });
+
+  it("does not back-bill the months a lapsed student missed", () => {
+    // Enrolled in March, paid once in March, then nothing until 23 Jul. The
+    // Apr–Jul gap is written off: the July payment covers July→August.
+    expect(through("2026-03-15", ["2026-03-15", "2026-07-23"])).toBe("2026-08-23");
+  });
+
+  it("is order-independent", () => {
+    expect(through("2026-07-23", ["2026-08-20", "2026-07-23"])).toBe("2026-09-23");
+  });
+
+  it("extends coverage by the days already spent frozen", () => {
+    expect(through("2026-07-23", ["2026-07-23"], 10)).toBe("2026-09-02");
+  });
+
+  it("clamps to the end of short months", () => {
+    expect(through("2026-01-31", ["2026-01-31"])).toBe("2026-02-28");
+  });
+});
+
+describe("decideStudentStatus — status from the coverage window", () => {
   const grace = 5;
   const d = (s: string) => parseDate(s);
+  const at = (today: string, paymentDates: string[], extra = {}) =>
+    decideStudentStatus({
+      startDate: "2026-07-23",
+      today: d(today),
+      gracePeriodDays: grace,
+      paymentDates,
+      ...extra,
+    });
 
   it("a future start date is not due yet", () => {
     expect(
-      decideStudentStatus({ startDate: "2026-08-01", today: d("2026-07-23"), gracePeriodDays: grace, paymentsMade: 0 }),
+      decideStudentStatus({ startDate: "2026-08-01", today: d("2026-07-23"), gracePeriodDays: grace, paymentDates: [] }),
     ).toBe("not_due");
   });
 
   it("the first payment is due on the start date (pay up front)", () => {
-    // Starts 23 Jul, no payment yet → awaiting from day one (within grace).
-    expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-07-23"), gracePeriodDays: grace, paymentsMade: 0 }),
-    ).toBe("awaiting_payment");
-    // Past the grace period, still unpaid → overdue.
-    expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-07-29"), gracePeriodDays: grace, paymentsMade: 0 }),
-    ).toBe("overdue");
+    expect(at("2026-07-23", [])).toBe("awaiting_payment");
+    expect(at("2026-07-29", [])).toBe("overdue"); // past grace
   });
 
-  it("after paying the first month, is paid until the next anniversary", () => {
-    // Paid once (covers 23 Jul → 23 Aug). Mid-cycle → paid.
+  it("stays paid for the whole month that was paid for", () => {
+    // Paid 23 Jul → covered 23 Jul through 22 Aug inclusive.
+    expect(at("2026-07-23", ["2026-07-23"])).toBe("paid");
+    expect(at("2026-08-10", ["2026-07-23"])).toBe("paid");
+    expect(at("2026-08-22", ["2026-07-23"])).toBe("paid");
+    // Coverage ends ON the 23rd — that's when the next payment falls due.
+    expect(at("2026-08-23", ["2026-07-23"])).toBe("awaiting_payment");
+    expect(at("2026-08-30", ["2026-07-23"])).toBe("overdue");
+  });
+
+  it("keeps a long-lapsed student paid once they pay again", () => {
+    // The regression this model was written for: enrolled months ago, pays
+    // today, and must read as Paid rather than Awaiting on the back-billed gap.
     expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-08-10"), gracePeriodDays: grace, paymentsMade: 1 }),
+      decideStudentStatus({
+        startDate: "2026-03-15",
+        today: d("2026-07-24"),
+        gracePeriodDays: grace,
+        paymentDates: ["2026-07-23"],
+      }),
     ).toBe("paid");
-    // On the next anniversary (23 Aug), the second payment is due → awaiting.
-    expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-08-23"), gracePeriodDays: grace, paymentsMade: 1 }),
-    ).toBe("awaiting_payment");
-    // Past grace on the second cycle → overdue.
-    expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-08-30"), gracePeriodDays: grace, paymentsMade: 1 }),
-    ).toBe("overdue");
   });
 
   it("paying ahead keeps the student paid", () => {
-    expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-07-23"), gracePeriodDays: grace, paymentsMade: 2 }),
-    ).toBe("paid");
+    expect(at("2026-08-25", ["2026-07-23", "2026-08-20"])).toBe("paid");
   });
 
   it("an active freeze wins over everything", () => {
-    expect(
-      decideStudentStatus({ startDate: "2026-07-23", today: d("2026-09-20"), gracePeriodDays: grace, paymentsMade: 0, isFrozenNow: true }),
-    ).toBe("frozen");
+    expect(at("2026-09-20", [], { isFrozenNow: true })).toBe("frozen");
   });
 
-  it("excused (frozen) due dates don't count as owed", () => {
-    // 1 month elapsed → 2 due dates; 1 excused by a freeze; 1 payment → paid up.
-    expect(
-      decideStudentStatus({
-        startDate: "2026-07-23",
-        today: d("2026-08-25"),
-        gracePeriodDays: grace,
-        paymentsMade: 1,
-        frozenDueCount: 1,
-      }),
-    ).toBe("paid");
+  it("frozen days push the due date out rather than burning the paid month", () => {
+    // Coverage would have ended 23 Aug; 10 frozen days carry it to 2 Sep.
+    expect(at("2026-08-25", ["2026-07-23"], { frozenDays: 10 })).toBe("paid");
   });
 });
 

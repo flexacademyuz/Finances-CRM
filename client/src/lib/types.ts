@@ -12,7 +12,7 @@ export type StudentRow = {
   monthlyFee: string | null;
   effectiveFee: string;
   status: StudentStatus;
-  paidThroughMonth: string | null;
+  paidThroughDate: string | null;
   enrolledAt: string;
   active: boolean;
 };

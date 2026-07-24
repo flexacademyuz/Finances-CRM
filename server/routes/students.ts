@@ -15,8 +15,8 @@ import {
   getSettings,
   type StudentFilter,
 } from "../storage";
-import { parseDate, addMonths, fullMonthsBetween } from "@shared/date";
-import { decideStudentStatus } from "../services/billing";
+import { parseDate, fullMonthsBetween, atMidnight, toIso } from "@shared/date";
+import { computePaidThrough, decideStudentStatus, elapsedFrozenDays } from "@shared/billing";
 import { env } from "../env";
 
 const router = Router();
@@ -47,27 +47,25 @@ router.get(
     const grace = settings?.gracePeriodDays ?? env.defaultGracePeriodDays;
     const currency = settings?.currency ?? env.defaultCurrency;
     const now = new Date();
-    const start = parseDate(student.enrolledAt);
+    const start = atMidnight(parseDate(student.enrolledAt));
     const monthsElapsed = fullMonthsBetween(start, now);
-    const paymentsMade = payments.filter((p) => !p.voided).length;
+    const active = payments.filter((p) => !p.voided);
 
     const activeFreezes = freezes.filter((f) => f.status === "active");
-    const todayIso = now.toISOString().slice(0, 10);
+    const todayIso = toIso(now);
     const isFrozenNow = activeFreezes.some((f) => todayIso >= f.freezeFrom && todayIso <= f.freezeTo);
-    let frozenDueCount = 0;
-    for (let k = 0; k <= monthsElapsed; k++) {
-      const due = addMonths(start, k).toISOString().slice(0, 10);
-      if (activeFreezes.some((f) => due >= f.freezeFrom && due <= f.freezeTo)) frozenDueCount++;
-    }
 
-    const status = decideStudentStatus({
+    const args = {
       startDate: student.enrolledAt,
-      today: now,
-      gracePeriodDays: grace,
-      paymentsMade,
-      frozenDueCount,
-      isFrozenNow,
-    });
+      paymentDates: active.map((p) => toIso(new Date(p.createdAt))),
+      frozenDays: elapsedFrozenDays(
+        activeFreezes.map((f) => ({ from: f.freezeFrom, to: f.freezeTo })),
+        start,
+        atMidnight(now),
+      ),
+    };
+    const paidThrough = computePaidThrough(args);
+    const status = decideStudentStatus({ ...args, today: now, gracePeriodDays: grace, isFrozenNow });
 
     res.json({
       student: {
@@ -81,13 +79,13 @@ router.get(
       billing: {
         startDate: student.enrolledAt,
         monthsEnrolled: monthsElapsed,
-        paymentsMade,
+        paymentsMade: active.length,
         effectiveFee: feeVal,
         currency,
-        // Advance billing: `paymentsMade` payments cover through start + N months,
-        // and the next payment is due on that same date (paid up front).
-        paidThrough: addMonths(start, paymentsMade).toISOString().slice(0, 10),
-        nextDueDate: addMonths(start, paymentsMade).toISOString().slice(0, 10),
+        // Coverage runs up to (but not including) this date, so it doubles as
+        // the day the next payment falls due.
+        paidThrough: toIso(paidThrough),
+        nextDueDate: toIso(paidThrough),
         status,
       },
       payments,

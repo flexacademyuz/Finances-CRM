@@ -71,3 +71,18 @@ export function fullMonthsBetween(start: Date, today: Date): number {
 export function daysBetween(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
 }
+
+/** Add `n` days to a date (UTC). */
+export function addDays(d: Date, n: number): Date {
+  return new Date(d.getTime() + n * 86_400_000);
+}
+
+/** Strip the time component, returning UTC midnight of the same calendar day. */
+export function atMidnight(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** `YYYY-MM-DD` for a Date, in UTC. */
+export function toIso(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}

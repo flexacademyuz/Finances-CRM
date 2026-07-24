@@ -110,8 +110,10 @@ export const students = pgTable(
     // Overrides the class default_fee when set.
     monthlyFee: numeric("monthly_fee", { precision: 14, scale: 2 }),
     status: studentStatusEnum("status").notNull().default("awaiting_payment"),
-    // First day (YYYY-MM-01) of the last month fully paid.
-    paidThroughMonth: date("paid_through_month"),
+    // Date their coverage runs out — exclusive, so they owe again on this day.
+    // Derived from their payment history; see services/billing.computePaidThrough.
+    // (Column name is historical: it used to hold a YYYY-MM-01 month key.)
+    paidThroughDate: date("paid_through_month"),
     enrolledAt: date("enrolled_at").notNull().defaultNow(),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

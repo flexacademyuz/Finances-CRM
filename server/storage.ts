@@ -17,7 +17,9 @@ import {
   type StudentStatus,
   type DiscountType,
 } from "@shared/schema";
-import { monthKey } from "@shared/date";
+import { monthKey, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
+import { computePaidThrough, decideStudentStatus } from "@shared/billing";
+import { env } from "./env";
 
 /* ─────────────────────────────── Users ─────────────────────────────── */
 
@@ -199,7 +201,7 @@ export async function listStudents(filter: StudentFilter = {}) {
       monthlyFee: students.monthlyFee,
       effectiveFee: sql<string>`coalesce(${students.monthlyFee}, ${classes.defaultFee})`,
       status: students.status,
-      paidThroughMonth: students.paidThroughMonth,
+      paidThroughDate: students.paidThroughDate,
       enrolledAt: students.enrolledAt,
       active: students.active,
     })
@@ -366,14 +368,16 @@ export async function recordPayment(input: {
       })
       .returning();
 
-    // Mark paid; advance paid_through_month to the latest paid month.
-    const paidThrough =
-      !student.paidThroughMonth || input.billingMonth > student.paidThroughMonth
-        ? input.billingMonth
-        : student.paidThroughMonth;
+    // This payment buys one month of coverage from today, or from the end of
+    // the coverage they already have if they're paying ahead. Mirrors
+    // services/billing.computePaidThrough so the badge is right immediately,
+    // before the hourly recompute runs.
+    const today = atMidnight(new Date());
+    const existing = student.paidThroughDate ? parseDate(student.paidThroughDate) : today;
+    const base = existing.getTime() > today.getTime() ? existing : today;
     await tx
       .update(students)
-      .set({ status: "paid", paidThroughMonth: paidThrough })
+      .set({ status: "paid", paidThroughDate: toIso(addMonths(base, 1)) })
       .where(eq(students.id, student.id));
 
     return payment;
@@ -435,25 +439,31 @@ export async function voidPayment(id: string, byUserId: string, reason: string) 
       .where(eq(payments.id, id))
       .returning();
 
-    // If no other active payment covers the current month, revert to awaiting.
-    const currentMonth = monthKey();
-    if (current.billingMonth === currentMonth) {
+    // Rebuild coverage from the payments that remain, so voiding actually takes
+    // the month back instead of leaving a stale "paid" badge until the next
+    // hourly recompute.
+    const [student] = await tx.select().from(students).where(eq(students.id, current.studentId));
+    if (student) {
       const remaining = await tx
-        .select({ id: payments.id })
+        .select({ paidAt: payments.createdAt })
         .from(payments)
-        .where(
-          and(
-            eq(payments.studentId, current.studentId),
-            eq(payments.billingMonth, currentMonth),
-            eq(payments.voided, false),
-          ),
-        );
-      if (remaining.length === 0) {
-        await tx
-          .update(students)
-          .set({ status: "awaiting_payment" })
-          .where(eq(students.id, current.studentId));
-      }
+        .where(and(eq(payments.studentId, student.id), eq(payments.voided, false)));
+      const [cfg] = await tx.select().from(settings).where(eq(settings.id, "global"));
+      const args = {
+        startDate: student.enrolledAt,
+        paymentDates: remaining.map((p) => toIso(p.paidAt)),
+      };
+      await tx
+        .update(students)
+        .set({
+          status: decideStudentStatus({
+            ...args,
+            today: new Date(),
+            gracePeriodDays: cfg?.gracePeriodDays ?? env.defaultGracePeriodDays,
+          }),
+          paidThroughDate: toIso(computePaidThrough(args)),
+        })
+        .where(eq(students.id, student.id));
     }
     return updated;
   });
@@ -538,6 +548,19 @@ export async function updateSettings(patch: { gracePeriodDays?: number; currency
 export async function setStudentsStatus(ids: string[], status: StudentStatus) {
   if (ids.length === 0) return;
   await db.update(students).set({ status }).where(inArray(students.id, ids));
+}
+
+/** Write each student's coverage end date in one statement (id → YYYY-MM-DD). */
+export async function setStudentsPaidThrough(byId: Map<string, string>) {
+  if (byId.size === 0) return;
+  const cases = sql.join(
+    [...byId].map(([id, date]) => sql`when ${students.id} = ${id}::uuid then ${date}::date`),
+    sql` `,
+  );
+  await db
+    .update(students)
+    .set({ paidThroughDate: sql`case ${cases} end` })
+    .where(inArray(students.id, [...byId.keys()]));
 }
 
 /**
