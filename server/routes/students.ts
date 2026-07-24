@@ -17,6 +17,7 @@ import {
 } from "../storage";
 import { parseDate, fullMonthsBetween, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, elapsedFrozenDays } from "@shared/billing";
+import { recomputeStatuses } from "../services/billing";
 import { env } from "../env";
 
 const router = Router();
@@ -102,6 +103,12 @@ router.get(
 router.get(
   "/students",
   asyncHandler(async (req, res) => {
+    // Refresh statuses before listing so both the badges and the status filter
+    // reflect today's billing reality, not a value stamped hours ago. Without
+    // this the list serves the stored `status` column verbatim, so filtering by
+    // "Paid"/"Awaiting" matches stale data. Idempotent (same as /awaiting).
+    await recomputeStatuses();
+
     const filter: StudentFilter = {};
     const { classId, teacherId, status, activeOnly } = req.query;
     if (typeof classId === "string") filter.classId = classId;
