@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
 import type { StudentRow, Class, TeacherRow } from "../../lib/types";
 import type { StudentStatus } from "@shared/schema";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner, StatusBadge } from "../../components/ui";
-import { StudentActions } from "../../components/StudentActions";
 
 const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overdue", "frozen", "not_due"];
 
@@ -76,23 +75,23 @@ export function StudentsPage() {
       ) : students.data?.length ? (
         <div className="space-y-2">
           {students.data.map((s) => (
-            <Card key={s.id} className="flex items-center justify-between gap-2">
-              <Link href={`/student/${s.id}`} className="min-w-0 flex-1">
-                <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
-                <div className="text-xs text-tg-hint">
-                  {s.className} · {money(s.effectiveFee)}
+            <Card key={s.id} className="flex items-center justify-between gap-2 p-0">
+              {/* Whole row opens the profile, where the per-student actions live. */}
+              <Link href={`/student/${s.id}`} className="flex min-w-0 flex-1 items-center gap-2 p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
+                  <div className="truncate text-xs text-tg-hint">
+                    {s.className} · {money(s.effectiveFee)}
+                  </div>
                 </div>
+                {view !== "archived" && <StatusBadge status={s.status} />}
+                <ChevronRight size={18} className="shrink-0 text-tg-hint" />
               </Link>
-              <div className="flex shrink-0 items-center gap-2">
-                {view === "archived" ? (
+              {view === "archived" && (
+                <div className="shrink-0 pr-3">
                   <Button variant="ghost" onClick={() => setResuming(s)}>{t("resumeStudent")}</Button>
-                ) : (
-                  <>
-                    <StatusBadge status={s.status} />
-                    <StudentActions student={s} />
-                  </>
-                )}
-              </div>
+                </div>
+              )}
             </Card>
           ))}
         </div>
