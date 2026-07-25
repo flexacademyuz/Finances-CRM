@@ -167,6 +167,16 @@ export const payments = pgTable(
     // Soft-void instead of delete (spec §7 auditability).
     voided: boolean("voided").notNull().default(false),
     voidReason: text("void_reason"),
+    // Money returned to the student, cumulative across partial refunds. Net
+    // revenue for this payment = amount - refundedAmount. Distinct from void:
+    // a refund keeps the payment real but gives back part/all of the money for
+    // classes the student won't take.
+    refundedAmount: numeric("refunded_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+    // Teacher credit removed alongside the refund (proportional to the refunded
+    // fraction), so payroll only pays for classes actually delivered.
+    refundedTeacherCredit: numeric("refunded_teacher_credit", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
     // Audit trail: [{ at, byUserId, action, before, after }, ...]
     editHistory: jsonb("edit_history").$type<PaymentEdit[]>().notNull().default([]),
   },
@@ -185,7 +195,7 @@ export const payments = pgTable(
 export type PaymentEdit = {
   at: string;
   byUserId: string;
-  action: "edit" | "void";
+  action: "edit" | "void" | "refund";
   reason?: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
@@ -428,6 +438,14 @@ export const editPaymentSchema = z.object({
 
 export const voidPaymentSchema = z.object({
   reason: z.string().min(1),
+});
+
+export const refundPaymentSchema = z.object({
+  amount: z.coerce.number().positive(),
+  reason: z.string().min(1),
+  // The date the refund is measured to (default: today). Used only to compute
+  // the suggested pro-rata amount client-side; the server trusts `amount`.
+  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const salaryRuleSchema = z.object({

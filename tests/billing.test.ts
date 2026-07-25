@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { decideStatus } from "../server/services/billing";
-import { computePaidThrough, decideStudentStatus, elapsedFrozenDays } from "@shared/billing";
+import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, refundSuggestion, paymentCoverWindow } from "@shared/billing";
 import { monthKey, shiftMonth, normalizeMonth, recentMonths, addMonths, fullMonthsBetween, parseDate, atMidnight } from "@shared/date";
 
 /**
@@ -191,6 +191,44 @@ describe("resume re-anchoring — a returning student starts fresh", () => {
     expect(
       decideStudentStatus({ startDate: "2026-07-20", today: parseDate("2026-08-10"), gracePeriodDays: grace, paymentDates: ["2026-07-20"] }),
     ).toBe("paid");
+  });
+});
+
+describe("refundSuggestion — pro-rata by unused period", () => {
+  // A 300,000 payment covering 23 Jul → 23 Aug (31 days).
+  const win = paymentCoverWindow("2026-08-01", 23); // anchor day 23 in Aug → but billing month Aug
+  const julWin = { coverStart: parseDate("2026-07-23"), coverEnd: parseDate("2026-08-23") };
+
+  it("refunds the whole amount before the period starts", () => {
+    expect(
+      refundSuggestion({ amount: 300000, ...julWin, asOf: parseDate("2026-07-23") }),
+    ).toBe(300000);
+    // Even earlier (paid ahead, not started) → full.
+    expect(
+      refundSuggestion({ amount: 300000, ...julWin, asOf: parseDate("2026-07-01") }),
+    ).toBe(300000);
+  });
+
+  it("refunds nothing once the period is fully used", () => {
+    expect(
+      refundSuggestion({ amount: 300000, ...julWin, asOf: parseDate("2026-08-23") }),
+    ).toBe(0);
+    expect(
+      refundSuggestion({ amount: 300000, ...julWin, asOf: parseDate("2026-09-01") }),
+    ).toBe(0);
+  });
+
+  it("refunds the unused fraction mid-period", () => {
+    // Left on 2 Aug: used 23 Jul–2 Aug = 10 days of 31; unused 21 days.
+    // 300000 * 21/31 = 203225.81
+    expect(
+      refundSuggestion({ amount: 300000, ...julWin, asOf: parseDate("2026-08-02") }),
+    ).toBeCloseTo(203225.81, 1);
+  });
+
+  it("anchors the cover window to the billing day within the month", () => {
+    expect(win.start.toISOString().slice(0, 10)).toBe("2026-08-23");
+    expect(win.end.toISOString().slice(0, 10)).toBe("2026-09-23");
   });
 });
 

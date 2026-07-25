@@ -350,6 +350,8 @@ export async function listPayments(filter: PaymentFilter = {}) {
       recorderName: users.fullName,
       voided: payments.voided,
       voidReason: payments.voidReason,
+      refundedAmount: payments.refundedAmount,
+      refundedTeacherCredit: payments.refundedTeacherCredit,
       createdAt: payments.createdAt,
     })
     .from(payments)
@@ -514,6 +516,58 @@ export async function voidPayment(id: string, byUserId: string, reason: string) 
         })
         .where(eq(students.id, student.id));
     }
+    return updated;
+  });
+}
+
+/**
+ * CEO-only refund: return money to the student for classes they won't take,
+ * without deleting the payment (that's what void is for). Supports repeated
+ * partial refunds up to the amount paid. The teacher's credit is reduced by the
+ * same fraction that is refunded, so payroll only pays for delivered classes.
+ * Appends a "refund" entry to the audit trail.
+ */
+export async function refundPayment(
+  id: string,
+  byUserId: string,
+  input: { amount: number; reason: string },
+) {
+  return db.transaction(async (tx) => {
+    const [current] = await tx.select().from(payments).where(eq(payments.id, id));
+    if (!current) throw new Error("Payment not found");
+    if (current.voided) throw new Error("Cannot refund a voided payment");
+
+    const paid = Number(current.amount);
+    const alreadyRefunded = Number(current.refundedAmount);
+    const remaining = +(paid - alreadyRefunded).toFixed(2);
+    if (input.amount > remaining + 1e-9) {
+      throw new Error(`Refund exceeds refundable amount (${remaining}).`);
+    }
+
+    // Teacher credit removed in proportion to the fraction refunded.
+    const credit = Number(
+      current.teacherCreditAmount ?? current.fullTuitionAmount ?? current.amount,
+    );
+    const creditReduction = paid > 0 ? +((credit * input.amount) / paid).toFixed(2) : 0;
+
+    const edit: PaymentEdit = {
+      at: new Date().toISOString(),
+      byUserId,
+      action: "refund",
+      reason: input.reason,
+      before: { refundedAmount: current.refundedAmount },
+      after: { refundedAmount: (alreadyRefunded + input.amount).toFixed(2) },
+    };
+
+    const [updated] = await tx
+      .update(payments)
+      .set({
+        refundedAmount: (alreadyRefunded + input.amount).toFixed(2),
+        refundedTeacherCredit: (Number(current.refundedTeacherCredit) + creditReduction).toFixed(2),
+        editHistory: [...current.editHistory, edit],
+      })
+      .where(eq(payments.id, id))
+      .returning();
     return updated;
   });
 }

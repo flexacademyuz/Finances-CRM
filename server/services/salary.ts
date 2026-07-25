@@ -66,12 +66,14 @@ export async function estimateSalary(
       classId: classes.id,
       className: classes.name,
       paidStudents: sql<number>`count(distinct ${payments.studentId})`,
-      collected: sql<string>`coalesce(sum(${payments.amount}), 0)`,
-      cash: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.method} = 'cash'), 0)`,
-      online: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.method} = 'online'), 0)`,
-      // Teacher's credited amount is discount-independent (V2 1C). Falls back to
-      // full tuition, then amount paid, for legacy rows without a stored credit.
-      credit: sql<string>`coalesce(sum(coalesce(${payments.teacherCreditAmount}, ${payments.fullTuitionAmount}, ${payments.amount})), 0)`,
+      // Collected is net of refunds (money actually kept).
+      collected: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
+      cash: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.method} = 'cash'), 0)`,
+      online: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.method} = 'online'), 0)`,
+      // Teacher's credited amount is discount-independent (V2 1C), less the
+      // credit removed by any refund (teacher paid only for delivered classes).
+      // Falls back to full tuition, then amount, for legacy rows without credit.
+      credit: sql<string>`coalesce(sum(coalesce(${payments.teacherCreditAmount}, ${payments.fullTuitionAmount}, ${payments.amount}) - ${payments.refundedTeacherCredit}), 0)`,
     })
     .from(classes)
     .leftJoin(

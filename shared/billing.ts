@@ -8,6 +8,52 @@ import { parseDate, addMonths, addDays, atMidnight, daysBetween } from "./date";
 import type { StudentStatus } from "./schema";
 
 /**
+ * Suggested pro-rata refund for a single payment: the share of `amount` that
+ * covers classes the student has NOT taken yet, measured to `asOf`.
+ *
+ *   used  = asOf - coverStart   (clamped to the covered window)
+ *   refund = amount * (coverEnd - asOf) / (coverEnd - coverStart)
+ *
+ * `asOf` before the window starts → full refund (nothing consumed); on or after
+ * it ends → nothing to refund (fully consumed). The result is rounded to whole
+ * currency units and never exceeds `amount`.
+ */
+export function refundSuggestion(args: {
+  amount: number;
+  coverStart: Date;
+  coverEnd: Date;
+  asOf: Date;
+}): number {
+  const start = atMidnight(args.coverStart).getTime();
+  const end = atMidnight(args.coverEnd).getTime();
+  const asOf = atMidnight(args.asOf).getTime();
+  const totalDays = Math.round((end - start) / 86_400_000);
+  if (totalDays <= 0) return 0;
+  if (asOf <= start) return round2(args.amount);
+  if (asOf >= end) return 0;
+  const unusedDays = Math.round((end - asOf) / 86_400_000);
+  return round2((args.amount * unusedDays) / totalDays);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * The calendar window a payment covers: one month starting on the student's
+ * billing anniversary day within the payment's billing month. E.g. anchor day
+ * 23 + billingMonth 2026-08 → 23 Aug 2026 to 23 Sep 2026.
+ */
+export function paymentCoverWindow(billingMonth: string, anchorDay: number): { start: Date; end: Date } {
+  const bm = parseDate(billingMonth);
+  const y = bm.getUTCFullYear();
+  const m = bm.getUTCMonth();
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const start = new Date(Date.UTC(y, m, Math.min(anchorDay, lastDay)));
+  return { start, end: addMonths(start, 1) };
+}
+
+/**
  * How far forward a student is paid up, as a calendar date.
  *
  * Each payment buys exactly one month of coverage, counted forward from the

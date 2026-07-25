@@ -1,0 +1,2 @@
+ALTER TABLE "payments" ADD COLUMN "refunded_amount" numeric(14, 2) DEFAULT '0' NOT NULL;--> statement-breakpoint
+ALTER TABLE "payments" ADD COLUMN "refunded_teacher_credit" numeric(14, 2) DEFAULT '0' NOT NULL;

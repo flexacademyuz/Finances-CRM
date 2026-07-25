@@ -33,9 +33,9 @@ router.get(
     const rows = await db
       .select({
         day: sql<string>`gs::date`,
-        total: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false), 0)`,
-        cash: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false and ${payments.method} = 'cash'), 0)`,
-        online: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false and ${payments.method} = 'online'), 0)`,
+        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false), 0)`,
+        cash: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.method} = 'cash'), 0)`,
+        online: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.method} = 'online'), 0)`,
         count: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false)`,
       })
       .from(sql`generate_series(${fromDate}::date, ${toDate}::date, '1 day') as gs`)
@@ -66,7 +66,7 @@ router.get(
     const rows = await db
       .select({
         month: payments.billingMonth,
-        total: sql<string>`coalesce(sum(${payments.amount}), 0)`,
+        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
       })
       .from(payments)
       .where(and(eq(payments.voided, false)))
@@ -95,7 +95,7 @@ router.get(
     for (const y of years) {
       const months = Array.from({ length: 12 }, (_, i) => shiftMonth(`${y}-09-01`, i));
       const [row] = await db
-        .select({ total: sql<string>`coalesce(sum(${payments.amount}), 0)` })
+        .select({ total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)` })
         .from(payments)
         .where(and(eq(payments.voided, false), sql`${payments.billingMonth} = any(${months})`));
       out.push({ startYear: y, label: `${y}–${y + 1}`, total: Number(row?.total ?? 0) });
@@ -118,7 +118,7 @@ router.get(
         count: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false)`,
         cashCount: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false and ${payments.method} = 'cash')`,
         onlineCount: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false and ${payments.method} = 'online')`,
-        total: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false), 0)`,
+        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false), 0)`,
       })
       .from(sql`generate_series(${fromDate}::date, ${toDate}::date, '1 day') as gs`)
       .leftJoin(payments, sql`${localDay} = gs::date`)
@@ -201,7 +201,7 @@ router.get(
       .select({
         groupId: classes.id,
         name: classes.name,
-        revenue: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
+        revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
         studentCount: sql<number>`(select count(*) from ${students} s where s.class_id = ${classes.id} and s.active = true)`,
         paidCount: sql<number>`count(distinct ${payments.studentId}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month})`,
       })
@@ -242,7 +242,7 @@ router.get(
     for (const tRow of teacherRows) {
       const [rev] = await db
         .select({
-          revenue: sql<string>`coalesce(sum(${payments.amount}), 0)`,
+          revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
         })
         .from(payments)
         .where(
@@ -281,7 +281,7 @@ router.get(
     const months = Array.from({ length: 12 }, (_, i) => shiftMonth(`${startYear}-09-01`, i));
 
     const revRows = await db
-      .select({ month: payments.billingMonth, total: sql<string>`coalesce(sum(${payments.amount}), 0)` })
+      .select({ month: payments.billingMonth, total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)` })
       .from(payments)
       .where(eq(payments.voided, false))
       .groupBy(payments.billingMonth);

@@ -12,13 +12,13 @@ import { settingsSchema } from "@shared/schema";
 
 const router = Router();
 
-/** Revenue (cash/online) for a month over non-voided payments. */
+/** Revenue (cash/online) for a month — net of refunds, over non-voided payments. */
 async function revenueForMonth(month: string) {
   const [row] = await db
     .select({
-      total: sql<string>`coalesce(sum(${payments.amount}), 0)`,
-      cash: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.method} = 'cash'), 0)`,
-      online: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.method} = 'online'), 0)`,
+      total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
+      cash: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.method} = 'cash'), 0)`,
+      online: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.method} = 'online'), 0)`,
       count: sql<number>`count(*)`,
     })
     .from(payments)
@@ -93,7 +93,7 @@ router.get(
         classId: classes.id,
         className: classes.name,
         teacherId: classes.teacherId,
-        revenue: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
+        revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
         paidStudents: sql<number>`count(distinct ${payments.studentId}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month})`,
       })
       .from(classes)
@@ -105,7 +105,7 @@ router.get(
       .select({
         teacherId: teachers.id,
         name: users.fullName,
-        revenue: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
+        revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
       })
       .from(teachers)
       .innerJoin(users, eq(teachers.userId, users.id))
@@ -163,6 +163,8 @@ router.get(
         className: classes.name,
         teacher: users.fullName,
         amount: payments.amount,
+        refunded: payments.refundedAmount,
+        net: sql<string>`${payments.amount} - ${payments.refundedAmount}`,
         method: payments.method,
         voided: payments.voided,
         recorder: sql<string>`(select full_name from ${users} u2 where u2.id = ${payments.recordedBy})`,
@@ -182,6 +184,8 @@ router.get(
       "class",
       "teacher",
       "amount",
+      "refunded",
+      "net",
       "method",
       "voided",
       "recorded_by",
@@ -200,6 +204,8 @@ router.get(
           r.className,
           r.teacher,
           r.amount,
+          r.refunded,
+          r.net,
           r.method,
           r.voided,
           r.recorder,

@@ -5,6 +5,7 @@ import {
   recordPaymentSchema,
   editPaymentSchema,
   voidPaymentSchema,
+  refundPaymentSchema,
 } from "@shared/schema";
 import {
   listPayments,
@@ -16,11 +17,13 @@ import {
   recordPayment,
   editPayment,
   voidPayment,
+  refundPayment,
   getClassById,
   getTeacherById,
   type PaymentFilter,
 } from "../storage";
-import { monthKey, normalizeMonth, monthLabel } from "@shared/date";
+import { monthKey, normalizeMonth, monthLabel, parseDate, toIso } from "@shared/date";
+import { refundSuggestion, paymentCoverWindow } from "@shared/billing";
 import { notifyPaymentRecorded } from "../bot/notifications";
 import { buildPaymentContext } from "../services/payment-context";
 
@@ -161,6 +164,65 @@ router.post(
     if (!existing) return res.status(404).json({ error: "not_found" });
     const updated = await voidPayment(req.params.id, req.authUser!.id, reason);
     res.json(updated);
+  }),
+);
+
+/**
+ * Suggested pro-rata refund for a payment as of a date (default today): the
+ * value of the classes the student has NOT taken in the month this payment
+ * covers. The window is anchored to the student's billing day.
+ */
+router.get(
+  "/payments/:id/refund-preview",
+  requireRole("ceo"),
+  asyncHandler(async (req, res) => {
+    const payment = await getPaymentById(req.params.id);
+    if (!payment) return res.status(404).json({ error: "not_found" });
+    const student = await getStudentById(payment.studentId);
+    if (!student) return res.status(404).json({ error: "not_found" });
+
+    const anchor = parseDate(student.billingStartDate ?? student.enrolledAt);
+    const { start, end } = paymentCoverWindow(payment.billingMonth, anchor.getUTCDate());
+    const asOf =
+      typeof req.query.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.asOf)
+        ? parseDate(req.query.asOf)
+        : new Date();
+
+    const paid = Number(payment.amount);
+    const alreadyRefunded = Number(payment.refundedAmount);
+    const remaining = +(paid - alreadyRefunded).toFixed(2);
+    // Suggestion can't exceed what's still refundable.
+    const suggested = Math.min(
+      remaining,
+      refundSuggestion({ amount: paid, coverStart: start, coverEnd: end, asOf }),
+    );
+
+    res.json({
+      paymentId: payment.id,
+      amount: paid,
+      alreadyRefunded,
+      maxRefundable: remaining,
+      coverStart: toIso(start),
+      coverEnd: toIso(end),
+      asOf: toIso(asOf),
+      suggestedRefund: +suggested.toFixed(2),
+    });
+  }),
+);
+
+router.post(
+  "/payments/:id/refund",
+  requireRole("ceo"),
+  asyncHandler(async (req, res) => {
+    const { amount, reason } = refundPaymentSchema.parse(req.body);
+    const existing = await getPaymentById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "not_found" });
+    try {
+      const updated = await refundPayment(req.params.id, req.authUser!.id, { amount, reason });
+      res.json(updated);
+    } catch (err) {
+      return res.status(400).json({ error: "bad_refund", message: (err as Error).message });
+    }
   }),
 );
 

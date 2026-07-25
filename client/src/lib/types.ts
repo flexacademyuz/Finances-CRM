@@ -42,7 +42,20 @@ export type PaymentRow = {
   recorderName: string;
   voided: boolean;
   voidReason: string | null;
+  refundedAmount: string;
+  refundedTeacherCredit: string;
   createdAt: string;
+};
+
+export type RefundPreview = {
+  paymentId: string;
+  amount: number;
+  alreadyRefunded: number;
+  maxRefundable: number;
+  coverStart: string;
+  coverEnd: string;
+  asOf: string;
+  suggestedRefund: number;
 };
 
 export type UserRow = {

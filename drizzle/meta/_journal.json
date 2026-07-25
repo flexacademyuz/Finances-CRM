@@ -43,6 +43,13 @@
       "when": 1784953143834,
       "tag": "0005_wakeful_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784954437189,
+      "tag": "0006_amused_mauler",
+      "breakpoints": true
     }
   ]
 }
