@@ -129,9 +129,16 @@ export function RecordPayment() {
       {/* Step 4 & 5: Amount + Method */}
       {student && (
         <Card className="space-y-4">
-          {preview.data?.alreadyPaid && (
-            <div className="rounded-lg bg-status-awaiting/15 px-3 py-2 text-xs text-status-awaiting">
-              ⚠️ {t("alreadyPaidMonth")}.
+          {preview.data && (
+            <div
+              className={`rounded-lg px-3 py-2 text-xs ${
+                preview.data.isAdvance
+                  ? "bg-status-paid/15 text-status-paid"
+                  : "bg-tg-secondary-bg text-tg-hint"
+              }`}
+            >
+              {preview.data.isAdvance ? `⏩ ${t("advancePayment")} — ` : ""}
+              {t("coversMonth")}: <span className="font-semibold">{preview.data.billingMonthLabel}</span>
             </div>
           )}
           {preview.data?.frozen && (
@@ -193,6 +200,7 @@ export function RecordPayment() {
           <Row label={t("student")} value={student?.fullName} />
           <Row label={t("amount")} value={money(Number(amount))} />
           <Row label={t("method")} value={t(method)} />
+          <Row label={t("coversMonth")} value={preview.data?.billingMonthLabel} />
           <Row label={t("date")} value={new Date().toLocaleDateString()} />
         </div>
         {record.isError && (

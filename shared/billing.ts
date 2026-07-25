@@ -82,14 +82,15 @@ export function decideStudentStatus(args: {
  * Future freezes don't extend coverage until they've actually been served.
  */
 export function elapsedFrozenDays(
-  freezes: { from: string; to: string }[],
+  freezes: { from: string; to: string | null }[],
   start: Date,
   today: Date,
 ): number {
   let days = 0;
   for (const f of freezes) {
     const from = atMidnight(parseDate(f.from));
-    const to = atMidnight(parseDate(f.to));
+    // Open-ended freeze (no end date) counts through to today.
+    const to = f.to ? atMidnight(parseDate(f.to)) : today;
     const lo = from.getTime() > start.getTime() ? from : start;
     const hi = to.getTime() < today.getTime() ? to : today;
     if (hi.getTime() >= lo.getTime()) days += daysBetween(lo, hi) + 1; // inclusive

@@ -11,6 +11,7 @@ import {
   getPaymentById,
   getStudentById,
   getActivePaymentForMonth,
+  nextUnpaidBillingMonth,
   effectiveFee,
   recordPayment,
   editPayment,
@@ -19,7 +20,7 @@ import {
   getTeacherById,
   type PaymentFilter,
 } from "../storage";
-import { monthKey, normalizeMonth } from "@shared/date";
+import { monthKey, normalizeMonth, monthLabel } from "@shared/date";
 import { notifyPaymentRecorded } from "../bot/notifications";
 import { buildPaymentContext } from "../services/payment-context";
 
@@ -60,11 +61,19 @@ router.get(
   asyncHandler(async (req, res) => {
     const student = await getStudentById(req.params.studentId);
     if (!student) return res.status(404).json({ error: "not_found" });
-    const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
+    // Default to the month a new payment would actually land on (the next
+    // uncovered one), so the form shows "Covers <that month>" and paying ahead
+    // is a normal action rather than an "already paid" error.
+    const month =
+      typeof req.query.month === "string"
+        ? normalizeMonth(req.query.month)
+        : await nextUnpaidBillingMonth(student.id);
     const ctx = await buildPaymentContext(student.id, month);
     res.json({
       studentId: student.id,
       billingMonth: month,
+      billingMonthLabel: monthLabel(month),
+      isAdvance: month > monthKey(),
       // Pre-fill with the discounted amount the student should pay.
       defaultAmount: ctx.amountToPay,
       fullTuition: ctx.fullTuition,
@@ -90,14 +99,21 @@ router.post(
     const student = await getStudentById(input.studentId);
     if (!student) return res.status(404).json({ error: "not_found", message: "Student not found" });
 
-    const billingMonth = input.billingMonth ? normalizeMonth(input.billingMonth) : monthKey();
-
-    const existing = await getActivePaymentForMonth(student.id, billingMonth);
-    if (existing) {
-      return res.status(409).json({
-        error: "already_paid",
-        message: "This student already has a payment for that month. Void it first to re-enter.",
-      });
+    // No month given → land on the student's next uncovered month, so recording
+    // again simply pays the next month forward (advance payments). An explicit
+    // month is a CEO correction and must not collide with an existing record.
+    let billingMonth: string;
+    if (input.billingMonth) {
+      billingMonth = normalizeMonth(input.billingMonth);
+      const existing = await getActivePaymentForMonth(student.id, billingMonth);
+      if (existing) {
+        return res.status(409).json({
+          error: "already_paid",
+          message: "This student already has a payment for that month. Void it first to re-enter.",
+        });
+      }
+    } else {
+      billingMonth = await nextUnpaidBillingMonth(student.id);
     }
 
     // Resolve discount + teacher credit for this student/month. The accountant

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { decideStatus } from "../server/services/billing";
-import { computePaidThrough, decideStudentStatus } from "@shared/billing";
-import { monthKey, shiftMonth, normalizeMonth, recentMonths, addMonths, fullMonthsBetween, parseDate } from "@shared/date";
+import { computePaidThrough, decideStudentStatus, elapsedFrozenDays } from "@shared/billing";
+import { monthKey, shiftMonth, normalizeMonth, recentMonths, addMonths, fullMonthsBetween, parseDate, atMidnight } from "@shared/date";
 
 /**
  * Monthly status-transition logic (spec §3.3). `decideStatus` is the pure
@@ -154,6 +154,43 @@ describe("decideStudentStatus — status from the coverage window", () => {
   it("frozen days push the due date out rather than burning the paid month", () => {
     // Coverage would have ended 23 Aug; 10 frozen days carry it to 2 Sep.
     expect(at("2026-08-25", ["2026-07-23"], { frozenDays: 10 })).toBe("paid");
+  });
+});
+
+describe("elapsedFrozenDays — indefinite & bounded freezes", () => {
+  const start = atMidnight(parseDate("2026-07-01"));
+  const today = atMidnight(parseDate("2026-07-31"));
+
+  it("counts an inclusive bounded window", () => {
+    // 10–14 Jul inclusive = 5 days.
+    expect(elapsedFrozenDays([{ from: "2026-07-10", to: "2026-07-14" }], start, today)).toBe(5);
+  });
+
+  it("counts an open-ended freeze through today only", () => {
+    // Frozen from 20 Jul with no end → 20..31 Jul = 12 days (future not counted).
+    expect(elapsedFrozenDays([{ from: "2026-07-20", to: null }], start, today)).toBe(12);
+  });
+
+  it("clips a freeze that began before the billing anchor", () => {
+    // Freeze 25 Jun–5 Jul, anchor 1 Jul → only 1..5 Jul counts = 5 days.
+    expect(elapsedFrozenDays([{ from: "2026-06-25", to: "2026-07-05" }], start, today)).toBe(5);
+  });
+});
+
+describe("resume re-anchoring — a returning student starts fresh", () => {
+  const grace = 5;
+  // Enrolled long ago, stopped, resumed 2026-07-20 (anchor = resume date).
+  // No payments since resume → first month due on the resume date.
+  it("is awaiting (not overdue) right after resuming", () => {
+    expect(
+      decideStudentStatus({ startDate: "2026-07-20", today: parseDate("2026-07-22"), gracePeriodDays: grace, paymentDates: [] }),
+    ).toBe("awaiting_payment");
+  });
+
+  it("is paid for a month once they pay on resume", () => {
+    expect(
+      decideStudentStatus({ startDate: "2026-07-20", today: parseDate("2026-08-10"), gracePeriodDays: grace, paymentDates: ["2026-07-20"] }),
+    ).toBe("paid");
   });
 });
 

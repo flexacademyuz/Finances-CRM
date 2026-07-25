@@ -102,6 +102,9 @@ export type PayrollData = {
 export type PaymentPreview = {
   studentId: string;
   billingMonth: string;
+  billingMonthLabel: string;
+  /** True when the resolved month is later than the current calendar month. */
+  isAdvance: boolean;
   defaultAmount: number;
   fullTuition: number;
   discount: { id: string; type: "percentage" | "fixed"; value: number; label: string } | null;
@@ -128,7 +131,7 @@ export type FreezeRow = {
   studentId: string;
   groupId: string;
   freezeFrom: string;
-  freezeTo: string;
+  freezeTo: string | null;
   reason: string;
   status: "active" | "lifted" | "expired";
   createdAt: string;

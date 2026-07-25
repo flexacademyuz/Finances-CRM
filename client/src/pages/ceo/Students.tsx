@@ -15,16 +15,21 @@ const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overd
 export function StudentsPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
+  const [view, setView] = useState<"active" | "archived">("active");
   const [status, setStatus] = useState<StudentStatus | "">("");
   const [classId, setClassId] = useState("");
   const [adding, setAdding] = useState(false);
+  const [resuming, setResuming] = useState<StudentRow | null>(null);
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
   const students = useQuery({
-    queryKey: ["students", status, classId],
+    queryKey: ["students", view, status, classId],
     queryFn: () =>
       api<StudentRow[]>("/api/students", {
-        query: { status: status || undefined, classId: classId || undefined },
+        query:
+          view === "archived"
+            ? { archived: "1", classId: classId || undefined }
+            : { activeOnly: "1", status: status || undefined, classId: classId || undefined },
       }),
   });
 
@@ -37,6 +42,19 @@ export function StudentsPage() {
         </Button>
       </div>
 
+      {/* Active / Archived */}
+      <div className="grid grid-cols-2 gap-2">
+        {(["active", "archived"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`btn ${view === v ? "btn-primary" : "btn-ghost"}`}
+          >
+            {v === "active" ? t("active") : t("archived")}
+          </button>
+        ))}
+      </div>
+
       <div className="flex gap-2">
         <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
           <option value="">{t("classes")}</option>
@@ -44,11 +62,13 @@ export function StudentsPage() {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </Select>
-        <Select value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | "")}>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{s ? t(s) : t("status")}</option>
-          ))}
-        </Select>
+        {view === "active" && (
+          <Select value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | "")}>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{s ? t(s) : t("status")}</option>
+            ))}
+          </Select>
+        )}
       </div>
 
       {students.isLoading ? (
@@ -64,14 +84,20 @@ export function StudentsPage() {
                 </div>
               </Link>
               <div className="flex shrink-0 items-center gap-2">
-                <StatusBadge status={s.status} />
-                <StudentActions student={s} />
+                {view === "archived" ? (
+                  <Button variant="ghost" onClick={() => setResuming(s)}>{t("resumeStudent")}</Button>
+                ) : (
+                  <>
+                    <StatusBadge status={s.status} />
+                    <StudentActions student={s} />
+                  </>
+                )}
               </div>
             </Card>
           ))}
         </div>
       ) : (
-        <Empty />
+        <Empty>{view === "archived" ? t("noArchived") : undefined}</Empty>
       )}
 
       <AddStudentModal
@@ -80,7 +106,64 @@ export function StudentsPage() {
         classes={classes.data ?? []}
         onSaved={() => { setAdding(false); qc.invalidateQueries({ queryKey: ["students"] }); }}
       />
+      {resuming && (
+        <ResumeStudentModal
+          student={resuming}
+          classes={classes.data ?? []}
+          onClose={() => setResuming(null)}
+          onSaved={() => { setResuming(null); qc.invalidateQueries({ queryKey: ["students"] }); }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Bring a stopped student back, optionally into a different group. */
+function ResumeStudentModal({
+  student,
+  classes,
+  onClose,
+  onSaved,
+}: {
+  student: StudentRow;
+  classes: Class[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const [classId, setClassId] = useState(student.classId);
+  const [resumeDate, setResumeDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const resume = useMutation({
+    mutationFn: () =>
+      api(`/api/students/${student.id}/resume`, {
+        method: "POST",
+        body: { classId, resumeDate },
+      }),
+    onSuccess: onSaved,
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("resumeStudent")} — ${student.fullName}`}>
+      <div className="space-y-3">
+        <Field label={t("resumeInto")}>
+          <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={t("resumeDate")}>
+          <Input type="date" value={resumeDate} onChange={(e) => setResumeDate(e.target.value)} />
+        </Field>
+        {resume.isError && (
+          <div className="text-sm text-status-overdue">{(resume.error as Error).message}</div>
+        )}
+        <Button className="w-full" disabled={resume.isPending} onClick={() => resume.mutate()}>
+          {t("resumeStudent")}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

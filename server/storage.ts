@@ -17,7 +17,7 @@ import {
   type StudentStatus,
   type DiscountType,
 } from "@shared/schema";
-import { monthKey, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
+import { monthKey, shiftMonth, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus } from "@shared/billing";
 import { env } from "./env";
 
@@ -180,6 +180,8 @@ export type StudentFilter = {
   teacherId?: string;
   status?: StudentStatus;
   activeOnly?: boolean;
+  /** Only stopped/archived students (active = false). */
+  archivedOnly?: boolean;
 };
 
 /** List students with class + teacher names, honoring filters. */
@@ -189,6 +191,7 @@ export async function listStudents(filter: StudentFilter = {}) {
   if (filter.teacherId) conds.push(eq(classes.teacherId, filter.teacherId));
   if (filter.status) conds.push(eq(students.status, filter.status));
   if (filter.activeOnly) conds.push(eq(students.active, true));
+  if (filter.archivedOnly) conds.push(eq(students.active, false));
 
   return db
     .select({
@@ -245,6 +248,7 @@ export async function updateStudent(
     classId: string;
     monthlyFee: number | null;
     active: boolean;
+    billingStartDate: string | null;
   }>,
 ) {
   const values: Record<string, unknown> = { ...patch };
@@ -252,6 +256,47 @@ export async function updateStudent(
     values.monthlyFee = patch.monthlyFee != null ? String(patch.monthlyFee) : null;
   const [s] = await db.update(students).set(values).where(eq(students.id, id)).returning();
   return s;
+}
+
+/**
+ * Stop a student's education: they leave the group (active=false) so they drop
+ * off rosters, dashboards and the awaiting list, but the student row and all
+ * their payments are preserved for the archive and the finance history.
+ */
+export async function stopStudent(id: string) {
+  return updateStudent(id, { active: false });
+}
+
+/**
+ * Resume a stopped student. They rejoin (active=true), optionally into a new
+ * group, and billing is re-anchored to the resume date so they start a fresh
+ * first month rather than owing for the time they were away.
+ */
+export async function resumeStudent(
+  id: string,
+  opts: { classId?: string; resumeDate: string },
+) {
+  return updateStudent(id, {
+    active: true,
+    billingStartDate: opts.resumeDate,
+    ...(opts.classId ? { classId: opts.classId } : {}),
+  });
+}
+
+/**
+ * The first billing month (YYYY-MM-01) from `now` forward that the student has
+ * no active payment for. Lets an accountant record advance payments: each click
+ * lands on the next uncovered month instead of colliding on the current one.
+ */
+export async function nextUnpaidBillingMonth(studentId: string, now: Date = new Date()): Promise<string> {
+  const rows = await db
+    .select({ month: payments.billingMonth })
+    .from(payments)
+    .where(and(eq(payments.studentId, studentId), eq(payments.voided, false)));
+  const taken = new Set(rows.map((r) => r.month));
+  let m = monthKey(now);
+  while (taken.has(m)) m = shiftMonth(m, 1);
+  return m;
 }
 
 /** Effective monthly fee for a student = override ?? class default. */
@@ -450,7 +495,7 @@ export async function voidPayment(id: string, byUserId: string, reason: string) 
         .where(and(eq(payments.studentId, student.id), eq(payments.voided, false)));
       const [cfg] = await tx.select().from(settings).where(eq(settings.id, "global"));
       const args = {
-        startDate: student.enrolledAt,
+        startDate: student.billingStartDate ?? student.enrolledAt,
         paymentDates: remaining.map((p) => toIso(p.paidAt)),
       };
       await tx
@@ -618,7 +663,10 @@ export async function classLedger(classId: string, months: string[]) {
       if (paidSet.has(`${s.id}|${m}`)) monthly[m] = "paid";
       else if (
         freezeRows.some(
-          (f) => f.studentId === s.id && m >= f.freezeFrom.slice(0, 7) + "-01" && m <= f.freezeTo,
+          (f) =>
+            f.studentId === s.id &&
+            m >= f.freezeFrom.slice(0, 7) + "-01" &&
+            (f.freezeTo == null || m <= f.freezeTo),
         )
       )
         monthly[m] = "frozen";
@@ -636,7 +684,7 @@ export async function createFreeze(input: {
   studentId: string;
   groupId: string;
   freezeFrom: string;
-  freezeTo: string;
+  freezeTo: string | null;
   reason: string;
   createdBy: string;
 }) {

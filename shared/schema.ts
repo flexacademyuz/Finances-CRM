@@ -115,6 +115,11 @@ export const students = pgTable(
     // (Column name is historical: it used to hold a YYYY-MM-01 month key.)
     paidThroughDate: date("paid_through_month"),
     enrolledAt: date("enrolled_at").notNull().defaultNow(),
+    // Billing anchor. Normally the enrolment date, but a student who stops and
+    // later resumes gets re-anchored to their resume date (a fresh first month),
+    // while `enrolledAt` keeps the original enrolment for the record. Null =
+    // fall back to `enrolledAt`. See services/billing.
+    billingStartDate: date("billing_start_date"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -237,7 +242,8 @@ export const paymentFreezes = pgTable(
       .notNull()
       .references(() => classes.id, { onDelete: "cascade" }),
     freezeFrom: date("freeze_from").notNull(),
-    freezeTo: date("freeze_to").notNull(),
+    // Null = open-ended freeze (frozen until explicitly lifted).
+    freezeTo: date("freeze_to"),
     reason: text("reason").notNull(),
     createdBy: uuid("created_by")
       .notNull()
@@ -441,7 +447,8 @@ export const createFreezeSchema = z.object({
   studentId: z.string().uuid(),
   groupId: z.string().uuid(),
   freezeFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  freezeTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Null / omitted = open-ended freeze (until lifted).
+  freezeTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   reason: z.string().min(1),
 });
 

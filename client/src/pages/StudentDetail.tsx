@@ -82,7 +82,7 @@ export function StudentDetail() {
             ))}
             {freezes.map((f) => (
               <span key={f.id} className="rounded-full bg-status-frozen/10 px-2.5 py-0.5 text-xs font-semibold text-status-frozen">
-                🔵 {formatDate(f.freezeFrom, locale)} → {formatDate(f.freezeTo, locale)}
+                🔵 {formatDate(f.freezeFrom, locale)} → {f.freezeTo ? formatDate(f.freezeTo, locale) : t("untilLifted")}
               </span>
             ))}
           </div>

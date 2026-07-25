@@ -1,23 +1,23 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Snowflake, Tag } from "lucide-react";
+import { Snowflake, Tag, ArrowLeftRight, LogOut } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { money } from "../lib/format";
 import { monthKey } from "@shared/date";
-import type { FreezeRow, DiscountRow } from "../lib/types";
+import type { FreezeRow, DiscountRow, Class } from "../lib/types";
 import { Button, Field, Input, Modal, Select } from "./ui";
 
 /** Minimal student shape the freeze/discount actions need. */
 type ActionStudent = { id: string; classId: string; fullName: string; effectiveFee: string };
 
 /**
- * Freeze / discount actions for a single student (V2 1B, 1C). Available to
- * Accountant and CEO from any student row.
+ * Per-student actions available to Accountant and CEO from any active student
+ * row: freeze (1B), discount (1C), change group, and stop learning.
  */
 export function StudentActions({ student }: { student: ActionStudent }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState<null | "freeze" | "discount">(null);
+  const [open, setOpen] = useState<null | "freeze" | "discount" | "group" | "stop">(null);
 
   return (
     <>
@@ -36,10 +36,97 @@ export function StudentActions({ student }: { student: ActionStudent }) {
         >
           <Tag size={16} />
         </button>
+        <button
+          className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+          title={t("changeGroup")}
+          onClick={() => setOpen("group")}
+        >
+          <ArrowLeftRight size={16} />
+        </button>
+        <button
+          className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
+          title={t("stopStudent")}
+          onClick={() => setOpen("stop")}
+        >
+          <LogOut size={16} />
+        </button>
       </div>
       {open === "freeze" && <FreezeModal student={student} onClose={() => setOpen(null)} />}
       {open === "discount" && <DiscountModal student={student} onClose={() => setOpen(null)} />}
+      {open === "group" && <ChangeGroupModal student={student} onClose={() => setOpen(null)} />}
+      {open === "stop" && <StopModal student={student} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+
+/** Move a student to a different group. Past payments stay with the old teacher. */
+function ChangeGroupModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [classId, setClassId] = useState(student.classId);
+
+  const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
+
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/api/students/${student.id}`, { method: "PATCH", body: { classId } }),
+    onSuccess: () => { qc.invalidateQueries(); onClose(); },
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("changeGroup")} — ${student.fullName}`}>
+      <div className="space-y-3">
+        <div className="rounded-lg bg-tg-secondary-bg px-3 py-2 text-xs text-tg-hint">
+          {t("changeGroupNote")}
+        </div>
+        <Field label={t("groups")}>
+          <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+            {(classes.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
+        </Field>
+        {save.isError && (
+          <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>
+        )}
+        <Button
+          className="w-full"
+          disabled={classId === student.classId || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {t("save")}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Stop a student's education: leaves the group, kept in the archive. */
+function StopModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const stop = useMutation({
+    mutationFn: () => api(`/api/students/${student.id}/stop`, { method: "POST" }),
+    onSuccess: () => { qc.invalidateQueries(); onClose(); },
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("stopStudent")} — ${student.fullName}`}>
+      <div className="space-y-4">
+        <div className="rounded-lg bg-status-overdue/10 px-3 py-2 text-sm text-tg-text">
+          {t("stopStudentConfirm")}
+        </div>
+        {stop.isError && (
+          <div className="text-sm text-status-overdue">{(stop.error as Error).message}</div>
+        )}
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={onClose}>{t("cancel")}</Button>
+          <Button className="flex-1" disabled={stop.isPending} onClick={() => stop.mutate()}>
+            {t("stopStudent")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -48,6 +135,7 @@ function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: ()
   const qc = useQueryClient();
   const firstOfMonth = monthKey();
   const [freezeFrom, setFreezeFrom] = useState(firstOfMonth);
+  const [indefinite, setIndefinite] = useState(true);
   const [freezeTo, setFreezeTo] = useState("");
   const [reason, setReason] = useState("");
 
@@ -60,7 +148,13 @@ function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: ()
     mutationFn: () =>
       api("/api/freezes", {
         method: "POST",
-        body: { studentId: student.id, groupId: student.classId, freezeFrom, freezeTo, reason },
+        body: {
+          studentId: student.id,
+          groupId: student.classId,
+          freezeFrom,
+          freezeTo: indefinite ? null : freezeTo,
+          reason,
+        },
       }),
     onSuccess: () => { qc.invalidateQueries(); onClose(); },
   });
@@ -79,7 +173,7 @@ function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: ()
             {active.map((f) => (
               <div key={f.id} className="flex items-center justify-between">
                 <span className="text-status-frozen">
-                  🔵 {f.freezeFrom} → {f.freezeTo} · {f.reason}
+                  🔵 {f.freezeFrom} → {f.freezeTo ?? t("untilLifted")} · {f.reason}
                 </span>
                 <button className="text-tg-link" onClick={() => lift.mutate(f.id)}>
                   {t("liftFreeze")}
@@ -93,7 +187,13 @@ function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: ()
             <Input type="date" value={freezeFrom} onChange={(e) => setFreezeFrom(e.target.value)} />
           </Field>
           <Field label={t("freezeUntil")}>
-            <Input type="date" value={freezeTo} onChange={(e) => setFreezeTo(e.target.value)} />
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={indefinite} onChange={(e) => setIndefinite(e.target.checked)} />
+              <span className="text-xs text-tg-hint">{t("untilLifted")}</span>
+            </label>
+            {!indefinite && (
+              <Input type="date" className="mt-1" value={freezeTo} onChange={(e) => setFreezeTo(e.target.value)} />
+            )}
           </Field>
         </div>
         <Field label={t("reason")}>
@@ -104,7 +204,7 @@ function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: ()
         )}
         <Button
           className="w-full"
-          disabled={!freezeFrom || !freezeTo || !reason || create.isPending}
+          disabled={!freezeFrom || (!indefinite && !freezeTo) || !reason || create.isPending}
           onClick={() => create.mutate()}
         >
           {t("confirm")}

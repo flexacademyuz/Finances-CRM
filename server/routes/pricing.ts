@@ -30,10 +30,14 @@ router.post(
   requireRole("accountant", "ceo"),
   asyncHandler(async (req, res) => {
     const input = createFreezeSchema.parse(req.body);
-    if (input.freezeTo < input.freezeFrom) {
+    if (input.freezeTo && input.freezeTo < input.freezeFrom) {
       return res.status(400).json({ error: "bad_range", message: "End date is before start date." });
     }
-    const freeze = await createFreeze({ ...input, createdBy: req.authUser!.id });
+    const freeze = await createFreeze({
+      ...input,
+      freezeTo: input.freezeTo ?? null,
+      createdBy: req.authUser!.id,
+    });
     res.status(201).json(freeze);
   }),
 );

@@ -43,11 +43,12 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
   const settings = await getSettings();
   const gracePeriodDays = settings?.gracePeriodDays ?? env.defaultGracePeriodDays;
 
-  // Active students with their start date (enrolledAt).
+  // Active students with their billing anchor: the resume date if they stopped
+  // and came back, otherwise their original enrolment date.
   const rows = await db
     .select({
       id: students.id,
-      startDate: students.enrolledAt,
+      startDate: sql<string>`coalesce(${students.billingStartDate}, ${students.enrolledAt})`,
     })
     .from(students)
     .where(eq(students.active, true));
@@ -81,7 +82,7 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     })
     .from(paymentFreezes)
     .where(eq(paymentFreezes.status, "active"));
-  const freezesByStudent = new Map<string, { from: string; to: string }[]>();
+  const freezesByStudent = new Map<string, { from: string; to: string | null }[]>();
   for (const f of freezes) {
     const list = freezesByStudent.get(f.studentId) ?? [];
     list.push({ from: f.from, to: f.to });
@@ -96,7 +97,9 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
       continue;
     }
     const studentFreezes = freezesByStudent.get(r.id) ?? [];
-    const isFrozenNow = studentFreezes.some((f) => todayIso >= f.from && todayIso <= f.to);
+    const isFrozenNow = studentFreezes.some(
+      (f) => todayIso >= f.from && (f.to == null || todayIso <= f.to),
+    );
 
     const args = {
       startDate: r.startDate,

@@ -1,12 +1,15 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
+import { requireRole } from "../auth/middleware";
 import { insertStudentSchema, type StudentStatus } from "@shared/schema";
 import {
   listStudents,
   getStudentById,
   createStudent,
   updateStudent,
+  stopStudent,
+  resumeStudent,
   getClassById,
   effectiveFee,
   listPayments,
@@ -48,16 +51,21 @@ router.get(
     const grace = settings?.gracePeriodDays ?? env.defaultGracePeriodDays;
     const currency = settings?.currency ?? env.defaultCurrency;
     const now = new Date();
-    const start = atMidnight(parseDate(student.enrolledAt));
+    // Billing anchor: resume date if the student stopped and came back, else
+    // their enrolment date.
+    const anchor = student.billingStartDate ?? student.enrolledAt;
+    const start = atMidnight(parseDate(anchor));
     const monthsElapsed = fullMonthsBetween(start, now);
     const active = payments.filter((p) => !p.voided);
 
     const activeFreezes = freezes.filter((f) => f.status === "active");
     const todayIso = toIso(now);
-    const isFrozenNow = activeFreezes.some((f) => todayIso >= f.freezeFrom && todayIso <= f.freezeTo);
+    const isFrozenNow = activeFreezes.some(
+      (f) => todayIso >= f.freezeFrom && (f.freezeTo == null || todayIso <= f.freezeTo),
+    );
 
     const args = {
-      startDate: student.enrolledAt,
+      startDate: anchor,
       paymentDates: active.map((p) => toIso(new Date(p.createdAt))),
       frozenDays: elapsedFrozenDays(
         activeFreezes.map((f) => ({ from: f.freezeFrom, to: f.freezeTo })),
@@ -78,7 +86,7 @@ router.get(
         active: student.active,
       },
       billing: {
-        startDate: student.enrolledAt,
+        startDate: anchor,
         monthsEnrolled: monthsElapsed,
         paymentsMade: active.length,
         effectiveFee: feeVal,
@@ -110,10 +118,12 @@ router.get(
     await recomputeStatuses();
 
     const filter: StudentFilter = {};
-    const { classId, teacherId, status, activeOnly } = req.query;
+    const { classId, teacherId, status, activeOnly, archived } = req.query;
     if (typeof classId === "string") filter.classId = classId;
     if (typeof status === "string") filter.status = status as StudentStatus;
     if (activeOnly === "1" || activeOnly === "true") filter.activeOnly = true;
+    // Archive tab: stopped students only (active = false).
+    if (archived === "1" || archived === "true") filter.archivedOnly = true;
 
     if (req.authUser!.role === "teacher") {
       filter.teacherId = req.teacherId; // hard scope
@@ -185,18 +195,57 @@ router.patch(
         .json({ error: "forbidden", message: "Teachers cannot change fees or reassign classes." });
     }
     const updated = await updateStudent(req.params.id, patch);
+    // Moving groups doesn't touch past payments — those keep the class/teacher
+    // they were recorded under, so salary stays with the previous teacher and
+    // the new group's teacher is credited only from the next payment. Refresh
+    // the roster/badge state after the move.
+    if (patch.classId) await recomputeStatuses();
     res.json(updated);
   }),
 );
 
-/** Mark a student inactive/left (soft). Teacher: own class; else CEO/Accountant. */
+/**
+ * Stop a student's education (soft): they leave the group and move to the
+ * archive, but the record and every payment stay for the finance history.
+ * Teacher: own class; else CEO/Accountant. (`/archive` kept as an alias.)
+ */
 router.post(
-  "/students/:id/archive",
+  ["/students/:id/stop", "/students/:id/archive"],
   asyncHandler(async (req, res) => {
     const existing = await getStudentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
     await assertClassWritable(req, existing.classId);
-    const updated = await updateStudent(req.params.id, { active: false });
+    const updated = await stopStudent(req.params.id);
+    res.json(updated);
+  }),
+);
+
+/**
+ * Resume a stopped student. Optionally into a new group. Billing re-anchors to
+ * the resume date (default today) so they begin a fresh first month rather than
+ * owing for the time they were away. CEO/Accountant only.
+ */
+router.post(
+  "/students/:id/resume",
+  requireRole("accountant", "ceo"),
+  asyncHandler(async (req, res) => {
+    const existing = await getStudentById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "not_found" });
+
+    const { classId, resumeDate } = z
+      .object({
+        classId: z.string().uuid().optional(),
+        resumeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      })
+      .parse(req.body);
+
+    if (classId) await assertClassWritable(req, classId);
+    const updated = await resumeStudent(req.params.id, {
+      classId,
+      resumeDate: resumeDate ?? new Date().toISOString().slice(0, 10),
+    });
+    // Refresh status/coverage against the new anchor immediately.
+    await recomputeStatuses();
     res.json(updated);
   }),
 );
