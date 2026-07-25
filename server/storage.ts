@@ -289,10 +289,14 @@ export async function resumeStudent(
  * lands on the next uncovered month instead of colliding on the current one.
  */
 export async function nextUnpaidBillingMonth(studentId: string, now: Date = new Date()): Promise<string> {
+  // Consider EVERY existing row, voided ones included: the unique index
+  // (student_id, billing_month) counts them, so a month that holds only a
+  // voided/refunded payment is still taken. Skipping it here is what prevents
+  // the "duplicate key … payments_student_month_uniq" crash on re-record.
   const rows = await db
     .select({ month: payments.billingMonth })
     .from(payments)
-    .where(and(eq(payments.studentId, studentId), eq(payments.voided, false)));
+    .where(eq(payments.studentId, studentId));
   const taken = new Set(rows.map((r) => r.month));
   let m = monthKey(now);
   while (taken.has(m)) m = shiftMonth(m, 1);
