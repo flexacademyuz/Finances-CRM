@@ -247,6 +247,7 @@ export async function updateStudent(
     phone: string | null;
     classId: string;
     monthlyFee: number | null;
+    enrolledAt: string;
     active: boolean;
     billingStartDate: string | null;
   }>,

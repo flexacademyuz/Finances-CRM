@@ -157,7 +157,7 @@ router.patch(
 
 router.post(
   "/payments/:id/void",
-  requireRole("ceo"),
+  requireRole("accountant", "ceo"),
   asyncHandler(async (req, res) => {
     const { reason } = voidPaymentSchema.parse(req.body);
     const existing = await getPaymentById(req.params.id);

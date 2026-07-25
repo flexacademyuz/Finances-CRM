@@ -42,7 +42,9 @@ router.get(
 
     const [feeVal, payments, discounts, freezes, settings] = await Promise.all([
       effectiveFee(student.id),
-      listPayments({ studentId: student.id, includeVoided: true }),
+      // Voided (accidental) payments are removed from the student's view; they
+      // remain in the CEO payments log for audit.
+      listPayments({ studentId: student.id, includeVoided: false }),
       listDiscountsForStudent(student.id),
       listFreezesForStudent(student.id),
       getSettings(),
@@ -177,29 +179,31 @@ router.patch(
         phone: z.string().nullable().optional(),
         classId: z.string().uuid().optional(),
         monthlyFee: z.coerce.number().nonnegative().nullable().optional(),
+        // Start (enrolment) date — editable to fix a mistaken entry. Drives
+        // billing when the student hasn't been re-anchored by a resume.
+        enrolledAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         active: z.boolean().optional(),
       })
       .parse(req.body);
 
-    // Teachers cannot move a student into a class they don't own; only
-    // CEO/Accountant may reassign fees freely.
+    // Teachers cannot move a class, change fees, or move the start date (all
+    // affect billing/money); only CEO/Accountant may.
     if (patch.classId && req.authUser!.role === "teacher") {
       await assertClassWritable(req, patch.classId);
     }
     if (
       req.authUser!.role === "teacher" &&
-      (patch.monthlyFee !== undefined || patch.classId !== undefined)
+      (patch.monthlyFee !== undefined || patch.classId !== undefined || patch.enrolledAt !== undefined)
     ) {
-      return res
-        .status(403)
-        .json({ error: "forbidden", message: "Teachers cannot change fees or reassign classes." });
+      return res.status(403).json({
+        error: "forbidden",
+        message: "Teachers cannot change fees, classes, or start dates.",
+      });
     }
     const updated = await updateStudent(req.params.id, patch);
-    // Moving groups doesn't touch past payments — those keep the class/teacher
-    // they were recorded under, so salary stays with the previous teacher and
-    // the new group's teacher is credited only from the next payment. Refresh
-    // the roster/badge state after the move.
-    if (patch.classId) await recomputeStatuses();
+    // A class move keeps past payments with their original teacher; a start-date
+    // change shifts the billing anchor. Either way, refresh status/coverage.
+    if (patch.classId || patch.enrolledAt) await recomputeStatuses();
     res.json(updated);
   }),
 );

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Snowflake, Tag, ArrowLeftRight, LogOut } from "lucide-react";
+import { Snowflake, Tag, ArrowLeftRight, LogOut, Pencil } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { money } from "../lib/format";
 import { monthKey } from "@shared/date";
-import type { FreezeRow, DiscountRow, Class } from "../lib/types";
+import type { FreezeRow, DiscountRow, Class, StudentRow } from "../lib/types";
 import { Button, Field, Input, Modal, Select } from "./ui";
 
 /** Minimal student shape the freeze/discount actions need. */
@@ -17,11 +17,18 @@ type ActionStudent = { id: string; classId: string; fullName: string; effectiveF
  */
 export function StudentActions({ student }: { student: ActionStudent }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState<null | "freeze" | "discount" | "group" | "stop">(null);
+  const [open, setOpen] = useState<null | "edit" | "freeze" | "discount" | "group" | "stop">(null);
 
   return (
     <>
       <div className="flex gap-1">
+        <button
+          className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+          title={t("editStudent")}
+          onClick={() => setOpen("edit")}
+        >
+          <Pencil size={16} />
+        </button>
         <button
           className="rounded-lg bg-tg-bg p-1.5 text-status-frozen"
           title={t("freezePayment")}
@@ -51,11 +58,77 @@ export function StudentActions({ student }: { student: ActionStudent }) {
           <LogOut size={16} />
         </button>
       </div>
+      {open === "edit" && <EditStudentModal student={student} onClose={() => setOpen(null)} />}
       {open === "freeze" && <FreezeModal student={student} onClose={() => setOpen(null)} />}
       {open === "discount" && <DiscountModal student={student} onClose={() => setOpen(null)} />}
       {open === "group" && <ChangeGroupModal student={student} onClose={() => setOpen(null)} />}
       {open === "stop" && <StopModal student={student} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+
+/** Edit a student's details, including a mistaken start (enrolment) date. */
+function EditStudentModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [fullName, setFullName] = useState(student.fullName);
+  const [phone, setPhone] = useState("");
+  const [monthlyFee, setMonthlyFee] = useState("");
+  const [enrolledAt, setEnrolledAt] = useState("");
+
+  // Load the current values (phone / fee / start date aren't on ActionStudent).
+  const detail = useQuery({
+    queryKey: ["student-row", student.id],
+    queryFn: () => api<StudentRow>(`/api/students/${student.id}`),
+  });
+  useEffect(() => {
+    if (!detail.data) return;
+    setPhone(detail.data.phone ?? "");
+    setMonthlyFee(detail.data.monthlyFee ?? "");
+    setEnrolledAt(detail.data.enrolledAt?.slice(0, 10) ?? "");
+  }, [detail.data]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/api/students/${student.id}`, {
+        method: "PATCH",
+        body: {
+          fullName,
+          phone: phone || null,
+          monthlyFee: monthlyFee === "" ? null : Number(monthlyFee),
+          enrolledAt: enrolledAt || undefined,
+        },
+      }),
+    onSuccess: () => { qc.invalidateQueries(); onClose(); },
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("editStudent")} — ${student.fullName}`}>
+      <div className="space-y-3">
+        <Field label={t("fullName")}>
+          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </Field>
+        <Field label={t("phone")}>
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </Field>
+        <Field label={t("fee")}>
+          <Input type="number" inputMode="decimal" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} placeholder={student.effectiveFee} />
+        </Field>
+        <Field label={t("startDate")}>
+          <Input type="date" value={enrolledAt} onChange={(e) => setEnrolledAt(e.target.value)} />
+        </Field>
+        {save.isError && (
+          <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>
+        )}
+        <Button
+          className="w-full"
+          disabled={!fullName || save.isPending || detail.isLoading}
+          onClick={() => save.mutate()}
+        >
+          {t("save")}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

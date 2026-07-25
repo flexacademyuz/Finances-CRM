@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { ArrowLeft, Phone, CalendarClock, CalendarCheck } from "lucide-react";
+import { ArrowLeft, Phone, CalendarClock, CalendarCheck, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { money, formatDate } from "../lib/format";
-import type { StudentDetail as StudentDetailData } from "../lib/types";
-import { Card, Empty, Spinner, StatusBadge, MethodTag } from "../components/ui";
+import type { StudentDetail as StudentDetailData, PaymentRow } from "../lib/types";
+import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge, MethodTag } from "../components/ui";
 import { StudentActions } from "../components/StudentActions";
 
 /** Full student profile: start date, next-due, and complete payment history. */
@@ -15,6 +16,7 @@ export function StudentDetail() {
   const { user } = useSession();
   const params = useParams();
   const id = params.id!;
+  const [removeFor, setRemoveFor] = useState<PaymentRow | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["student-detail", id],
@@ -106,25 +108,77 @@ export function StudentDetail() {
           <Empty>{t("noPayments")}</Empty>
         ) : (
           <div className="space-y-2">
-            {payments.map((p) => (
-              <Card key={p.id} className={`flex items-center justify-between gap-2 ${p.voided ? "opacity-50" : ""}`}>
-                <div className="min-w-0">
-                  <div className="font-semibold">
-                    {money(p.amount, billing.currency)}
-                    {p.voided && <span className="text-status-overdue"> (void)</span>}
+            {payments.map((p) => {
+              const refunded = Number(p.refundedAmount ?? 0);
+              return (
+                <Card key={p.id} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold">
+                      {money(p.amount, billing.currency)}
+                      {refunded > 0 && (
+                        <span className="text-status-discount"> · −{money(refunded, billing.currency)} {t("refunded")}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-tg-hint">{formatDate(p.createdAt, locale)}</div>
                   </div>
-                  <div className="text-xs text-tg-hint">
-                    {formatDate(p.createdAt, locale)}
-                    {p.voidReason ? ` · ${p.voidReason}` : ""}
+                  <div className="flex items-center gap-2">
+                    <MethodTag method={p.method} />
+                    {canManage && (
+                      <button
+                        className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
+                        title={t("removePayment")}
+                        onClick={() => setRemoveFor(p)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
-                </div>
-                <MethodTag method={p.method} />
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {removeFor && <RemovePaymentModal payment={removeFor} onClose={() => setRemoveFor(null)} />}
     </div>
+  );
+}
+
+/** Remove an accidental payment: voids it (drops from totals) and hides it. */
+function RemovePaymentModal({ payment, onClose }: { payment: PaymentRow; onClose: () => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [reason, setReason] = useState("");
+  const remove = useMutation({
+    mutationFn: () =>
+      api(`/api/payments/${payment.id}/void`, {
+        method: "POST",
+        body: { reason: reason || "Accidental entry" },
+      }),
+    onSuccess: () => { qc.invalidateQueries(); onClose(); },
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("removePayment")} — ${money(payment.amount)}`}>
+      <div className="space-y-4">
+        <div className="rounded-lg bg-status-overdue/10 px-3 py-2 text-sm text-tg-text">
+          {t("removePaymentConfirm")}
+        </div>
+        <Field label={t("reason")}>
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Accidental entry" />
+        </Field>
+        {remove.isError && (
+          <div className="text-sm text-status-overdue">{(remove.error as Error).message}</div>
+        )}
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={onClose}>{t("cancel")}</Button>
+          <Button className="flex-1" disabled={remove.isPending} onClick={() => remove.mutate()}>
+            {t("remove")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

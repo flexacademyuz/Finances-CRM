@@ -60,9 +60,9 @@ export function PaymentsLog() {
                         −{money(refunded)} {t("refunded")} · {t("netAmount")} {money(net)}
                       </div>
                     )}
-                    {isCeo && !p.voided && (
+                    {!p.voided && (
                       <div className="flex justify-end gap-2">
-                        {net > 0 && (
+                        {isCeo && net > 0 && (
                           <button className="text-xs text-status-discount" onClick={() => setRefundFor(p)}>
                             {t("refund")}
                           </button>

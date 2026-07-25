@@ -125,6 +125,12 @@ const dict = {
   resumeStudent: { en: "Resume learning", uz: "O'qishni davom ettirish" },
   resumeInto: { en: "Resume into group", uz: "Guruhga qaytarish" },
   resumeDate: { en: "Resume date", uz: "Qaytish sanasi" },
+  editStudent: { en: "Edit student", uz: "O'quvchini tahrirlash" },
+  removePayment: { en: "Remove payment", uz: "To'lovni o'chirish" },
+  removePaymentConfirm: {
+    en: "Remove this payment? It's an accidental entry — it will disappear from the student and drop from all totals.",
+    uz: "Bu to'lovni o'chirasizmi? Bu tasodifiy yozuv — u o'quvchidan yo'qoladi va barcha hisoblardan chiqadi.",
+  },
   changeGroup: { en: "Change group", uz: "Guruhni o'zgartirish" },
   changeGroupNote: {
     en: "Past payments stay with the current teacher. The new group's teacher is credited from the next payment.",
