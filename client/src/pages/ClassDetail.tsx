@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Plus, Check, Minus } from "lucide-react";
+import { ArrowLeft, Plus, Check, Minus, ChevronRight } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { money } from "../lib/format";
 import type { ClassLedger } from "../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge } from "../components/ui";
-import { StudentActions } from "../components/StudentActions";
 
 /**
  * Class "folder" detail: the class's students and a monthly payment table
@@ -97,23 +96,21 @@ export function ClassDetail() {
             </table>
           </Card>
 
-          {/* Roster with status + actions */}
+          {/* Roster — the row opens the student profile, where actions live. */}
           <div className="space-y-2">
             {students.map((s) => (
-              <Card key={s.id} className="flex items-center justify-between gap-2">
-                <Link href={`/student/${s.id}`} className="min-w-0 flex-1">
-                  <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
-                  <div className="text-xs text-tg-hint">
-                    {money(s.effectiveFee)}
-                    {s.phone ? ` · ${s.phone}` : ""}
+              <Card key={s.id} className="p-0">
+                <Link href={`/student/${s.id}`} className="flex min-w-0 items-center gap-2 p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
+                    <div className="truncate text-xs text-tg-hint">
+                      {money(s.effectiveFee)}
+                      {s.phone ? ` · ${s.phone}` : ""}
+                    </div>
                   </div>
-                </Link>
-                <div className="flex shrink-0 items-center gap-2">
                   <StatusBadge status={s.status} />
-                  {(user.role === "ceo" || user.role === "accountant") && (
-                    <StudentActions student={{ id: s.id, classId: cls.id, fullName: s.fullName, effectiveFee: s.effectiveFee }} />
-                  )}
-                </div>
+                  <ChevronRight size={18} className="shrink-0 text-tg-hint" />
+                </Link>
               </Card>
             ))}
           </div>
