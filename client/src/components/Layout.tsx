@@ -14,6 +14,7 @@ import {
   TrendingUp,
   BarChart3,
   Menu,
+  Plus,
 } from "lucide-react";
 import type { Role } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -21,6 +22,42 @@ import { useSession } from "../lib/session";
 import { haptic } from "../lib/telegram";
 
 type NavItem = { href: string; label: StringKey; icon: ReactNode };
+type BottomItem = NavItem & { center?: boolean };
+
+/**
+ * Mobile bottom tab bar (in addition to the sidebar drawer). The requested
+ * quick-access set: Students · Groups · Record (raised +) · Payroll · Users.
+ * Falls back to role-appropriate routes so it never links somewhere the role
+ * can't reach; the center Record button is the primary action.
+ */
+const BOTTOM_NAV: Record<Role, BottomItem[]> = {
+  ceo: [
+    { href: "/students", label: "students", icon: <GraduationCap size={22} /> },
+    { href: "/classes", label: "groups", icon: <BookOpen size={22} /> },
+    { href: "/record", label: "recordPayment", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
+    { href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={22} /> },
+    { href: "/users", label: "users", icon: <UserCog size={22} /> },
+  ],
+  accountant: [
+    { href: "/students", label: "students", icon: <GraduationCap size={22} /> },
+    { href: "/groups", label: "groups", icon: <BookOpen size={22} /> },
+    { href: "/", label: "recordPayment", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
+    { href: "/payments", label: "payments", icon: <ClipboardList size={22} /> },
+    { href: "/awaiting", label: "awaiting", icon: <Clock size={22} /> },
+  ],
+  teacher: [
+    { href: "/", label: "myClasses", icon: <Users size={22} /> },
+    { href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={22} /> },
+  ],
+};
+
+/** Highlight the tab for the current route, including student/class detail pages. */
+function bottomActive(href: string, location: string): boolean {
+  if (href === location) return true;
+  if (href === "/students" && location.startsWith("/student")) return true;
+  if ((href === "/classes" || href === "/groups") && location.startsWith("/class")) return true;
+  return false;
+}
 
 const NAV: Record<Role, NavItem[]> = {
   ceo: [
@@ -114,9 +151,51 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1280px] px-4 pb-16 pt-4 md:px-6">{children}</main>
+        {/* Extra bottom padding on mobile so the tab bar never covers content. */}
+        <main className="mx-auto max-w-[1280px] px-4 pb-28 pt-4 md:px-6 md:pb-16">{children}</main>
       </div>
+
+      {/* Mobile bottom tab bar — quick access alongside the sidebar drawer. */}
+      <BottomNav items={BOTTOM_NAV[role]} location={location} />
     </div>
+  );
+}
+
+function BottomNav({ items, location }: { items: BottomItem[]; location: string }) {
+  const { t } = useI18n();
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      {items.map((item) => {
+        const active = bottomActive(item.href, location);
+        if (item.center) {
+          return (
+            <div key={item.href} className="relative flex flex-1 items-center justify-center">
+              <Link
+                href={item.href}
+                onClick={() => haptic("light")}
+                aria-label={t(item.label)}
+                className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-primary text-[#04231f] shadow-lg ring-4 ring-bg transition active:scale-95"
+              >
+                {item.icon}
+              </Link>
+            </div>
+          );
+        }
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => haptic("light")}
+            className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium ${
+              active ? "text-primary" : "text-tg-hint"
+            }`}
+          >
+            {item.icon}
+            <span className="max-w-full truncate px-0.5">{t(item.label)}</span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
