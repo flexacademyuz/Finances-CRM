@@ -59,6 +59,7 @@ const dict = {
   confirm: { en: "Confirm", uz: "Tasdiqlash" },
   add: { en: "Add", uz: "Qo'shish" },
   search: { en: "Search…", uz: "Qidirish…" },
+  clear: { en: "Clear", uz: "Tozalash" },
   selectTeacher: { en: "Select a teacher", uz: "O'qituvchini tanlang" },
   selectClass: { en: "Select a class", uz: "Guruhni tanlang" },
   selectStudent: { en: "Select a student", uz: "O'quvchini tanlang" },

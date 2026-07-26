@@ -2,37 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design direction C — "Console": a dark operations terminal. Slate ground,
-   cyan accent, monospace data. Dark is the primary identity; a light-terminal
-   variant keeps light-theme clients legible. */
-:root {
-  --bg: #0e141b;
-  --surface: #131c26;
-  --border: #1f2b38;
-  --text: #e6edf3;
-  --text-muted: #7d8b9d;
-  --primary: #16b3b1;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-}
-
-/* Light terminal */
-:root[data-theme="light"] {
-  --bg: #eef1f5;
+/* Brand system — "Zoho": modeled on Zoho CRM's palette. Honolulu-blue primary
+   (#0974B0) does the brand work, on a cool light-gray ground with white cards.
+   Zoho's other three brand hues map to the semantic states (green=success,
+   yellow/gold=warning, red=danger). Fixed identity — same in light/dark clients. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  --bg: #f4f6f8;
   --surface: #ffffff;
-  --border: #dde3ea;
-  --text: #15202b;
-  --text-muted: #5a6b7b;
-  --primary: #0d8a88;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #eef1f5;
-    --surface: #ffffff;
-    --border: #dde3ea;
-    --text: #15202b;
-    --text-muted: #5a6b7b;
-    --primary: #0d8a88;
-  }
+  --border: #e3e7ec;
+  --text: #23303d;
+  --text-muted: #6b7684;
+  --primary: #0974b0;
+  --primary-hover: #075e8c;
+  --accent: #6b7684;
+  --dark: #23303d;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 html,
@@ -52,22 +38,41 @@ body {
 
 @layer components {
   .card {
-    @apply rounded-card border border-border bg-surface p-4 transition-colors;
+    @apply rounded-card border border-border bg-surface p-4 shadow-card transition-colors;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50;
   }
   .btn-primary {
-    @apply bg-primary font-bold text-[#04231f] hover:brightness-110;
+    @apply border border-primary bg-primary font-semibold text-white shadow-sm hover:border-primary-hover hover:bg-primary-hover;
   }
   .btn-ghost {
-    @apply border border-border bg-surface text-text hover:border-primary/50;
+    @apply border border-border bg-surface text-text hover:border-primary hover:bg-primary-soft hover:text-primary;
   }
   .btn-danger {
-    @apply bg-danger text-white hover:brightness-110;
+    @apply border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger/5;
   }
   .input {
-    @apply w-full rounded-btn border border-border bg-bg px-3.5 py-2.5 text-text outline-none transition focus:border-primary focus:ring-1 focus:ring-primary/40;
+    @apply w-full rounded-btn border border-border bg-surface px-3.5 py-2.5 text-text outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+  /* Modern dropdown: custom chevron, no native OS arrow, roomy hit area. The
+     native option list can't be fully themed cross-browser, but the trigger and
+     the open menu inherit these colors where the platform allows. */
+  .select {
+    @apply input cursor-pointer appearance-none bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-position: right 0.7rem center;
+    background-size: 1.15em 1.15em;
+  }
+  .select option {
+    background-color: #ffffff;
+    color: #23303d;
+    padding: 8px 12px;
+  }
+  .select option:checked {
+    background-color: #e6f1f8;
+    color: #075e8c;
+    font-weight: 600;
   }
   .label {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;

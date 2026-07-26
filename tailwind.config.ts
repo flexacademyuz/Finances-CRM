@@ -26,28 +26,36 @@ export default {
         border: "var(--border)",
         text: "var(--text)",
         muted: "var(--text-muted)",
+        dark: "#23303d",
+        // Zoho Honolulu Blue — the single brand color (buttons, links, active nav).
         primary: {
-          DEFAULT: "#16b3b1",
-          light: "#5fd4d2",
-          dark: "#0d8a88",
+          DEFAULT: "#0974b0",
+          hover: "#075e8c",
+          dark: "#075e8c",
+          light: "#4ea3d4",
+          soft: "#e6f1f8",
         },
-        accent: { DEFAULT: "#2fbf71", light: "#123227" },
-        warning: { DEFAULT: "#e0a53b", light: "#3a2f16" },
-        danger: { DEFAULT: "#e0603b", light: "#3a1c14" },
-        freeze: { DEFAULT: "#3aa0d6", light: "#12293a" },
-        discount: { DEFAULT: "#9a7be0", light: "#241d3a" },
+        // Accent is a neutral slate (not a competing hue) so the blue leads.
+        accent: { DEFAULT: "#6b7684", light: "#f1f3f5" },
+        // Semantic states map to Zoho's other three brand hues.
+        warning: { DEFAULT: "#c98a00", light: "#fdf3d7" }, // from Zoho vivid yellow, darkened for legibility
+        danger: { DEFAULT: "#ce2232", light: "#fbe3e6" }, // Zoho amaranth red
+        // Zoho's palette has no violet/sky, so frozen=neutral gray, discount=blue info.
+        freeze: { DEFAULT: "#6b7684", light: "#eef0f2" },
+        discount: { DEFAULT: "#0974b0", light: "#e6f1f8" },
         sidebar: {
-          bg: "#0a0f15",
-          text: "#8b9aac",
-          active: "#16b3b1",
+          bg: "#ffffff",
+          text: "#6b7684",
+          icon: "#6b7684",
+          active: "#0974b0",
         },
         status: {
-          paid: "#2fbf71",
-          awaiting: "#e0a53b",
-          overdue: "#e0603b",
-          frozen: "#3aa0d6",
-          discount: "#9a7be0",
-          notdue: "#7d8b9d",
+          paid: "#219e4a", // Zoho sea green
+          awaiting: "#c98a00",
+          overdue: "#ce2232",
+          frozen: "#6b7684",
+          discount: "#0974b0",
+          notdue: "#6b7684",
         },
       },
       fontFamily: {

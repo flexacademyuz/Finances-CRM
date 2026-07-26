@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, Search, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
@@ -14,9 +14,14 @@ const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overd
 export function StudentsPage() {
   const { t } = useI18n();
   const qc = useQueryClient();
+  // Deep-linkable status filter (e.g. dashboard "Overdue" → /students?status=overdue).
+  const qs = useSearch();
   const [view, setView] = useState<"active" | "archived">("active");
-  const [status, setStatus] = useState<StudentStatus | "">("");
+  const [status, setStatus] = useState<StudentStatus | "">(
+    () => (new URLSearchParams(qs).get("status") as StudentStatus) || "",
+  );
   const [classId, setClassId] = useState("");
+  const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
   const [resuming, setResuming] = useState<StudentRow | null>(null);
 
@@ -31,6 +36,15 @@ export function StudentsPage() {
             : { activeOnly: "1", status: status || undefined, classId: classId || undefined },
       }),
   });
+
+  // Live name/phone search over the already-filtered list.
+  const q = search.trim().toLowerCase();
+  const filtered = (students.data ?? []).filter(
+    (s) =>
+      !q ||
+      s.fullName.toLowerCase().includes(q) ||
+      (s.phone ?? "").toLowerCase().includes(q),
+  );
 
   return (
     <div className="space-y-4">
@@ -54,6 +68,27 @@ export function StudentsPage() {
         ))}
       </div>
 
+      {/* Search by name or phone */}
+      <div className="relative">
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <Input
+          className="pl-9 pr-9"
+          placeholder={t("search")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            aria-label={t("clear")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-bg hover:text-text"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
       <div className="flex gap-2">
         <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
           <option value="">{t("classes")}</option>
@@ -72,9 +107,9 @@ export function StudentsPage() {
 
       {students.isLoading ? (
         <Spinner />
-      ) : students.data?.length ? (
+      ) : filtered.length ? (
         <div className="space-y-2">
-          {students.data.map((s) => (
+          {filtered.map((s) => (
             <Card key={s.id} className="flex items-center justify-between gap-2 p-0">
               {/* Whole row opens the profile, where the per-student actions live. */}
               <Link href={`/student/${s.id}`} className="flex min-w-0 flex-1 items-center gap-2 p-3">

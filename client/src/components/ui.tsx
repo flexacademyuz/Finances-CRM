@@ -1,4 +1,5 @@
 import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { Link } from "wouter";
 import { twMerge } from "tailwind-merge";
 import type { StudentStatus, PaymentMethod } from "@shared/schema";
 import { statusColor } from "../lib/format";
@@ -32,7 +33,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={twMerge("input appearance-none", className)} {...props}>
+    <select className={twMerge("select", className)} {...props}>
       {children}
     </select>
   );
@@ -79,15 +80,24 @@ export function Stat({
   sub,
   accent,
   icon,
+  href,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   accent?: keyof typeof ACCENTS;
   icon?: ReactNode;
+  /** When set, the whole stat becomes a link with a hover affordance. */
+  href?: string;
 }) {
-  return (
-    <Card className={twMerge("flex-1", accent && `border-l-4 ${ACCENTS[accent]}`)}>
+  const card = (
+    <Card
+      className={twMerge(
+        "h-full flex-1",
+        accent && `border-l-4 ${ACCENTS[accent]}`,
+        href && "cursor-pointer transition hover:border-primary/40 hover:shadow-card-hover",
+      )}
+    >
       <div className="flex items-start justify-between">
         <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
         {icon}
@@ -95,6 +105,13 @@ export function Stat({
       <div className="figure mt-1 text-xl font-bold">{value}</div>
       {sub != null && <div className="mt-0.5 text-xs text-muted">{sub}</div>}
     </Card>
+  );
+  return href ? (
+    <Link href={href} className="flex min-w-0 flex-1">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }
 

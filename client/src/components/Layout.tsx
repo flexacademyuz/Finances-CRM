@@ -146,7 +146,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
           >
             {locale === "en" ? "UZ" : "EN"}
           </button>
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-bold text-[#04231f]">
+          <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-bold text-white">
             {initials(user.fullName)}
           </div>
         </header>
@@ -174,7 +174,7 @@ function BottomNav({ items, location }: { items: BottomItem[]; location: string 
                 href={item.href}
                 onClick={() => haptic("light")}
                 aria-label={t(item.label)}
-                className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-primary text-[#04231f] shadow-lg ring-4 ring-bg transition active:scale-95"
+                className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-primary text-white shadow-lg ring-4 ring-bg transition active:scale-95 hover:bg-primary-hover"
               >
                 {item.icon}
               </Link>
@@ -218,15 +218,15 @@ function SidebarContent({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex h-full flex-col bg-sidebar-bg text-sidebar-text">
+    <div className="flex h-full flex-col border-r border-border bg-sidebar-bg text-sidebar-text">
       {/* Brand / role */}
       <div className="flex items-center gap-3 px-4 py-4">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-sidebar-active text-sm font-bold text-[#04231f]">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-sm font-bold text-white">
           {initials(userName)}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-white">{userName}</div>
-          <div className="text-xs capitalize text-sidebar-text/70">{role}</div>
+          <div className="truncate text-sm font-semibold text-text">{userName}</div>
+          <div className="text-xs capitalize text-muted">{role}</div>
         </div>
       </div>
 
@@ -241,8 +241,8 @@ function SidebarContent({
               onClick={() => { haptic("light"); onNavigate(); }}
               className={`flex items-center gap-3 rounded-btn px-3 py-2 text-sm font-medium transition-colors duration-150 ${
                 active
-                  ? "bg-sidebar-active font-semibold text-[#04231f]"
-                  : "text-sidebar-text hover:bg-white/5 hover:text-white"
+                  ? "bg-primary-soft font-semibold text-primary-hover"
+                  : "text-sidebar-text hover:bg-slate-100 hover:text-text"
               }`}
             >
               {item.icon}
@@ -253,9 +253,9 @@ function SidebarContent({
       </nav>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-xs">
-        <span className="text-sidebar-text/70">{t("appName")}</span>
-        <button className="rounded bg-white/10 px-2 py-1 font-semibold uppercase" onClick={onToggleLocale}>
+      <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs">
+        <span className="text-muted">{t("appName")}</span>
+        <button className="rounded bg-bg px-2 py-1 font-semibold uppercase text-muted ring-1 ring-border" onClick={onToggleLocale}>
           {locale === "en" ? "UZ" : "EN"}
         </button>
       </div>

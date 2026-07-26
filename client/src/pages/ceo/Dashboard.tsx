@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { ChevronRight } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -27,32 +29,41 @@ export function CeoDashboard() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t("dashboard")}</h1>
 
-      <Card>
-        <div className="text-xs uppercase tracking-wide text-tg-hint">{t("totalRevenue")}</div>
-        <div className="figure mt-1 text-3xl font-bold text-primary">{money(data.revenue.total)}</div>
-        <div className="mt-2 flex gap-4 text-sm">
-          <span className="text-tg-hint">
-            {t("cash")}: <span className="font-semibold text-tg-text">{money(data.revenue.cash)}</span>
-          </span>
-          <span className="text-tg-hint">
-            {t("online")}: <span className="font-semibold text-tg-text">{money(data.revenue.online)}</span>
-          </span>
+      <Link href="/finances" className="block">
+        <Card className="cursor-pointer transition hover:border-primary/40 hover:shadow-card-hover">
+          <div className="flex items-center justify-between">
+            <div className="text-xs uppercase tracking-wide text-tg-hint">{t("totalRevenue")}</div>
+            <ChevronRight size={18} className="text-tg-hint" />
+          </div>
+          <div className="figure mt-1 text-3xl font-bold text-primary">{money(data.revenue.total)}</div>
+          <div className="mt-2 flex gap-4 text-sm">
+            <span className="text-tg-hint">
+              {t("cash")}: <span className="font-semibold text-tg-text">{money(data.revenue.cash)}</span>
+            </span>
+            <span className="text-tg-hint">
+              {t("online")}: <span className="font-semibold text-tg-text">{money(data.revenue.online)}</span>
+            </span>
+          </div>
+        </Card>
+      </Link>
+
+      <div className="flex gap-3">
+        <Stat label={t("paid")} value={data.statusCounts.paid} accent="accent" href="/students?status=paid" />
+        <Stat label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} accent="warning" href="/students?status=awaiting_payment" />
+        <Stat label={t("overdue")} value={data.statusCounts.overdue} accent="danger" href="/students?status=overdue" />
+      </div>
+
+      <div className="flex gap-3">
+        <Stat label={t("totalStudents")} value={data.totalStudents} accent="primary" href="/students" />
+        <Stat label={t("payrollObligation")} value={money(data.payrollObligation)} accent="discount" href="/payroll" />
+      </div>
+
+      <Link href="/analytics" className="block">
+      <Card className="cursor-pointer transition hover:border-primary/40 hover:shadow-card-hover">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-sm font-semibold">{t("totalRevenue")} — 6M</div>
+          <ChevronRight size={18} className="text-tg-hint" />
         </div>
-      </Card>
-
-      <div className="flex gap-3">
-        <Stat label={t("paid")} value={data.statusCounts.paid} accent="accent" />
-        <Stat label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} accent="warning" />
-        <Stat label={t("overdue")} value={data.statusCounts.overdue} accent="danger" />
-      </div>
-
-      <div className="flex gap-3">
-        <Stat label={t("totalStudents")} value={data.totalStudents} accent="primary" />
-        <Stat label={t("payrollObligation")} value={money(data.payrollObligation)} accent="discount" />
-      </div>
-
-      <Card>
-        <div className="mb-3 text-sm font-semibold">{t("totalRevenue")} — 6M</div>
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={data.trend}>
             <XAxis
@@ -73,6 +84,7 @@ export function CeoDashboard() {
           </BarChart>
         </ResponsiveContainer>
       </Card>
+      </Link>
     </div>
   );
 }
