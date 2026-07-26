@@ -203,7 +203,20 @@ router.get(
         name: classes.name,
         revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
         studentCount: sql<number>`(select count(*) from ${students} s where s.class_id = ${classes.id} and s.active = true)`,
-        paidCount: sql<number>`count(distinct ${payments.studentId}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month})`,
+        // Count only *currently-active* students of this class who paid for the
+        // month, so the numerator can never exceed studentCount (a student who
+        // paid then left/switched groups would otherwise push the rate >100%).
+        paidCount: sql<number>`(
+          select count(*) from ${students} s
+          where s.class_id = ${classes.id} and s.active = true
+            and exists (
+              select 1 from ${payments} p
+              where p.student_id = s.id
+                and p.voided = false
+                and p.billing_month = ${month}
+                and p.class_id = ${classes.id}
+            )
+        )`,
       })
       .from(classes)
       .leftJoin(payments, eq(payments.classId, classes.id))

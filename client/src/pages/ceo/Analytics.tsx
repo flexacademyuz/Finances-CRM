@@ -274,7 +274,10 @@ function GroupsTab() {
             {g.studentCount} {t("students")} · {g.complianceRate}% {t("complianceRate")}
           </div>
           <div className="mt-1.5 h-1.5 w-full rounded-full bg-tg-bg">
-            <div className="h-full rounded-full bg-status-paid" style={{ width: `${g.complianceRate}%` }} />
+            <div
+              className="h-full rounded-full bg-status-paid"
+              style={{ width: `${Math.min(100, Math.max(0, g.complianceRate))}%` }}
+            />
           </div>
         </Card>
       ))}
