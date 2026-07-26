@@ -39,6 +39,56 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
   );
 }
 
+/**
+ * Compact segmented control — a slim alternative to a row of full-size buttons
+ * for small either/or choices (view toggles, payment method, tabs). Pass `full`
+ * to stretch the segments edge-to-edge (e.g. inside a modal).
+ */
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  full,
+  className,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: ReactNode }[];
+  full?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      className={twMerge(
+        "inline-flex rounded-btn border border-border bg-surface p-0.5",
+        full && "flex w-full",
+        className,
+      )}
+    >
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(o.value)}
+            className={twMerge(
+              "rounded-[5px] px-3 py-1.5 text-sm font-medium transition-colors",
+              full && "flex-1",
+              active ? "bg-primary text-white shadow-sm" : "text-muted hover:text-text",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function StatusBadge({ status }: { status: StudentStatus }) {
   const { t } = useI18n();
   // Awaiting & overdue gently pulse to draw attention (Change 3).

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronRight, Search, X } from "lucide-react";
+import { Plus, ChevronRight, Search, X, SlidersHorizontal, Archive } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
@@ -10,6 +10,35 @@ import type { StudentStatus } from "@shared/schema";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner, StatusBadge } from "../../components/ui";
 
 const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overdue", "frozen", "not_due"];
+
+/** Round, tap-to-reveal icon button used in the students toolbar. */
+function IconButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-full border transition ${
+        active
+          ? "border-primary bg-primary text-white"
+          : "border-border bg-surface text-muted hover:border-primary hover:text-primary"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function StudentsPage() {
   const { t } = useI18n();
@@ -22,8 +51,12 @@ export function StudentsPage() {
   );
   const [classId, setClassId] = useState("");
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [resuming, setResuming] = useState<StudentRow | null>(null);
+
+  const hasFilters = !!classId || (view === "active" && !!status);
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
   const students = useQuery({
@@ -47,62 +80,102 @@ export function StudentsPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{t("students")}</h1>
         <Button onClick={() => setAdding(true)}>
-          <Plus size={18} /> {t("add")}
+          <Plus size={16} /> {t("add")}
         </Button>
       </div>
 
-      {/* Active / Archived */}
-      <div className="grid grid-cols-2 gap-2">
-        {(["active", "archived"] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`btn ${view === v ? "btn-primary" : "btn-ghost"}`}
-          >
-            {v === "active" ? t("active") : t("archived")}
-          </button>
-        ))}
-      </div>
+      {/* Icon toolbar — tap to reveal. Archive toggles the view, the magnifier
+          expands into a search field, the sliders open the filters popover. */}
+      <div className="flex items-center gap-2">
+        <IconButton
+          label={view === "archived" ? t("archived") : t("active")}
+          active={view === "archived"}
+          onClick={() => setView(view === "active" ? "archived" : "active")}
+        >
+          <Archive size={17} />
+        </IconButton>
 
-      {/* Search by name or phone */}
-      <div className="relative">
-        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-        <Input
-          className="pl-9 pr-9"
-          placeholder={t("search")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch("")}
-            aria-label={t("clear")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-bg hover:text-text"
-          >
-            <X size={16} />
-          </button>
-        )}
-      </div>
+        <div className="flex flex-1 items-center justify-end gap-2">
+          {searchOpen || search ? (
+            <div className="relative w-full animate-fade-in sm:max-w-xs">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <Input
+                autoFocus
+                className="rounded-full pl-8 pr-8"
+                placeholder={t("search")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onBlur={() => { if (!search) setSearchOpen(false); }}
+              />
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setSearchOpen(false); }}
+                aria-label={t("clear")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:text-text"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          ) : (
+            <IconButton label={t("search")} onClick={() => setSearchOpen(true)}>
+              <Search size={17} />
+            </IconButton>
+          )}
 
-      <div className="flex gap-2">
-        <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
-          <option value="">{t("classes")}</option>
-          {classes.data?.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </Select>
-        {view === "active" && (
-          <Select value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | "")}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>{s ? t(s) : t("status")}</option>
-            ))}
-          </Select>
-        )}
+          <div className="relative shrink-0">
+            <IconButton
+              label={t("filters")}
+              active={hasFilters || filterOpen}
+              onClick={() => setFilterOpen((v) => !v)}
+            >
+              <SlidersHorizontal size={17} />
+              {hasFilters && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-bg" />
+              )}
+            </IconButton>
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
+                <div className="absolute right-0 z-20 mt-2 w-64 origin-top-right animate-scale-in rounded-card border border-border bg-surface p-3 shadow-card-hover">
+                  <div className="space-y-2">
+                    <div>
+                      <span className="label">{t("classes")}</span>
+                      <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+                        <option value="">{t("classes")}</option>
+                        {classes.data?.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </Select>
+                    </div>
+                    {view === "active" && (
+                      <div>
+                        <span className="label">{t("status")}</span>
+                        <Select value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | "")}>
+                          {STATUSES.map((s) => (
+                            <option key={s} value={s}>{s ? t(s) : t("status")}</option>
+                          ))}
+                        </Select>
+                      </div>
+                    )}
+                    {hasFilters && (
+                      <button
+                        type="button"
+                        onClick={() => { setClassId(""); setStatus(""); }}
+                        className="pt-1 text-xs font-semibold text-primary hover:underline"
+                      >
+                        {t("clear")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {students.isLoading ? (

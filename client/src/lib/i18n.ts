@@ -60,6 +60,7 @@ const dict = {
   add: { en: "Add", uz: "Qo'shish" },
   search: { en: "Search…", uz: "Qidirish…" },
   clear: { en: "Clear", uz: "Tozalash" },
+  filters: { en: "Filters", uz: "Filtrlar" },
   selectTeacher: { en: "Select a teacher", uz: "O'qituvchini tanlang" },
   selectClass: { en: "Select a class", uz: "Guruhni tanlang" },
   selectStudent: { en: "Select a student", uz: "O'quvchini tanlang" },

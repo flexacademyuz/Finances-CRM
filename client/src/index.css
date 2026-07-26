@@ -41,7 +41,7 @@ body {
     @apply rounded-card border border-border bg-surface p-4 shadow-card transition-colors;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-btn px-4 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-btn px-3 py-1.5 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50;
   }
   .btn-primary {
     @apply border border-primary bg-primary font-semibold text-white shadow-sm hover:border-primary-hover hover:bg-primary-hover;
@@ -53,7 +53,7 @@ body {
     @apply border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger/5;
   }
   .input {
-    @apply w-full rounded-btn border border-border bg-surface px-3.5 py-2.5 text-text outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20;
+    @apply w-full rounded-btn border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20;
   }
   /* Modern dropdown: custom chevron, no native OS arrow, roomy hit area. The
      native option list can't be fully themed cross-browser, but the trigger and
