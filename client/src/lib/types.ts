@@ -99,7 +99,6 @@ export type SalaryEstimate = {
 };
 
 export type PayrollData = {
-  month: string;
   total: number;
   teachers: {
     teacherId: string;
@@ -108,8 +107,57 @@ export type PayrollData = {
     salaryValue: number;
     collectedTotal: number;
     paidStudents: number;
-    estimatedSalary: number;
+    earned: number;
+    advancesTotal: number;
+    netOwed: number;
   }[];
+};
+
+/** A teacher's live salary cycle (earned since last payout − open advances). */
+export type SalaryCycle = {
+  teacherId: string;
+  salaryModel: SalaryModel;
+  salaryValue: number;
+  periodStart: string | null;
+  earned: number;
+  collectedTotal: number;
+  paidStudents: number;
+  breakdown: {
+    classId: string;
+    className: string;
+    paidStudents: number;
+    collected: number;
+    cash: number;
+    online: number;
+    teacherShare: number;
+  }[];
+  advancesTotal: number;
+  advances: { id: string; amount: number; note: string | null; paidOn: string; createdAt: string }[];
+  netOwed: number;
+};
+
+export type AdvanceRow = {
+  id: string;
+  teacherId: string;
+  amount: string;
+  method: PaymentMethod;
+  note: string | null;
+  paidOn: string;
+  settledByPayoutId: string | null;
+  createdAt: string;
+};
+
+export type PayoutRow = {
+  id: string;
+  teacherId: string;
+  grossEarned: string;
+  advancesDeducted: string;
+  amount: string;
+  method: PaymentMethod;
+  note: string | null;
+  paidOn: string;
+  paidAt: string;
+  createdAt: string;
 };
 
 export type PaymentPreview = {
@@ -235,7 +283,8 @@ export type FinanceOverview = {
   months: { month: string; label: string }[];
   revenue: number[];
   expensesByCategory: Record<string, number[]>;
+  payroll: number[];
   totalExpenses: number[];
   netProfit: number[];
-  yearTotals: { revenue: number; expenses: number; netProfit: number };
+  yearTotals: { revenue: number; expenses: number; netProfit: number; payroll: number };
 };

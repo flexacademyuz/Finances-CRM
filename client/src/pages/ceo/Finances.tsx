@@ -85,6 +85,9 @@ export function FinancesPage() {
               if (total === 0) return null;
               return <Row key={cat} label={cat} values={vals} total={total} fmt={fmt} indent />;
             })}
+            {data.yearTotals.payroll > 0 && (
+              <Row label={t("payroll")} values={data.payroll} total={data.yearTotals.payroll} fmt={fmt} indent />
+            )}
             <Row
               label={t("totalExpenses")}
               values={data.totalExpenses}

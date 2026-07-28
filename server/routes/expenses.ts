@@ -14,6 +14,7 @@ import {
   softDeleteExpense,
   expenseTotalsByCategory,
   expenseMatrix,
+  payrollByMonth,
   type ExpenseFilter,
 } from "../storage";
 import { monthKey, normalizeMonth, monthLabel, shiftMonth } from "@shared/date";
@@ -139,13 +140,17 @@ async function financeOverview(startYear: number) {
     expByMonthCat.get(r.month)!.set(r.category, Number(r.total));
   }
 
+  // Payroll cash-out (teacher advances + net salary payouts) per month.
+  const payrollMap = await payrollByMonth(months);
+
   const revenue = months.map((m) => revByMonth.get(m) ?? 0);
   const expensesByCategory: Record<string, number[]> = {};
   for (const cat of EXPENSE_CATEGORY_NAMES) {
     expensesByCategory[cat] = months.map((m) => expByMonthCat.get(m)?.get(cat) ?? 0);
   }
-  const totalExpenses = months.map((_, i) =>
-    EXPENSE_CATEGORY_NAMES.reduce((sum, cat) => sum + expensesByCategory[cat][i], 0),
+  const payroll = months.map((m) => payrollMap.get(m) ?? 0);
+  const totalExpenses = months.map(
+    (_, i) => EXPENSE_CATEGORY_NAMES.reduce((sum, cat) => sum + expensesByCategory[cat][i], 0) + payroll[i],
   );
   const netProfit = months.map((_, i) => revenue[i] - totalExpenses[i]);
 
@@ -155,12 +160,14 @@ async function financeOverview(startYear: number) {
     months: months.map((m) => ({ month: m, label: monthLabel(m) })),
     revenue,
     expensesByCategory,
+    payroll,
     totalExpenses,
     netProfit,
     yearTotals: {
       revenue: revenue.reduce((a, b) => a + b, 0),
       expenses: totalExpenses.reduce((a, b) => a + b, 0),
       netProfit: netProfit.reduce((a, b) => a + b, 0),
+      payroll: payroll.reduce((a, b) => a + b, 0),
     },
   };
 }

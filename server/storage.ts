@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   users,
@@ -7,6 +7,8 @@ import {
   students,
   payments,
   salaryRecords,
+  salaryAdvances,
+  salaryPayouts,
   settings,
   paymentFreezes,
   discounts,
@@ -618,6 +620,127 @@ export async function listSalaryHistory(teacherId: string) {
     .from(salaryRecords)
     .where(eq(salaryRecords.teacherId, teacherId))
     .orderBy(desc(salaryRecords.month));
+}
+
+/* ─────────────────────── Salary advances & payouts ─────────────────── */
+
+/** Record an advance handed to a teacher (CEO). */
+export async function createAdvance(input: {
+  teacherId: string;
+  amount: number;
+  method: "cash" | "online";
+  paidOn: string;
+  note: string | null;
+  createdBy: string;
+}) {
+  const [r] = await db
+    .insert(salaryAdvances)
+    .values({ ...input, amount: String(input.amount) })
+    .returning();
+  return r;
+}
+
+/** Open (unsettled) advances for a teacher — deducted from the next payout. */
+export async function openAdvances(teacherId: string) {
+  return db
+    .select()
+    .from(salaryAdvances)
+    .where(and(eq(salaryAdvances.teacherId, teacherId), isNull(salaryAdvances.settledByPayoutId)))
+    .orderBy(desc(salaryAdvances.createdAt));
+}
+
+/** Every advance for a teacher, newest first (settled and open). */
+export async function listAdvances(teacherId: string) {
+  return db
+    .select()
+    .from(salaryAdvances)
+    .where(eq(salaryAdvances.teacherId, teacherId))
+    .orderBy(desc(salaryAdvances.createdAt));
+}
+
+/** The teacher's most recent payout — its `paidAt` bounds the current cycle. */
+export async function lastPayout(teacherId: string) {
+  const [r] = await db
+    .select()
+    .from(salaryPayouts)
+    .where(eq(salaryPayouts.teacherId, teacherId))
+    .orderBy(desc(salaryPayouts.paidAt))
+    .limit(1);
+  return r;
+}
+
+/** Payout history for a teacher, newest first. */
+export async function listPayouts(teacherId: string) {
+  return db
+    .select()
+    .from(salaryPayouts)
+    .where(eq(salaryPayouts.teacherId, teacherId))
+    .orderBy(desc(salaryPayouts.paidAt));
+}
+
+/**
+ * Record a salary payment and settle the cycle in one transaction: insert the
+ * payout, then stamp every currently-open advance with its id so it stops
+ * counting against the next cycle.
+ */
+export async function createPayoutAndSettle(input: {
+  teacherId: string;
+  grossEarned: number;
+  advancesDeducted: number;
+  amount: number;
+  method: "cash" | "online";
+  paidOn: string;
+  note: string | null;
+  periodStart: Date | null;
+  createdBy: string;
+}) {
+  return db.transaction(async (tx) => {
+    const [payout] = await tx
+      .insert(salaryPayouts)
+      .values({
+        teacherId: input.teacherId,
+        grossEarned: String(input.grossEarned),
+        advancesDeducted: String(input.advancesDeducted),
+        amount: String(input.amount),
+        method: input.method,
+        paidOn: input.paidOn,
+        note: input.note,
+        periodStart: input.periodStart,
+        createdBy: input.createdBy,
+      })
+      .returning();
+    await tx
+      .update(salaryAdvances)
+      .set({ settledByPayoutId: payout.id })
+      .where(and(eq(salaryAdvances.teacherId, input.teacherId), isNull(salaryAdvances.settledByPayoutId)));
+    return payout;
+  });
+}
+
+/** Payroll cash-out (advances + net payouts) grouped by month, for Finances. */
+export async function payrollByMonth(months: string[]): Promise<Map<string, number>> {
+  const byMonth = new Map<string, number>();
+  if (!months.length) return byMonth;
+  const advRows = await db
+    .select({
+      month: sql<string>`to_char(date_trunc('month', ${salaryAdvances.paidOn}), 'YYYY-MM-DD')`,
+      total: sql<string>`coalesce(sum(${salaryAdvances.amount}), 0)`,
+    })
+    .from(salaryAdvances)
+    .where(inArray(sql`to_char(date_trunc('month', ${salaryAdvances.paidOn}), 'YYYY-MM-DD')`, months))
+    .groupBy(sql`date_trunc('month', ${salaryAdvances.paidOn})`);
+  const payRows = await db
+    .select({
+      month: sql<string>`to_char(date_trunc('month', ${salaryPayouts.paidOn}), 'YYYY-MM-DD')`,
+      total: sql<string>`coalesce(sum(${salaryPayouts.amount}), 0)`,
+    })
+    .from(salaryPayouts)
+    .where(inArray(sql`to_char(date_trunc('month', ${salaryPayouts.paidOn}), 'YYYY-MM-DD')`, months))
+    .groupBy(sql`date_trunc('month', ${salaryPayouts.paidOn})`);
+  for (const r of [...advRows, ...payRows]) {
+    byMonth.set(r.month, (byMonth.get(r.month) ?? 0) + Number(r.total));
+  }
+  return byMonth;
 }
 
 /* ─────────────────────────────── Settings ──────────────────────────── */

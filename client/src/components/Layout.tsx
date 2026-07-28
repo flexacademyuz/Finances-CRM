@@ -15,6 +15,8 @@ import {
   BarChart3,
   Menu,
   Plus,
+  HandCoins,
+  X,
 } from "lucide-react";
 import type { Role } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -156,46 +158,95 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
       </div>
 
       {/* Mobile bottom tab bar — quick access alongside the sidebar drawer. */}
-      <BottomNav items={BOTTOM_NAV[role]} location={location} />
+      <BottomNav items={BOTTOM_NAV[role]} location={location} role={role} />
     </div>
   );
 }
 
-function BottomNav({ items, location }: { items: BottomItem[]; location: string }) {
+/** Quick-create options behind the center "+", grouped and role-filtered. */
+type QuickAction = { label: StringKey; icon: ReactNode; href: string };
+function quickActions(role: Role): QuickAction[] {
+  const recordHref = role === "accountant" ? "/" : "/record";
+  const actions: QuickAction[] = [
+    { label: "recordPayment", icon: <Wallet size={20} />, href: recordHref },
+    { label: "addExpense", icon: <Receipt size={20} />, href: "/expenses" },
+  ];
+  // Advances are a CEO-only payroll action (handled on the Payroll screen).
+  if (role === "ceo") {
+    actions.push({ label: "advanceToTeacher", icon: <HandCoins size={20} />, href: "/payroll" });
+  }
+  return actions;
+}
+
+function BottomNav({ items, location, role }: { items: BottomItem[]; location: string; role: Role }) {
   const { t } = useI18n();
+  const [, navigate] = useLocation();
+  const [sheet, setSheet] = useState(false);
+  const actions = quickActions(role);
+
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-      {items.map((item) => {
-        const active = bottomActive(item.href, location);
-        if (item.center) {
+    <>
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {items.map((item) => {
+          const active = bottomActive(item.href, location);
+          if (item.center) {
+            return (
+              <div key={item.href} className="relative flex flex-1 items-center justify-center">
+                <button
+                  onClick={() => { haptic("light"); setSheet(true); }}
+                  aria-label={t(item.label)}
+                  className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-primary text-white shadow-lg ring-4 ring-bg transition active:scale-95 hover:bg-primary-hover"
+                >
+                  {item.icon}
+                </button>
+              </div>
+            );
+          }
           return (
-            <div key={item.href} className="relative flex flex-1 items-center justify-center">
-              <Link
-                href={item.href}
-                onClick={() => haptic("light")}
-                aria-label={t(item.label)}
-                className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-primary text-white shadow-lg ring-4 ring-bg transition active:scale-95 hover:bg-primary-hover"
-              >
-                {item.icon}
-              </Link>
-            </div>
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => haptic("light")}
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium ${
+                active ? "text-primary" : "text-tg-hint"
+              }`}
+            >
+              {item.icon}
+              <span className="max-w-full truncate px-0.5">{t(item.label)}</span>
+            </Link>
           );
-        }
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => haptic("light")}
-            className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium ${
-              active ? "text-primary" : "text-tg-hint"
-            }`}
+        })}
+      </nav>
+
+      {/* Create action sheet (mobile) */}
+      {sheet && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/40 animate-fade-in md:hidden" onClick={() => setSheet(false)}>
+          <div
+            className="w-full rounded-t-2xl bg-surface p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-card-hover animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
           >
-            {item.icon}
-            <span className="max-w-full truncate px-0.5">{t(item.label)}</span>
-          </Link>
-        );
-      })}
-    </nav>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold text-muted">{t("whatToRecord")}</div>
+              <button aria-label={t("cancel")} className="rounded-full p-1 text-muted hover:bg-bg" onClick={() => setSheet(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {actions.map((a) => (
+                <button
+                  key={a.href + String(a.label)}
+                  onClick={() => { haptic("light"); setSheet(false); navigate(a.href); }}
+                  className="flex w-full items-center gap-3 rounded-btn border border-border bg-surface px-4 py-3 text-left font-medium transition hover:border-primary hover:bg-primary-soft"
+                >
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">{a.icon}</span>
+                  {t(a.label)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

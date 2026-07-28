@@ -5,7 +5,7 @@ import { requireRole } from "../auth/middleware";
 import { db } from "../db";
 import { payments, students, classes, users, teachers } from "@shared/schema";
 import { monthKey, normalizeMonth, recentMonths, monthLabel } from "@shared/date";
-import { payrollForMonth } from "../services/salary";
+import { payrollNow } from "../services/salary";
 import { recomputeStatuses } from "../services/billing";
 import { getSettings, updateSettings, listStudents } from "../storage";
 import { settingsSchema } from "@shared/schema";
@@ -54,7 +54,7 @@ router.get(
           students: sql<number>`count(*) filter (where ${students.active})`,
         })
         .from(students),
-      payrollForMonth(month),
+      payrollNow(),
     ]);
 
     const statusCounts = { paid: 0, awaiting_payment: 0, overdue: 0, frozen: 0, not_due: 0 };

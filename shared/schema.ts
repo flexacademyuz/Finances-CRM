@@ -227,6 +227,66 @@ export const salaryRecords = pgTable(
   }),
 );
 
+/**
+ * Money advanced to a teacher against future salary (CEO only). It is deducted
+ * from the teacher's next salary payout; `settledByPayoutId` is set once that
+ * payout is recorded. Counts as cash-out in Finances on `paidOn`.
+ */
+export const salaryAdvances = pgTable(
+  "salary_advances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teachers.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    method: paymentMethodEnum("method").notNull().default("cash"),
+    note: text("note"),
+    // The day the money was handed over (used for Finances month grouping).
+    paidOn: date("paid_on").notNull(),
+    // Null until a salary payout settles this advance.
+    settledByPayoutId: uuid("settled_by_payout_id"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byTeacher: index("advances_teacher_idx").on(t.teacherId) }),
+);
+
+/**
+ * A recorded salary payment to a teacher. `paidAt` marks the end of the settled
+ * cycle: the next salary accrues from student payments recorded after it. Stores
+ * the gross earned, advances deducted, and net amount actually paid.
+ */
+export const salaryPayouts = pgTable(
+  "salary_payouts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teacherId: uuid("teacher_id")
+      .notNull()
+      .references(() => teachers.id, { onDelete: "cascade" }),
+    grossEarned: numeric("gross_earned", { precision: 14, scale: 2 }).notNull(),
+    advancesDeducted: numeric("advances_deducted", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    // Net amount actually handed to the teacher (grossEarned − advancesDeducted).
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    method: paymentMethodEnum("method").notNull().default("cash"),
+    note: text("note"),
+    // Cycle boundary: previous payout's paidAt (null for the first cycle).
+    periodStart: timestamp("period_start", { withTimezone: true }),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
+    // The day the salary was paid (used for Finances month grouping).
+    paidOn: date("paid_on").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byTeacher: index("payouts_teacher_idx").on(t.teacherId) }),
+);
+
 /** Center-wide, CEO-configurable settings (single row, id = 'global'). */
 export const settings = pgTable("settings", {
   id: text("id").primaryKey().default("global"),
@@ -381,6 +441,8 @@ export type Class = typeof classes.$inferSelect;
 export type Student = typeof students.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type SalaryRecord = typeof salaryRecords.$inferSelect;
+export type SalaryAdvance = typeof salaryAdvances.$inferSelect;
+export type SalaryPayout = typeof salaryPayouts.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type PaymentFreeze = typeof paymentFreezes.$inferSelect;
 export type Discount = typeof discounts.$inferSelect;
@@ -503,3 +565,24 @@ export const createExpenseSchema = z.object({
 export const updateExpenseSchema = createExpenseSchema.partial();
 
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+
+/** Advance handed to a teacher (CEO). Defaults `paidOn` to today server-side. */
+export const createAdvanceSchema = z.object({
+  teacherId: z.string().uuid(),
+  amount: z.coerce.number().positive(),
+  method: z.enum(paymentMethodEnum.enumValues).optional(),
+  paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().optional(),
+});
+
+/** Record a salary payment to a teacher (CEO). `amount` defaults to net owed. */
+export const createPayoutSchema = z.object({
+  teacherId: z.string().uuid(),
+  amount: z.coerce.number().nonnegative().optional(),
+  method: z.enum(paymentMethodEnum.enumValues).optional(),
+  paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  note: z.string().optional(),
+});
+
+export type CreateAdvanceInput = z.infer<typeof createAdvanceSchema>;
+export type CreatePayoutInput = z.infer<typeof createPayoutSchema>;
