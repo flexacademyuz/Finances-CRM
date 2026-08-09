@@ -30,21 +30,23 @@ export function CeoDashboard() {
       <h1 className="text-xl font-bold">{t("dashboard")}</h1>
 
       <Link href="/finances" className="block">
-        <Card className="cursor-pointer transition hover:border-primary/40 hover:shadow-card-hover">
+        <div className="hero cursor-pointer transition hover:brightness-105">
           <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-wide text-tg-hint">{t("totalRevenue")}</div>
-            <ChevronRight size={18} className="text-tg-hint" />
+            <div className="text-xs font-medium uppercase tracking-wide text-white/70">{t("totalRevenue")}</div>
+            <ChevronRight size={18} className="text-white/70" />
           </div>
-          <div className="figure mt-1 text-3xl font-bold text-primary">{money(data.revenue.total)}</div>
-          <div className="mt-2 flex gap-4 text-sm">
-            <span className="text-tg-hint">
-              {t("cash")}: <span className="font-semibold text-tg-text">{money(data.revenue.cash)}</span>
-            </span>
-            <span className="text-tg-hint">
-              {t("online")}: <span className="font-semibold text-tg-text">{money(data.revenue.online)}</span>
-            </span>
+          <div className="figure mt-1 text-3xl font-bold text-white">{money(data.revenue.total)}</div>
+          <div className="mt-3 flex gap-3">
+            <div className="flex-1 rounded-xl bg-white/15 px-3 py-2 backdrop-blur">
+              <div className="text-[11px] text-white/70">{t("cash")}</div>
+              <div className="figure text-sm font-semibold text-white">{money(data.revenue.cash)}</div>
+            </div>
+            <div className="flex-1 rounded-xl bg-white/15 px-3 py-2 backdrop-blur">
+              <div className="text-[11px] text-white/70">{t("online")}</div>
+              <div className="figure text-sm font-semibold text-white">{money(data.revenue.online)}</div>
+            </div>
           </div>
-        </Card>
+        </div>
       </Link>
 
       <div className="flex gap-3">
@@ -66,19 +68,28 @@ export function CeoDashboard() {
         </div>
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={data.trend}>
+            <defs>
+              <linearGradient id="barBrand" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#7256f2" />
+                <stop offset="100%" stopColor="#3b6ef5" />
+              </linearGradient>
+            </defs>
             <XAxis
               dataKey="label"
               tickFormatter={(l: string) => l.split(" ")[0].slice(0, 3)}
               fontSize={10}
-              stroke="var(--tg-hint)"
+              stroke="var(--text-muted)"
+              tickLine={false}
+              axisLine={false}
             />
             <Tooltip
+              cursor={{ fill: "rgba(52,87,245,0.06)" }}
               formatter={(v: number) => money(v)}
-              contentStyle={{ background: "var(--tg-bg)", border: "none", borderRadius: 12 }}
+              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 6px 24px rgba(16,24,40,0.10)" }}
             />
-            <Bar dataKey="total" radius={[6, 6, 0, 0]}>
+            <Bar dataKey="total" radius={[8, 8, 0, 0]}>
               {data.trend.map((_, i) => (
-                <Cell key={i} fill="var(--tg-button)" />
+                <Cell key={i} fill="url(#barBrand)" />
               ))}
             </Bar>
           </BarChart>

@@ -2,22 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Brand system — "Zoho": modeled on Zoho CRM's palette. Honolulu-blue primary
-   (#0974B0) does the brand work, on a cool light-gray ground with white cards.
-   Zoho's other three brand hues map to the semantic states (green=success,
-   yellow/gold=warning, red=danger). Fixed identity — same in light/dark clients. */
+/* Brand system — "Aurora": modeled on the Figma "CRM Mobile App" template.
+   A vivid blue→violet gradient does the hero/brand work, on a cool off-white
+   ground with airy white cards, soft diffuse shadows, and a violet secondary
+   accent (donut charts, highlights). Bold navy text; big tabular figures for
+   money. Fixed identity — same in light/dark clients. */
 :root,
 :root[data-theme="light"],
 :root[data-theme="dark"] {
-  --bg: #f4f6f8;
+  --bg: #f5f7fb;
   --surface: #ffffff;
-  --border: #e3e7ec;
-  --text: #23303d;
-  --text-muted: #6b7684;
-  --primary: #0974b0;
-  --primary-hover: #075e8c;
-  --accent: #6b7684;
-  --dark: #23303d;
+  --border: #eaeef5;
+  --text: #1a2338;
+  --text-muted: #7a8699;
+  --primary: #3457f5;
+  --primary-hover: #2440d4;
+  --violet: #7b5cf5;
+  --grad-from: #3b6ef5;
+  --grad-to: #7256f2;
+  --brand-gradient: linear-gradient(135deg, #3b6ef5 0%, #7256f2 100%);
+  --accent: #7a8699;
+  --dark: #1a2338;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -40,11 +45,18 @@ body {
   .card {
     @apply rounded-card border border-border bg-surface p-4 shadow-card transition-colors;
   }
+  /* Signature brand panel — the blue→violet gradient hero from the Figma design.
+     White text/figures sit on it; used for the dashboard revenue header. */
+  .hero {
+    @apply rounded-card p-5 text-white shadow-brand;
+    background: var(--brand-gradient);
+  }
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-btn px-3 py-1.5 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-btn px-3.5 py-2 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50;
   }
   .btn-primary {
-    @apply border border-primary bg-primary font-semibold text-white shadow-sm hover:border-primary-hover hover:bg-primary-hover;
+    @apply border-0 font-semibold text-white shadow-brand hover:brightness-105;
+    background: var(--brand-gradient);
   }
   .btn-ghost {
     @apply border border-border bg-surface text-text hover:border-primary hover:bg-primary-soft hover:text-primary;
@@ -66,12 +78,12 @@ body {
   }
   .select option {
     background-color: #ffffff;
-    color: #23303d;
+    color: #1a2338;
     padding: 8px 12px;
   }
   .select option:checked {
-    background-color: #e6f1f8;
-    color: #075e8c;
+    background-color: #ebeffe;
+    color: #2440d4;
     font-weight: 600;
   }
   .label {

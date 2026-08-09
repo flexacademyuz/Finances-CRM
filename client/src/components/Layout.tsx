@@ -148,7 +148,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
           >
             {locale === "en" ? "UZ" : "EN"}
           </button>
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-primary text-sm font-bold text-white">
+          <div className="grid h-9 w-9 place-items-center rounded-full bg-brand text-sm font-bold text-white shadow-brand">
             {initials(user.fullName)}
           </div>
         </header>
@@ -195,7 +195,7 @@ function BottomNav({ items, location, role }: { items: BottomItem[]; location: s
                 <button
                   onClick={() => { haptic("light"); setSheet(true); }}
                   aria-label={t(item.label)}
-                  className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-primary text-white shadow-lg ring-4 ring-bg transition active:scale-95 hover:bg-primary-hover"
+                  className="absolute -top-6 grid h-16 w-16 place-items-center rounded-full bg-brand text-white shadow-brand ring-4 ring-bg transition active:scale-95 hover:brightness-105"
                 >
                   {item.icon}
                 </button>
@@ -272,7 +272,7 @@ function SidebarContent({
     <div className="flex h-full flex-col border-r border-border bg-sidebar-bg text-sidebar-text">
       {/* Brand / role */}
       <div className="flex items-center gap-3 px-4 py-4">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-sm font-bold text-white">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-sm font-bold text-white shadow-brand">
           {initials(userName)}
         </div>
         <div className="min-w-0">

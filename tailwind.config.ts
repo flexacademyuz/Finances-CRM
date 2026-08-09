@@ -26,48 +26,54 @@ export default {
         border: "var(--border)",
         text: "var(--text)",
         muted: "var(--text-muted)",
-        dark: "#23303d",
-        // Zoho Honolulu Blue — the single brand color (buttons, links, active nav).
+        dark: "#1a2338",
+        // Vivid blue — the lead brand color (buttons via gradient, links, active nav).
         primary: {
-          DEFAULT: "#0974b0",
-          hover: "#075e8c",
-          dark: "#075e8c",
-          light: "#4ea3d4",
-          soft: "#e6f1f8",
+          DEFAULT: "#3457f5",
+          hover: "#2440d4",
+          dark: "#2440d4",
+          light: "#7d97fb",
+          soft: "#ebeffe",
         },
-        // Accent is a neutral slate (not a competing hue) so the blue leads.
-        accent: { DEFAULT: "#6b7684", light: "#f1f3f5" },
-        // Semantic states map to Zoho's other three brand hues.
-        warning: { DEFAULT: "#c98a00", light: "#fdf3d7" }, // from Zoho vivid yellow, darkened for legibility
-        danger: { DEFAULT: "#ce2232", light: "#fbe3e6" }, // Zoho amaranth red
-        // Zoho's palette has no violet/sky, so frozen=neutral gray, discount=blue info.
-        freeze: { DEFAULT: "#6b7684", light: "#eef0f2" },
-        discount: { DEFAULT: "#0974b0", light: "#e6f1f8" },
+        // Violet — the Figma design's secondary accent (donut charts, highlights).
+        violet: { DEFAULT: "#7b5cf5", soft: "#f0ecfe" },
+        // Accent is a neutral slate (not a competing hue) so the brand hues lead.
+        accent: { DEFAULT: "#7a8699", light: "#f1f4f9" },
+        // Semantic states.
+        warning: { DEFAULT: "#d18700", light: "#fdf1d6" },
+        danger: { DEFAULT: "#e23744", light: "#fce4e6" },
+        // Frozen = neutral gray, discount = violet accent.
+        freeze: { DEFAULT: "#7a8699", light: "#eef1f6" },
+        discount: { DEFAULT: "#7b5cf5", light: "#f0ecfe" },
         sidebar: {
           bg: "#ffffff",
-          text: "#6b7684",
-          icon: "#6b7684",
-          active: "#0974b0",
+          text: "#7a8699",
+          icon: "#7a8699",
+          active: "#3457f5",
         },
         status: {
-          paid: "#219e4a", // Zoho sea green
-          awaiting: "#c98a00",
-          overdue: "#ce2232",
-          frozen: "#6b7684",
-          discount: "#0974b0",
-          notdue: "#6b7684",
+          paid: "#12b76a",
+          awaiting: "#d18700",
+          overdue: "#e23744",
+          frozen: "#7a8699",
+          discount: "#7b5cf5",
+          notdue: "#7a8699",
         },
+      },
+      backgroundImage: {
+        brand: "var(--brand-gradient)",
       },
       fontFamily: {
         mono: ["ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "monospace"],
       },
       borderRadius: {
-        card: "10px",
-        btn: "7px",
+        card: "16px",
+        btn: "10px",
       },
       boxShadow: {
-        card: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
-        "card-hover": "0 4px 12px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.05)",
+        card: "0 1px 2px rgba(16,24,40,0.04), 0 4px 16px rgba(16,24,40,0.05)",
+        "card-hover": "0 6px 24px rgba(16,24,40,0.10), 0 2px 6px rgba(16,24,40,0.05)",
+        brand: "0 8px 24px rgba(52,87,245,0.28)",
       },
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
