@@ -64,6 +64,7 @@ export default {
         brand: "var(--brand-gradient)",
       },
       fontFamily: {
+        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "monospace"],
       },
       borderRadius: {

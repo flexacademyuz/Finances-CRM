@@ -23,6 +23,7 @@
   --brand-gradient: linear-gradient(135deg, #3b6ef5 0%, #7256f2 100%);
   --accent: #7a8699;
   --dark: #1a2338;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -36,8 +37,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -89,9 +92,10 @@ body {
   .label {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
   }
-  /* Monospace, tabular figures for money and metrics. */
+  /* Money and metrics — Inter with tabular (fixed-width) figures so columns of
+     numbers still align, without the techy monospace look. */
   .figure {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
   }
