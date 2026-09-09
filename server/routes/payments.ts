@@ -30,6 +30,20 @@ import { buildPaymentContext } from "../services/payment-context";
 const router = Router();
 
 /**
+ * A teacher may only record/preview payments for students in their own classes.
+ * CEO/Accountant are unrestricted. Returns a 403-worthy flag rather than
+ * throwing so callers can respond consistently.
+ */
+async function teacherOwnsStudentClass(
+  req: import("express").Request,
+  classId: string,
+): Promise<boolean> {
+  if (req.authUser!.role !== "teacher") return true;
+  const cls = await getClassById(classId);
+  return !!cls && cls.teacherId === req.teacherId;
+}
+
+/**
  * GET /api/payments — history / log.
  *  - CEO: everything (full history, editable).
  *  - Accountant: their own entries by default (?scope=all for the full log).
@@ -64,6 +78,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const student = await getStudentById(req.params.studentId);
     if (!student) return res.status(404).json({ error: "not_found" });
+    if (!(await teacherOwnsStudentClass(req, student.classId))) {
+      return res.status(403).json({ error: "forbidden", message: "This student is not in your class." });
+    }
     // Default to the month a new payment would actually land on (the next
     // uncovered one), so the form shows "Covers <that month>" and paying ahead
     // is a normal action rather than an "already paid" error.
@@ -101,6 +118,9 @@ router.post(
     const input = recordPaymentSchema.parse(req.body);
     const student = await getStudentById(input.studentId);
     if (!student) return res.status(404).json({ error: "not_found", message: "Student not found" });
+    if (!(await teacherOwnsStudentClass(req, student.classId))) {
+      return res.status(403).json({ error: "forbidden", message: "You can only record payments for your own students." });
+    }
 
     // No month given → land on the student's next uncovered month, so recording
     // again simply pays the next month forward (advance payments). An explicit
@@ -162,6 +182,10 @@ router.post(
     const { reason } = voidPaymentSchema.parse(req.body);
     const existing = await getPaymentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    // Teachers may only void payments belonging to their own classes.
+    if (req.authUser!.role === "teacher" && existing.teacherId !== req.teacherId) {
+      return res.status(403).json({ error: "forbidden", message: "This payment is not for your class." });
+    }
     const updated = await voidPayment(req.params.id, req.authUser!.id, reason);
     res.json(updated);
   }),

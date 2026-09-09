@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Check, Search } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
+import { useSession } from "../../lib/session";
 import { haptic } from "../../lib/telegram";
 import { money } from "../../lib/format";
 import type { TeacherRow, Class, StudentRow, PaymentPreview } from "../../lib/types";
@@ -16,7 +17,12 @@ import { Button, Card, Field, Input, Modal, Spinner } from "../../components/ui"
  */
 export function RecordPayment() {
   const { t } = useI18n();
+  const { user } = useSession();
   const qc = useQueryClient();
+  // Teachers record only for their own students, so skip the teacher picker and
+  // go straight to their (server-scoped) classes. Renumber the steps to match.
+  const isTeacher = user.role === "teacher";
+  const stepNo = (n: number) => (isTeacher ? n - 1 : n);
 
   const [teacherId, setTeacherId] = useState<string>();
   const [classId, setClassId] = useState<string>();
@@ -26,11 +32,17 @@ export function RecordPayment() {
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
 
-  const teachers = useQuery({ queryKey: ["teachers"], queryFn: () => api<TeacherRow[]>("/api/teachers") });
+  const teachers = useQuery({
+    queryKey: ["teachers"],
+    queryFn: () => api<TeacherRow[]>("/api/teachers"),
+    enabled: !isTeacher,
+  });
   const classes = useQuery({
-    queryKey: ["classes", teacherId],
-    queryFn: () => api<Class[]>("/api/classes", { query: { teacherId, activeOnly: "1" } }),
-    enabled: !!teacherId,
+    queryKey: ["classes", isTeacher ? "mine" : teacherId],
+    // For a teacher the list endpoint is hard-scoped to their own classes, so no
+    // teacherId is sent; others must pick a teacher first.
+    queryFn: () => api<Class[]>("/api/classes", { query: { teacherId: isTeacher ? undefined : teacherId, activeOnly: "1" } }),
+    enabled: isTeacher || !!teacherId,
   });
   const students = useQuery({
     queryKey: ["students", classId],
@@ -92,20 +104,22 @@ export function RecordPayment() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t("recordPayment")}</h1>
 
-      {/* Step 1: Teacher */}
-      <SearchStep
-        title={`1. ${t("selectTeacher")}`}
-        selected={teacherName}
-        onClear={() => { setTeacherId(undefined); setClassId(undefined); setStudent(undefined); }}
-        loading={teachers.isLoading}
-        items={(teachers.data ?? []).map((x) => ({ id: x.id, label: x.fullName }))}
-        onPick={(id) => { setTeacherId(id); setClassId(undefined); setStudent(undefined); }}
-      />
+      {/* Step 1: Teacher (accountant/CEO only) */}
+      {!isTeacher && (
+        <SearchStep
+          title={`1. ${t("selectTeacher")}`}
+          selected={teacherName}
+          onClear={() => { setTeacherId(undefined); setClassId(undefined); setStudent(undefined); }}
+          loading={teachers.isLoading}
+          items={(teachers.data ?? []).map((x) => ({ id: x.id, label: x.fullName }))}
+          onPick={(id) => { setTeacherId(id); setClassId(undefined); setStudent(undefined); }}
+        />
+      )}
 
       {/* Step 2: Class */}
-      {teacherId && (
+      {(isTeacher || teacherId) && (
         <SearchStep
-          title={`2. ${t("selectClass")}`}
+          title={`${stepNo(2)}. ${t("selectClass")}`}
           selected={className}
           onClear={() => { setClassId(undefined); setStudent(undefined); }}
           loading={classes.isLoading}
@@ -117,7 +131,7 @@ export function RecordPayment() {
       {/* Step 3: Student */}
       {classId && (
         <SearchStep
-          title={`3. ${t("selectStudent")}`}
+          title={`${stepNo(3)}. ${t("selectStudent")}`}
           selected={student?.fullName}
           onClear={() => setStudent(undefined)}
           loading={students.isLoading}
@@ -160,7 +174,7 @@ export function RecordPayment() {
               </div>
             </div>
           )}
-          <Field label={`4. ${t("amount")}`}>
+          <Field label={`${stepNo(4)}. ${t("amount")}`}>
             <Input
               type="number"
               inputMode="decimal"
@@ -169,7 +183,7 @@ export function RecordPayment() {
             />
           </Field>
           <div>
-            <span className="label">{`5. ${t("method")}`}</span>
+            <span className="label">{`${stepNo(5)}. ${t("method")}`}</span>
             <div className="grid grid-cols-2 gap-2">
               {(["cash", "online"] as const).map((m) => (
                 <button
@@ -195,7 +209,7 @@ export function RecordPayment() {
       {/* Confirmation summary before final save */}
       <Modal open={confirming} onClose={() => setConfirming(false)} title={t("confirmPayment")}>
         <div className="space-y-2 text-sm">
-          <Row label={t("teacher")} value={teacherName} />
+          {!isTeacher && <Row label={t("teacher")} value={teacherName} />}
           <Row label={t("class")} value={className} />
           <Row label={t("student")} value={student?.fullName} />
           <Row label={t("amount")} value={money(Number(amount))} />

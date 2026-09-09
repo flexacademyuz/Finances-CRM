@@ -13,6 +13,9 @@ export function PaymentsLog() {
   const { t, locale } = useI18n();
   const { user } = useSession();
   const isCeo = user.role === "ceo";
+  // Teachers get a read-only view of their own students' payments; corrections
+  // (void/refund) stay with the CEO/Accountant.
+  const canVoid = user.role === "ceo" || user.role === "accountant";
   const [voidFor, setVoidFor] = useState<PaymentRow | null>(null);
   const [refundFor, setRefundFor] = useState<PaymentRow | null>(null);
 
@@ -60,7 +63,7 @@ export function PaymentsLog() {
                         −{money(refunded)} {t("refunded")} · {t("netAmount")} {money(net)}
                       </div>
                     )}
-                    {!p.voided && (
+                    {!p.voided && canVoid && (
                       <div className="flex justify-end gap-2">
                         {isCeo && net > 0 && (
                           <button className="text-xs text-status-discount" onClick={() => setRefundFor(p)}>

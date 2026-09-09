@@ -42,7 +42,9 @@ export function StudentDetail() {
   const canEdit = can(user, "edit_student");
   const canDiscount = can(user, "manage_discounts");
   const canDelete = can(user, "delete_student");
-  const canRecord = can(user, "record_payment");
+  // Voiding (removing) a recorded payment is a correction reserved for the
+  // CEO/Accountant; teachers record and view but don't undo payments.
+  const canVoidPayment = user.role === "ceo" || user.role === "accountant";
   // Show the actions cluster if the user can do at least one of them.
   const canManage = canEdit || canDiscount || canDelete;
 
@@ -132,7 +134,7 @@ export function StudentDetail() {
                   </div>
                   <div className="flex items-center gap-2">
                     <MethodTag method={p.method} />
-                    {canRecord && (
+                    {canVoidPayment && (
                       <button
                         className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
                         title={t("removePayment")}
