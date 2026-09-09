@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Snowflake, Tag, ArrowLeftRight, LogOut, Pencil } from "lucide-react";
+import { Snowflake, Tag, ArrowLeftRight, LogOut, Pencil, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { money } from "../lib/format";
@@ -15,9 +15,9 @@ type ActionStudent = { id: string; classId: string; fullName: string; effectiveF
  * Per-student actions available to Accountant and CEO from any active student
  * row: freeze (1B), discount (1C), change group, and stop learning.
  */
-export function StudentActions({ student }: { student: ActionStudent }) {
+export function StudentActions({ student, canDelete }: { student: ActionStudent; canDelete?: boolean }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState<null | "edit" | "freeze" | "discount" | "group" | "stop">(null);
+  const [open, setOpen] = useState<null | "edit" | "freeze" | "discount" | "group" | "stop" | "delete">(null);
 
   return (
     <>
@@ -57,13 +57,60 @@ export function StudentActions({ student }: { student: ActionStudent }) {
         >
           <LogOut size={16} />
         </button>
+        {canDelete && (
+          <button
+            className="rounded-lg bg-status-overdue/10 p-1.5 text-status-overdue"
+            title={t("deleteStudent")}
+            onClick={() => setOpen("delete")}
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
       {open === "edit" && <EditStudentModal student={student} onClose={() => setOpen(null)} />}
       {open === "freeze" && <FreezeModal student={student} onClose={() => setOpen(null)} />}
       {open === "discount" && <DiscountModal student={student} onClose={() => setOpen(null)} />}
       {open === "group" && <ChangeGroupModal student={student} onClose={() => setOpen(null)} />}
       {open === "stop" && <StopModal student={student} onClose={() => setOpen(null)} />}
+      {open === "delete" && <DeleteStudentModal student={student} onClose={() => setOpen(null)} />}
     </>
+  );
+}
+
+/**
+ * Permanently delete a student — for accidental registrations only. The server
+ * refuses when real payments exist (409), so the archive stays the safe default;
+ * that message is surfaced here. On success we leave the (now-gone) profile.
+ */
+function DeleteStudentModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const del = useMutation({
+    mutationFn: () => api(`/api/students/${student.id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["students"] });
+      onClose();
+      window.history.back();
+    },
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("deleteStudent")} — ${student.fullName}`}>
+      <div className="space-y-4">
+        <div className="rounded-lg bg-status-overdue/10 px-3 py-2 text-sm text-tg-text">
+          {t("deleteStudentConfirm")}
+        </div>
+        {del.isError && (
+          <div className="text-sm text-status-overdue">{(del.error as Error).message}</div>
+        )}
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={onClose}>{t("cancel")}</Button>
+          <Button className="flex-1" disabled={del.isPending} onClick={() => del.mutate()}>
+            {t("deleteStudent")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

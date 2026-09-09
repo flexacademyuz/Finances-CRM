@@ -46,6 +46,8 @@ const dict = {
   payrollObligation: { en: "Payroll estimate", uz: "Maosh hisob-kitobi" },
 
   teacher: { en: "Teacher", uz: "O'qituvchi" },
+  ceo: { en: "CEO", uz: "Rahbar" },
+  accountant: { en: "Accountant", uz: "Hisobchi" },
   class: { en: "Class", uz: "Guruh" },
   student: { en: "Student", uz: "O'quvchi" },
   amount: { en: "Amount", uz: "Summa" },
@@ -191,6 +193,33 @@ const dict = {
   complianceRate: { en: "Paid on time", uz: "O'z vaqtida to'lagan" },
   salaryRatio: { en: "Salary/revenue", uz: "Maosh/daromad" },
   groupCount: { en: "Groups", uz: "Guruhlar" },
+
+  // User profile editing & permissions (CEO management).
+  editUser: { en: "Edit profile", uz: "Profilni tahrirlash" },
+  username: { en: "Username", uz: "Foydalanuvchi nomi" },
+  permissions: { en: "Permissions", uz: "Ruxsatlar" },
+  managePermissions: { en: "Manage permissions", uz: "Ruxsatlarni boshqarish" },
+  permissionsNote: {
+    en: "Choose what this user can do. The CEO always has full access.",
+    uz: "Bu foydalanuvchi nima qila olishini tanlang. Rahbarda doim to'liq ruxsat bor.",
+  },
+  permAll: { en: "Full access (CEO)", uz: "To'liq ruxsat (rahbar)" },
+  // Permanent student delete (accidental registrations).
+  deleteStudent: { en: "Delete permanently", uz: "Butunlay o'chirish" },
+  deleteStudentConfirm: {
+    en: "Permanently delete this student? This cannot be undone. Use this only for an accidental registration — otherwise stop (archive) them to keep the history.",
+    uz: "Bu o'quvchini butunlay o'chirasizmi? Buni qaytarib bo'lmaydi. Faqat tasodifiy ro'yxatga olish uchun ishlating — aks holda tarixni saqlash uchun uni to'xtating (arxivlang).",
+  },
+  // Permission labels (grantable actions).
+  perm_record_payment: { en: "Record payments", uz: "To'lovlarni kiritish" },
+  perm_add_student: { en: "Add students", uz: "O'quvchi qo'shish" },
+  perm_edit_student: { en: "Edit students", uz: "O'quvchini tahrirlash" },
+  perm_delete_student: { en: "Delete students", uz: "O'quvchini o'chirish" },
+  perm_add_group: { en: "Add groups", uz: "Guruh qo'shish" },
+  perm_edit_group: { en: "Edit groups", uz: "Guruhni tahrirlash" },
+  perm_add_expense: { en: "Manage expenses", uz: "Xarajatlarni boshqarish" },
+  perm_manage_discounts: { en: "Manage discounts", uz: "Chegirmalarni boshqarish" },
+  perm_approve_leads: { en: "Approve new students", uz: "Yangi o'quvchilarni tasdiqlash" },
 } as const;
 
 export type StringKey = keyof typeof dict;

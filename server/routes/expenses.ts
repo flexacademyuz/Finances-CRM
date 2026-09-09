@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, requirePermission } from "../auth/middleware";
 import { db } from "../db";
 import { payments } from "@shared/schema";
 import { createExpenseSchema, updateExpenseSchema } from "@shared/schema";
@@ -21,8 +21,9 @@ import { monthKey, normalizeMonth, monthLabel, shiftMonth } from "@shared/date";
 
 const router = Router();
 
-// All expense routes require accountant or CEO.
-router.use("/expenses", requireRole("accountant", "ceo"));
+// Expenses are visible to anyone who can add them (CEO/Accountant by default,
+// plus any user the CEO grants the ability). The full finance report is CEO-only.
+router.use("/expenses", requirePermission("add_expense"));
 router.use("/finance", requireRole("ceo"));
 
 /** GET /api/expenses — filterable list (Accountant + CEO). */

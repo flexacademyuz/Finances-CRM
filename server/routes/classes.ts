@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, requirePermission } from "../auth/middleware";
 import { insertClassSchema } from "@shared/schema";
 import {
   listClasses,
@@ -80,10 +80,10 @@ router.get(
   }),
 );
 
-/* Create/edit/archive: CEO and Accountant per spec §3.1. */
+/* Create/edit/archive: anyone granted the group permissions (CEO always). */
 router.post(
   "/classes",
-  requireRole("ceo", "accountant"),
+  requirePermission("add_group"),
   asyncHandler(async (req, res) => {
     const input = insertClassSchema.parse(req.body);
     const created = await createClass({
@@ -102,7 +102,7 @@ router.post(
 
 router.patch(
   "/classes/:id",
-  requireRole("ceo", "accountant"),
+  requirePermission("edit_group"),
   asyncHandler(async (req, res) => {
     const patch = z
       .object({

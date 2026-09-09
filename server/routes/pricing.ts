@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requirePermission } from "../auth/middleware";
 import {
   createFreezeSchema,
   createDiscountSchema,
@@ -27,7 +27,7 @@ const router = Router();
 
 router.post(
   "/freezes",
-  requireRole("accountant", "ceo"),
+  requirePermission("manage_discounts"),
   asyncHandler(async (req, res) => {
     const input = createFreezeSchema.parse(req.body);
     if (input.freezeTo && input.freezeTo < input.freezeFrom) {
@@ -51,7 +51,7 @@ router.get(
 
 router.patch(
   "/freezes/:id/lift",
-  requireRole("accountant", "ceo"),
+  requirePermission("manage_discounts"),
   asyncHandler(async (req, res) => {
     const existing = await getFreezeById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
@@ -63,7 +63,7 @@ router.patch(
 
 router.post(
   "/discounts",
-  requireRole("accountant", "ceo"),
+  requirePermission("manage_discounts"),
   asyncHandler(async (req, res) => {
     const input = createDiscountSchema.parse(req.body);
     if (input.discountType === "percentage" && input.discountValue > 100) {
@@ -93,7 +93,7 @@ router.get(
 /** Remove (deactivate) or reactivate a discount. */
 router.patch(
   "/discounts/:id",
-  requireRole("accountant", "ceo"),
+  requirePermission("manage_discounts"),
   asyncHandler(async (req, res) => {
     const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
     const updated = await setDiscountActive(req.params.id, isActive);
@@ -107,7 +107,7 @@ router.patch(
 /** Set/replace a group's fixed per-student teacher rate (V2 1C). */
 router.put(
   "/teacher-salary-rules",
-  requireRole("accountant", "ceo"),
+  requirePermission("manage_discounts"),
   asyncHandler(async (req, res) => {
     const input = teacherSalaryRuleSchema.parse(req.body);
     const group = await getClassById(input.groupId);

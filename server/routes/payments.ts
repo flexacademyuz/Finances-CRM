@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, requirePermission } from "../auth/middleware";
 import {
   recordPaymentSchema,
   editPaymentSchema,
@@ -60,7 +60,7 @@ router.get(
  */
 router.get(
   "/payments/preview/:studentId",
-  requireRole("accountant", "ceo"),
+  requirePermission("record_payment"),
   asyncHandler(async (req, res) => {
     const student = await getStudentById(req.params.studentId);
     if (!student) return res.status(404).json({ error: "not_found" });
@@ -96,7 +96,7 @@ router.get(
  */
 router.post(
   "/payments",
-  requireRole("accountant", "ceo"),
+  requirePermission("record_payment"),
   asyncHandler(async (req, res) => {
     const input = recordPaymentSchema.parse(req.body);
     const student = await getStudentById(input.studentId);
@@ -157,7 +157,7 @@ router.patch(
 
 router.post(
   "/payments/:id/void",
-  requireRole("accountant", "ceo"),
+  requirePermission("record_payment"),
   asyncHandler(async (req, res) => {
     const { reason } = voidPaymentSchema.parse(req.body);
     const existing = await getPaymentById(req.params.id);

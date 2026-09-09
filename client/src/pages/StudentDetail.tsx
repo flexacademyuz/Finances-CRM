@@ -5,6 +5,7 @@ import { ArrowLeft, Phone, CalendarClock, CalendarCheck, Trash2 } from "lucide-r
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
+import { can } from "@shared/permissions";
 import { money, formatDate } from "../lib/format";
 import type { StudentDetail as StudentDetailData, PaymentRow } from "../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge, MethodTag } from "../components/ui";
@@ -71,6 +72,7 @@ export function StudentDetail() {
                   fullName: student.fullName,
                   effectiveFee: String(billing.effectiveFee),
                 }}
+                canDelete={can(user, "delete_student")}
               />
             )}
           </div>

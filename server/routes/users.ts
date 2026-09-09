@@ -2,16 +2,24 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
 import { requireRole } from "../auth/middleware";
-import { insertUserSchema, salaryRuleSchema } from "@shared/schema";
+import {
+  insertUserSchema,
+  salaryRuleSchema,
+  updateUserSchema,
+  permissionsSchema,
+} from "@shared/schema";
 import {
   listUsers,
   createUser,
   updateUserRole,
+  updateUserProfile,
+  setUserPermissions,
   setUserActive,
   getUserById,
   getTeacherByUserId,
   updateSalaryRule,
 } from "../storage";
+import { isPermission } from "@shared/permissions";
 
 const router = Router();
 
@@ -48,8 +56,25 @@ router.post(
       username: input.username ?? null,
       fullName: input.fullName,
       role: input.role,
+      // Only accept known permission keys; unknown strings are dropped so a
+      // stale client can't grant a permission the server doesn't understand.
+      permissions: input.permissions?.filter(isPermission),
     });
     res.status(201).json(user);
+  }),
+);
+
+/**
+ * Edit a user's profile (name, username, role) — lets the CEO fix a mistaken
+ * registration, e.g. a teacher entered under the wrong name.
+ */
+router.patch(
+  "/users/:id",
+  asyncHandler(async (req, res) => {
+    const patch = updateUserSchema.parse(req.body);
+    const user = await updateUserProfile(req.params.id, patch);
+    if (!user) return res.status(404).json({ error: "not_found" });
+    res.json(user);
   }),
 );
 
@@ -58,6 +83,17 @@ router.patch(
   asyncHandler(async (req, res) => {
     const { role } = z.object({ role: z.enum(["ceo", "accountant", "teacher"]) }).parse(req.body);
     const user = await updateUserRole(req.params.id, role);
+    if (!user) return res.status(404).json({ error: "not_found" });
+    res.json(user);
+  }),
+);
+
+/** Set the per-user permission grants (CEO controls who can do what). */
+router.patch(
+  "/users/:id/permissions",
+  asyncHandler(async (req, res) => {
+    const { permissions } = permissionsSchema.parse(req.body);
+    const user = await setUserPermissions(req.params.id, permissions.filter(isPermission));
     if (!user) return res.status(404).json({ error: "not_found" });
     res.json(user);
   }),

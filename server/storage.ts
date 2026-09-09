@@ -48,9 +48,13 @@ export async function createUser(input: {
   username?: string | null;
   fullName: string;
   role: Role;
+  permissions?: string[];
 }) {
   return db.transaction(async (tx) => {
-    const [u] = await tx.insert(users).values(input).returning();
+    const [u] = await tx
+      .insert(users)
+      .values({ ...input, permissions: input.permissions ?? [] })
+      .returning();
     if (u.role === "teacher") {
       await tx.insert(teachers).values({ userId: u.id });
     }
@@ -69,6 +73,27 @@ export async function updateUserRole(id: string, role: Role) {
     }
     return u;
   });
+}
+
+/** CEO edits to a user's profile; a role change keeps the teachers row in sync. */
+export async function updateUserProfile(
+  id: string,
+  patch: { fullName?: string; username?: string | null; role?: Role },
+) {
+  return db.transaction(async (tx) => {
+    const [u] = await tx.update(users).set(patch).where(eq(users.id, id)).returning();
+    if (!u) return undefined;
+    if (patch.role === "teacher") {
+      const existing = await tx.select().from(teachers).where(eq(teachers.userId, id));
+      if (existing.length === 0) await tx.insert(teachers).values({ userId: id });
+    }
+    return u;
+  });
+}
+
+export async function setUserPermissions(id: string, permissions: string[]) {
+  const [u] = await db.update(users).set({ permissions }).where(eq(users.id, id)).returning();
+  return u;
 }
 
 export async function setUserActive(id: string, active: boolean) {
@@ -283,6 +308,34 @@ export async function resumeStudent(
     active: true,
     billingStartDate: opts.resumeDate,
     ...(opts.classId ? { classId: opts.classId } : {}),
+  });
+}
+
+/**
+ * Count a student's real (non-voided) payment records. Used to guard the
+ * permanent delete: a student who has ever been billed must be archived, not
+ * deleted, so the finance history stays intact.
+ */
+export async function countStudentPayments(studentId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<string>`count(*)` })
+    .from(payments)
+    .where(and(eq(payments.studentId, studentId), eq(payments.voided, false)));
+  return row ? Number(row.n) : 0;
+}
+
+/**
+ * Permanently delete a student and their dependent rows (discounts, freezes,
+ * and any voided-only payment records). For accidental registrations only —
+ * the route guards this behind `delete_student` and refuses when real payments
+ * exist. Runs in a transaction so a failure leaves nothing half-removed.
+ */
+export async function deleteStudent(id: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.delete(payments).where(eq(payments.studentId, id));
+    await tx.delete(discounts).where(eq(discounts.studentId, id));
+    await tx.delete(paymentFreezes).where(eq(paymentFreezes.studentId, id));
+    await tx.delete(students).where(eq(students.id, id));
   });
 }
 

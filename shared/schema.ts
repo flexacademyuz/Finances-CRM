@@ -57,6 +57,9 @@ export const users = pgTable("users", {
   username: text("username"),
   fullName: text("full_name").notNull(),
   role: roleEnum("role").notNull(),
+  // Extra abilities the CEO grants this user on top of their role defaults.
+  // See shared/permissions.ts.
+  permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -455,7 +458,20 @@ export const insertUserSchema = createInsertSchema(users, {
   telegramId: z.coerce.number().int(),
   fullName: z.string().min(1),
   role: z.enum(roleEnum.enumValues),
-}).pick({ telegramId: true, username: true, fullName: true, role: true });
+})
+  .pick({ telegramId: true, username: true, fullName: true, role: true })
+  .extend({ permissions: z.array(z.string()).optional() });
+
+/** CEO edits to a user's profile (name, username, role). */
+export const updateUserSchema = z.object({
+  fullName: z.string().min(1).optional(),
+  username: z.string().nullable().optional(),
+  role: z.enum(roleEnum.enumValues).optional(),
+});
+
+export const permissionsSchema = z.object({
+  permissions: z.array(z.string()),
+});
 
 export const insertClassSchema = createInsertSchema(classes, {
   name: z.string().min(1),

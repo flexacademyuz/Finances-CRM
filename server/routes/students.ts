@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, requirePermission } from "../auth/middleware";
 import { insertStudentSchema, type StudentStatus } from "@shared/schema";
 import {
   listStudents,
@@ -10,6 +10,8 @@ import {
   updateStudent,
   stopStudent,
   resumeStudent,
+  deleteStudent,
+  countStudentPayments,
   getClassById,
   effectiveFee,
   listPayments,
@@ -152,6 +154,7 @@ async function assertClassWritable(req: Request, classId: string) {
  */
 router.post(
   "/students",
+  requirePermission("add_student"),
   asyncHandler(async (req, res) => {
     const input = insertStudentSchema.parse(req.body);
     await assertClassWritable(req, input.classId);
@@ -168,6 +171,7 @@ router.post(
 
 router.patch(
   "/students/:id",
+  requirePermission("edit_student"),
   asyncHandler(async (req, res) => {
     const existing = await getStudentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
@@ -221,6 +225,30 @@ router.post(
     await assertClassWritable(req, existing.classId);
     const updated = await stopStudent(req.params.id);
     res.json(updated);
+  }),
+);
+
+/**
+ * Permanently delete a student — for accidental registrations. Only allowed
+ * when the student has NO real payment history (protecting the finance audit
+ * trail); otherwise the caller is told to archive instead. Requires the
+ * delete_student permission (CEO has it by default).
+ */
+router.delete(
+  "/students/:id",
+  requirePermission("delete_student"),
+  asyncHandler(async (req, res) => {
+    const existing = await getStudentById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "not_found" });
+    const payCount = await countStudentPayments(req.params.id);
+    if (payCount > 0) {
+      return res.status(409).json({
+        error: "has_payments",
+        message: `This student has ${payCount} payment record(s). Archive them instead of deleting, to keep the finance history.`,
+      });
+    }
+    await deleteStudent(req.params.id);
+    res.json({ ok: true });
   }),
 );
 

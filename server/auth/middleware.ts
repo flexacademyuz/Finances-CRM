@@ -3,6 +3,7 @@ import { verifyInitData, telegramDisplayName } from "./telegram";
 import { getUserByTelegramId, getTeacherByUserId } from "../storage";
 import { env } from "../env";
 import type { Role, User } from "@shared/schema";
+import { can, type Permission } from "@shared/permissions";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -66,6 +67,24 @@ export function requireRole(...roles: Role[]) {
     if (!req.authUser) return res.status(401).json({ error: "unauthorized" });
     if (!roles.includes(req.authUser.role)) {
       return res.status(403).json({ error: "forbidden", message: "Insufficient role." });
+    }
+    next();
+  };
+}
+
+/**
+ * Restrict a route to users who have the given ability — either from their role
+ * defaults or a per-user grant from the CEO (who always passes). See
+ * shared/permissions.ts.
+ */
+export function requirePermission(perm: Permission) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.authUser) return res.status(401).json({ error: "unauthorized" });
+    if (!can(req.authUser, perm)) {
+      return res.status(403).json({
+        error: "forbidden",
+        message: "You don't have permission for this action. Ask the CEO to enable it.",
+      });
     }
     next();
   };
