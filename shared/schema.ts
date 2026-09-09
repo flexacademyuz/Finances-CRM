@@ -59,7 +59,9 @@ export type PaymentMethod = (typeof paymentMethodEnum.enumValues)[number];
 /** Every Mini App user is a Telegram account mapped to exactly one role. */
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  telegramId: bigint("telegram_id", { mode: "number" }).notNull().unique(),
+  // Nullable: a web-only user (signed up with username/password in a browser)
+  // may have no Telegram account. Still unique when present.
+  telegramId: bigint("telegram_id", { mode: "number" }).unique(),
   username: text("username"),
   fullName: text("full_name").notNull(),
   role: roleEnum("role").notNull(),

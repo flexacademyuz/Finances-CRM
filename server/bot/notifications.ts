@@ -12,8 +12,8 @@ import { monthKey, monthLabel } from "@shared/date";
 async function financeStaff(): Promise<{ telegramId: number; role: string }[]> {
   const all = await listUsers();
   return all
-    .filter((u) => u.active && (u.role === "ceo" || u.role === "accountant"))
-    .map((u) => ({ telegramId: u.telegramId, role: u.role }));
+    .filter((u) => u.active && u.telegramId != null && (u.role === "ceo" || u.role === "accountant"))
+    .map((u) => ({ telegramId: u.telegramId as number, role: u.role }));
 }
 
 const money = (n: number, currency = "UZS") =>
@@ -63,7 +63,7 @@ export async function finalizeAndNotifySalaries(month: string = monthKey()): Pro
     const snap = await snapshotSalary(t.id, month, true);
     if (!snap) continue;
     const [u] = await db.select().from(users).where(eq(users.id, t.userId));
-    if (!u) continue;
+    if (!u || u.telegramId == null) continue; // web-only teacher has no Telegram to notify
     const text =
       `💰 <b>Estimated salary finalized</b> — ${monthLabel(month)}\n` +
       `Collected: ${money(Number(snap.collectedTotal), settings?.currency)}\n` +

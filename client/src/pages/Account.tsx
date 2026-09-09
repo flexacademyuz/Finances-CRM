@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { clearToken } from "../lib/auth";
+import { isTelegram } from "../lib/telegram";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { Button, Card, Field, Input } from "../components/ui";
@@ -51,6 +53,17 @@ export function AccountPage() {
           {t("saveCredentials")}
         </Button>
       </Card>
+
+      {/* Log out only applies to a browser session (Telegram uses initData). */}
+      {!isTelegram() && (
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={() => { clearToken(); window.location.reload(); }}
+        >
+          {t("logOut")}
+        </Button>
+      )}
     </div>
   );
 }

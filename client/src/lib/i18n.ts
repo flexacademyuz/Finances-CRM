@@ -342,6 +342,7 @@ const dict = {
   reject: { en: "Reject", uz: "Rad etish" },
   setLoginCreds: { en: "Set login", uz: "Kirish o'rnatish" },
   loginUsernameLabel: { en: "Login username", uz: "Kirish nomi" },
+  logOut: { en: "Log out", uz: "Chiqish" },
 } as const;
 
 export type StringKey = keyof typeof dict;

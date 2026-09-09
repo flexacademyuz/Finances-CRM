@@ -42,7 +42,10 @@ async function main() {
   await waitForDatabase();
   await runMigrations();
   const boot = await bootstrap();
-  if (boot.ceoCreated) console.log(`👑 Seeded first CEO (Telegram ID ${env.seedCeoTelegramId}).`);
+  if (boot.ceoCreated)
+    console.log(
+      `👑 Seeded first CEO (${env.seedCeoUsername ? `login "${env.seedCeoUsername}"` : `Telegram ID ${env.seedCeoTelegramId}`}).`,
+    );
   else console.log(`• CEO seed skipped: ${boot.ceoSkipped}.`);
 
   startJobs();

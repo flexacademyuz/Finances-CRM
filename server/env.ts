@@ -17,6 +17,11 @@ export const env = {
 
   botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   webAppUrl: optional("WEB_APP_URL", ""),
+  // Secret for signing web session tokens (browser login, outside Telegram).
+  // Falls back to the bot token, then a dev-only constant.
+  sessionSecret: optional("SESSION_SECRET", process.env.TELEGRAM_BOT_TOKEN || "flex-insecure-dev-secret"),
+  // How long a web session token stays valid, in days.
+  sessionTtlDays: Number(optional("SESSION_TTL_DAYS", "30")),
   // Run the bot inside the API process (default). Disable if you run the bot
   // as a separate service to avoid two long-polling consumers.
   runBotInProcess: optional("RUN_BOT_IN_PROCESS", "1") !== "0",
@@ -31,6 +36,9 @@ export const env = {
     ? Number(process.env.SEED_CEO_TELEGRAM_ID)
     : undefined,
   seedCeoName: optional("SEED_CEO_NAME", "Flex Academy CEO"),
+  // Website login for the first CEO (so a browser-only deployment can bootstrap).
+  seedCeoUsername: process.env.SEED_CEO_USERNAME || "",
+  seedCeoPassword: process.env.SEED_CEO_PASSWORD || "",
 
   defaultGracePeriodDays: Number(optional("DEFAULT_GRACE_PERIOD_DAYS", "5")),
   defaultCurrency: optional("DEFAULT_CURRENCY", "UZS"),

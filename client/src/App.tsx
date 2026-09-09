@@ -8,6 +8,7 @@ import { accessFor } from "./lib/access";
 import { Layout } from "./components/Layout";
 import { Button, Card, Field, Input, Spinner } from "./components/ui";
 import { api, type ApiError } from "./lib/api";
+import { setToken } from "./lib/auth";
 
 // CEO pages
 import { CeoDashboard } from "./pages/ceo/Dashboard";
@@ -42,8 +43,12 @@ function Gate({ err }: { err: ApiError }) {
   const [fullName, setFullName] = useState("");
 
   const login = useMutation({
-    mutationFn: () => api("/api/auth/login", { method: "POST", body: { username, password } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    mutationFn: () => api<{ token?: string }>("/api/auth/login", { method: "POST", body: { username, password } }),
+    onSuccess: (data) => {
+      // Browser session: keep the token so the API is authenticated on reload.
+      if (data?.token) setToken(data.token);
+      qc.invalidateQueries();
+    },
   });
   const signup = useMutation({
     mutationFn: () => api("/api/auth/signup", { method: "POST", body: { fullName, username, password } }),

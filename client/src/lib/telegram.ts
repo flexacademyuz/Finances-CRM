@@ -56,6 +56,11 @@ export function getInitData(): string {
   return tg()?.initData ?? "";
 }
 
+/** True inside Telegram (verifiable initData present), false in a plain browser. */
+export function isTelegram(): boolean {
+  return getInitData() !== "";
+}
+
 export function detectLocale(): "en" | "uz" {
   const code = tg()?.initDataUnsafe?.user?.language_code ?? navigator.language;
   return code?.startsWith("uz") ? "uz" : "en";

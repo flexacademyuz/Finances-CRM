@@ -50,7 +50,7 @@ export async function listUsers() {
  * created so salary rules and class assignment can hang off it.
  */
 export async function createUser(input: {
-  telegramId: number;
+  telegramId?: number | null;
   username?: string | null;
   fullName: string;
   role: Role;
@@ -64,7 +64,7 @@ export async function createUser(input: {
     const [u] = await tx
       .insert(users)
       .values({
-        telegramId: input.telegramId,
+        telegramId: input.telegramId ?? null,
         username: input.username ?? null,
         fullName: input.fullName,
         role: input.role,
@@ -113,13 +113,13 @@ export async function relinkTelegramId(userId: string, newTelegramId: number) {
  * unapproved user the CEO can later approve and assign a role.
  */
 export async function createSignupRequest(input: {
-  telegramId: number;
+  telegramId?: number | null;
   username?: string | null;
   fullName: string;
   loginUsername: string;
   passwordHash: string;
 }) {
-  const existing = await getUserByTelegramId(input.telegramId);
+  const existing = input.telegramId != null ? await getUserByTelegramId(input.telegramId) : undefined;
   if (existing) {
     // Already known: refresh the pending request's details, but never touch an
     // already-approved account this way.
@@ -139,7 +139,7 @@ export async function createSignupRequest(input: {
   const [u] = await db
     .insert(users)
     .values({
-      telegramId: input.telegramId,
+      telegramId: input.telegramId ?? null,
       username: input.username ?? null,
       fullName: input.fullName,
       role: "teacher",

@@ -1,4 +1,16 @@
 import { getInitData } from "./telegram";
+import { getToken } from "./auth";
+
+/**
+ * Choose the auth header: Telegram initData when running inside Telegram, else a
+ * web session bearer token (browser login). Empty string when neither exists.
+ */
+function authHeader(): string {
+  const initData = getInitData();
+  if (initData) return `tma ${initData}`;
+  const token = getToken();
+  return token ? `Bearer ${token}` : "";
+}
 
 export class ApiError extends Error {
   constructor(
@@ -30,7 +42,7 @@ export async function api<T = unknown>(
     method: opts.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `tma ${getInitData()}`,
+      Authorization: authHeader(),
     },
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
   });
@@ -59,7 +71,7 @@ export async function downloadCsv(path: string, filename: string, query?: Record
   const url = new URL(path, window.location.origin);
   if (query) for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v);
   const res = await fetch(url.toString(), {
-    headers: { Authorization: `tma ${getInitData()}` },
+    headers: { Authorization: authHeader() },
   });
   const blob = await res.blob();
   const a = document.createElement("a");
