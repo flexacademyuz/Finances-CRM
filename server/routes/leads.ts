@@ -6,6 +6,8 @@ import {
   updateLeadSchema,
   approveLeadSchema,
   rejectLeadSchema,
+  insertDraftClassSchema,
+  assignTeacherSchema,
   type LeadStatus,
 } from "@shared/schema";
 import {
@@ -16,6 +18,11 @@ import {
   approveLead,
   rejectLead,
   deleteLead,
+  listDraftClasses,
+  getDraftClassById,
+  createDraftClass,
+  deleteDraftClass,
+  assignTeacherToDraft,
   getClassById,
   type LeadFilter,
 } from "../storage";
@@ -42,9 +49,10 @@ router.get(
   "/leads",
   asyncHandler(async (req, res) => {
     const filter: LeadFilter = {};
-    const { status, classId } = req.query;
+    const { status, classId, draftClassId } = req.query;
     if (typeof status === "string") filter.status = status as LeadStatus;
     if (typeof classId === "string") filter.classId = classId;
+    if (typeof draftClassId === "string") filter.draftClassId = draftClassId;
     if (req.authUser!.role === "teacher") filter.teacherId = req.teacherId; // hard scope
     res.json(await listLeads(filter));
   }),
@@ -60,13 +68,18 @@ router.post(
   asyncHandler(async (req, res) => {
     const input = insertLeadSchema.parse(req.body);
     if (input.classId) await assertClassWritable(req, input.classId);
+    if (input.draftClassId && !(await getDraftClassById(input.draftClassId))) {
+      return res.status(404).json({ error: "not_found", message: "Draft class not found." });
+    }
     const created = await createLead({
       fullName: input.fullName,
       phone: input.phone ?? null,
+      subject: input.subject ?? null,
       gradeAtSchool: input.gradeAtSchool ?? null,
       level: input.level ?? null,
       shift: input.shift,
       classId: input.classId ?? null,
+      draftClassId: input.draftClassId ?? null,
       createdBy: req.authUser!.id,
     });
     res.status(201).json(created);
@@ -152,6 +165,67 @@ router.delete(
     if (!lead) return res.status(404).json({ error: "not_found" });
     if (lead.classId) await assertClassWritable(req, lead.classId);
     await deleteLead(req.params.id);
+    res.json({ ok: true });
+  }),
+);
+
+/* ─────────────────────────── Draft classes ─────────────────────────── */
+
+/** List draft (teacherless) classes with a count of students sorted into each. */
+router.get(
+  "/draft-classes",
+  requirePermission("add_student"),
+  asyncHandler(async (_req, res) => {
+    res.json(await listDraftClasses());
+  }),
+);
+
+/** Create a draft class to sort new students into before a teacher exists. */
+router.post(
+  "/draft-classes",
+  requirePermission("add_student"),
+  asyncHandler(async (req, res) => {
+    const input = insertDraftClassSchema.parse(req.body);
+    const created = await createDraftClass({
+      name: input.name,
+      subject: input.subject ?? null,
+      defaultFee: input.defaultFee ?? null,
+      createdBy: req.authUser!.id,
+    });
+    res.status(201).json(created);
+  }),
+);
+
+/**
+ * Assign a teacher to a draft class → materialise it into a real class with its
+ * students. Requires add_group (materialising creates a real group).
+ */
+router.post(
+  "/draft-classes/:id/assign-teacher",
+  requirePermission("add_group"),
+  asyncHandler(async (req, res) => {
+    const draft = await getDraftClassById(req.params.id);
+    if (!draft) return res.status(404).json({ error: "not_found" });
+    const input = assignTeacherSchema.parse(req.body);
+    const result = await assignTeacherToDraft(req.params.id, {
+      teacherId: input.teacherId,
+      defaultFee: input.defaultFee ?? null,
+      startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
+    });
+    // New students begin their billing on the start date — refresh coverage.
+    await recomputeStatuses();
+    res.status(201).json(result);
+  }),
+);
+
+/** Delete an empty/abandoned draft class (its leads keep their intake record). */
+router.delete(
+  "/draft-classes/:id",
+  requirePermission("add_group"),
+  asyncHandler(async (req, res) => {
+    const draft = await getDraftClassById(req.params.id);
+    if (!draft) return res.status(404).json({ error: "not_found" });
+    await deleteDraftClass(req.params.id);
     res.json({ ok: true });
   }),
 );

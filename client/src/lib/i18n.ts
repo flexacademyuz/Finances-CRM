@@ -247,6 +247,21 @@ const dict = {
   noLeads: { en: "No leads here", uz: "Bu yerda o'quvchilar yo'q" },
   deleteLead: { en: "Delete lead", uz: "O'chirish" },
   chooseGroup: { en: "Choose a group", uz: "Guruhni tanlang" },
+  subject: { en: "Subject", uz: "Fan" },
+  registerStudent: { en: "Register student", uz: "O'quvchini ro'yxatga olish" },
+  placement: { en: "Placement", uz: "Joylashuv" },
+  newClass: { en: "New class (draft)", uz: "Yangi sinf (qoralama)" },
+  newClassName: { en: "New class name", uz: "Yangi sinf nomi" },
+  draftClasses: { en: "Draft classes", uz: "Qoralama sinflar" },
+  draftClass: { en: "Draft class", uz: "Qoralama sinf" },
+  assignTeacher: { en: "Assign teacher", uz: "O'qituvchi biriktirish" },
+  assignTeacherNote: {
+    en: "Assigning a teacher turns this draft into a real class and enrolls its students from the start date.",
+    uz: "O'qituvchi biriktirilsa, qoralama haqiqiy sinfga aylanadi va o'quvchilar boshlanish sanasidan ro'yxatga olinadi.",
+  },
+  noDrafts: { en: "No draft classes", uz: "Qoralama sinflar yo'q" },
+  studentsCount: { en: "students", uz: "o'quvchi" },
+  deleteDraft: { en: "Delete draft", uz: "Qoralamani o'chirish" },
 } as const;
 
 export type StringKey = keyof typeof dict;

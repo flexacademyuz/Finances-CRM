@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { insertLeadSchema, approveLeadSchema } from "../shared/schema";
+import {
+  insertLeadSchema,
+  approveLeadSchema,
+  insertDraftClassSchema,
+  assignTeacherSchema,
+} from "../shared/schema";
 
 /**
  * Lead intake validation (feature #4). The registration form collects full
@@ -23,6 +28,26 @@ describe("lead schemas", () => {
   it("requires a name and a valid shift", () => {
     expect(() => insertLeadSchema.parse({ fullName: "", shift: "morning" })).toThrow();
     expect(() => insertLeadSchema.parse({ fullName: "A", shift: "evening" })).toThrow();
+  });
+
+  it("carries subject and a draft-class placement", () => {
+    const parsed = insertLeadSchema.parse({
+      fullName: "Dilnoza",
+      subject: "English",
+      shift: "morning",
+      draftClassId: "22222222-2222-2222-2222-222222222222",
+    });
+    expect(parsed.subject).toBe("English");
+    expect(parsed.draftClassId).toBe("22222222-2222-2222-2222-222222222222");
+  });
+
+  it("draft class needs a name; assigning a teacher needs a teacher id", () => {
+    expect(insertDraftClassSchema.parse({ name: "Beginners A" }).name).toBe("Beginners A");
+    expect(() => insertDraftClassSchema.parse({ subject: "Math" })).toThrow();
+    expect(() =>
+      assignTeacherSchema.parse({ teacherId: "33333333-3333-3333-3333-333333333333" }),
+    ).not.toThrow();
+    expect(() => assignTeacherSchema.parse({})).toThrow();
   });
 
   it("approval accepts an optional group and an ISO start date", () => {

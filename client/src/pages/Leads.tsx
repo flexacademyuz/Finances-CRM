@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Check, X, ArrowLeftRight, Phone, GraduationCap, Clock } from "lucide-react";
+import { Plus, Check, X, ArrowLeftRight, Phone, GraduationCap, Clock, BookOpen } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { can } from "@shared/permissions";
-import type { LeadRow, Class } from "../lib/types";
+import type { LeadRow, Class, DraftClassRow } from "../lib/types";
 
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../components/ui";
 
@@ -17,8 +18,14 @@ export function LeadsPage() {
   const { t } = useI18n();
   const { user } = useSession();
   const qc = useQueryClient();
+  const search = useSearch();
   const [tab, setTab] = useState<LeadStatus>("pending");
   const [registering, setRegistering] = useState(false);
+
+  // Opened from the bottom "+" quick action (/leads?register=1).
+  useEffect(() => {
+    if (new URLSearchParams(search).get("register") === "1") setRegistering(true);
+  }, [search]);
   const [approving, setApproving] = useState<LeadRow | null>(null);
   const [swapping, setSwapping] = useState<LeadRow | null>(null);
   const [rejecting, setRejecting] = useState<LeadRow | null>(null);
@@ -27,12 +34,20 @@ export function LeadsPage() {
   const canDecide = can(user, "approve_leads");
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
+  const drafts = useQuery({
+    queryKey: ["draft-classes"],
+    queryFn: () => api<DraftClassRow[]>("/api/draft-classes"),
+    enabled: canRegister,
+  });
   const leads = useQuery({
     queryKey: ["leads", tab],
     queryFn: () => api<LeadRow[]>("/api/leads", { query: { status: tab } }),
   });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["leads"] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["leads"] });
+    qc.invalidateQueries({ queryKey: ["draft-classes"] });
+  };
 
   return (
     <div className="space-y-3">
@@ -73,6 +88,9 @@ export function LeadsPage() {
                     {l.phone && (
                       <span className="inline-flex items-center gap-1"><Phone size={12} /> {l.phone}</span>
                     )}
+                    {l.subject && (
+                      <span className="inline-flex items-center gap-1"><BookOpen size={12} /> {l.subject}</span>
+                    )}
                     {l.gradeAtSchool && (
                       <span className="inline-flex items-center gap-1"><GraduationCap size={12} /> {l.gradeAtSchool}</span>
                     )}
@@ -81,9 +99,13 @@ export function LeadsPage() {
                   </div>
                   <div className="mt-1 text-xs">
                     <span className="text-tg-hint">{t("targetGroup")}: </span>
-                    <span className={l.className ? "font-medium" : "text-muted"}>
-                      {l.className ?? t("unassignedGroup")}
-                    </span>
+                    {l.className ? (
+                      <span className="font-medium">{l.className}</span>
+                    ) : l.draftClassName ? (
+                      <span className="font-medium">{l.draftClassName} · {t("draftClass")}</span>
+                    ) : (
+                      <span className="text-muted">{t("unassignedGroup")}</span>
+                    )}
                   </div>
                   {l.decisionNote && (
                     <div className="mt-1 text-xs italic text-tg-hint">“{l.decisionNote}”</div>
@@ -114,6 +136,7 @@ export function LeadsPage() {
       {registering && (
         <RegisterLeadModal
           classes={classes.data ?? []}
+          drafts={drafts.data ?? []}
           onClose={() => setRegistering(false)}
           onSaved={() => { setRegistering(false); refresh(); }}
         />
@@ -147,46 +170,75 @@ export function LeadsPage() {
 
 function RegisterLeadModal({
   classes,
+  drafts,
   onClose,
   onSaved,
 }: {
   classes: Class[];
+  drafts: DraftClassRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [subject, setSubject] = useState("");
   const [gradeAtSchool, setGradeAtSchool] = useState("");
   const [level, setLevel] = useState("");
   const [shift, setShift] = useState<"morning" | "afternoon">("morning");
-  const [classId, setClassId] = useState("");
+  // Placement: "" | group:<id> | draft:<id> | __new__
+  const [placement, setPlacement] = useState("");
+  const [newClassName, setNewClassName] = useState("");
 
   const create = useMutation({
-    mutationFn: () =>
-      api("/api/leads", {
+    mutationFn: async () => {
+      let classId: string | null = null;
+      let draftClassId: string | null = null;
+      if (placement === "__new__") {
+        // Create the draft class first, then place the student into it.
+        const draft = await api<{ id: string }>("/api/draft-classes", {
+          method: "POST",
+          body: { name: newClassName, subject: subject || undefined },
+        });
+        draftClassId = draft.id;
+      } else if (placement.startsWith("group:")) {
+        classId = placement.slice(6);
+      } else if (placement.startsWith("draft:")) {
+        draftClassId = placement.slice(6);
+      }
+      return api("/api/leads", {
         method: "POST",
         body: {
           fullName,
           phone: phone || undefined,
+          subject: subject || undefined,
           gradeAtSchool: gradeAtSchool || undefined,
           level: level || undefined,
           shift,
-          classId: classId || null,
+          classId,
+          draftClassId,
         },
-      }),
+      });
+    },
     onSuccess: onSaved,
   });
 
+  const needsName = placement === "__new__";
+
   return (
-    <Modal open onClose={onClose} title={t("registerLead")}>
+    <Modal open onClose={onClose} title={t("registerStudent")}>
       <div className="space-y-3">
         <Field label={t("fullName")}>
           <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </Field>
-        <Field label={t("phone")}>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t("phone")}>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </Field>
+          <Field label={t("subject")}>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <Field label={t("gradeAtSchool")}>
             <Input value={gradeAtSchool} onChange={(e) => setGradeAtSchool(e.target.value)} />
@@ -195,26 +247,45 @@ function RegisterLeadModal({
             <Input value={level} onChange={(e) => setLevel(e.target.value)} />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label={t("shift")}>
-            <Select value={shift} onChange={(e) => setShift(e.target.value as "morning" | "afternoon")}>
-              <option value="morning">{t("morning")}</option>
-              <option value="afternoon">{t("afternoon")}</option>
-            </Select>
+        <Field label={t("shift")}>
+          <Select value={shift} onChange={(e) => setShift(e.target.value as "morning" | "afternoon")}>
+            <option value="morning">{t("morning")}</option>
+            <option value="afternoon">{t("afternoon")}</option>
+          </Select>
+        </Field>
+        <Field label={t("placement")}>
+          <Select value={placement} onChange={(e) => setPlacement(e.target.value)}>
+            <option value="">{t("unassignedGroup")}</option>
+            {classes.length > 0 && (
+              <optgroup label={t("groups")}>
+                {classes.map((c) => (
+                  <option key={c.id} value={`group:${c.id}`}>{c.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {drafts.length > 0 && (
+              <optgroup label={t("draftClasses")}>
+                {drafts.map((d) => (
+                  <option key={d.id} value={`draft:${d.id}`}>{d.name}</option>
+                ))}
+              </optgroup>
+            )}
+            <option value="__new__">＋ {t("newClass")}</option>
+          </Select>
+        </Field>
+        {needsName && (
+          <Field label={t("newClassName")}>
+            <Input value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
           </Field>
-          <Field label={t("targetGroup")}>
-            <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
-              <option value="">{t("unassignedGroup")}</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Select>
-          </Field>
-        </div>
+        )}
         {create.isError && (
           <div className="text-sm text-status-overdue">{(create.error as Error).message}</div>
         )}
-        <Button className="w-full" disabled={!fullName || create.isPending} onClick={() => create.mutate()}>
+        <Button
+          className="w-full"
+          disabled={!fullName || (needsName && !newClassName) || create.isPending}
+          onClick={() => create.mutate()}
+        >
           {t("save")}
         </Button>
       </div>

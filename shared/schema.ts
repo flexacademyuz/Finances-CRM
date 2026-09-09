@@ -414,12 +414,31 @@ export const expenses = pgTable(
 );
 
 /**
+ * Draft classes — provisional groups created while registering new students,
+ * before a teacher is assigned. Leads are sorted into a draft; when the CEO
+ * assigns a teacher the draft is materialised into a real class (in `classes`)
+ * with its students, and the draft is removed. Kept separate from `classes` so
+ * teacherless buckets never leak into rosters, billing, or payroll.
+ */
+export const draftClasses = pgTable("draft_classes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  subject: text("subject"),
+  defaultFee: numeric("default_fee", { precision: 14, scale: 2 }).notNull().default("0"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Leads — prospective new students registered through the platform before they
- * join a group. Captures the intake details (grade, level, preferred shift) and
- * an optional target group. A teacher (or anyone with approve_leads) approves a
- * lead into a group, which creates the actual student and starts their billing
- * from the approval date; a lead can also be reassigned (swapped) to a different
- * group or rejected. (Feature #4.)
+ * join a group. Captures the intake details (subject, grade, level, preferred
+ * shift) and an optional placement: an existing group, or a draft class. A
+ * teacher (or anyone with approve_leads) approves a lead into a group, which
+ * creates the actual student and starts their billing from the approval date; a
+ * lead can also be reassigned (swapped) to a different group or rejected.
+ * (Feature #4.)
  */
 export const leads = pgTable(
   "leads",
@@ -427,6 +446,8 @@ export const leads = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
+    // The subject the student wants to study, e.g. "English", "Math".
+    subject: text("subject"),
     // The student's grade at their regular school, e.g. "9th grade".
     gradeAtSchool: text("grade_at_school"),
     // Their current level for the subject, e.g. "Beginner", "B1".
@@ -435,6 +456,8 @@ export const leads = pgTable(
     shift: shiftEnum("shift").notNull().default("morning"),
     // Target group (existing). Null = not yet placed; chosen at approval.
     classId: uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+    // Provisional bucket before a teacher exists; cleared once materialised.
+    draftClassId: uuid("draft_class_id").references(() => draftClasses.id, { onDelete: "set null" }),
     status: leadStatusEnum("status").notNull().default("pending"),
     // Set when rejected/approved to explain the decision.
     decisionNote: text("decision_note"),
@@ -451,6 +474,7 @@ export const leads = pgTable(
   (t) => ({
     byStatus: index("leads_status_idx").on(t.status),
     byClass: index("leads_class_idx").on(t.classId),
+    byDraft: index("leads_draft_idx").on(t.draftClassId),
   }),
 );
 
@@ -499,6 +523,7 @@ export type Discount = typeof discounts.$inferSelect;
 export type TeacherSalaryRule = typeof teacherSalaryRules.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
+export type DraftClass = typeof draftClasses.$inferSelect;
 
 /* ───────────────────── Zod validation schemas ────────────────────── */
 
@@ -553,21 +578,40 @@ export const insertStudentSchema = createInsertSchema(students, {
 export const insertLeadSchema = z.object({
   fullName: z.string().min(1),
   phone: z.string().optional(),
+  subject: z.string().optional(),
   gradeAtSchool: z.string().optional(),
   level: z.string().optional(),
   shift: z.enum(shiftEnum.enumValues),
-  // Optional target group; may be placed later at approval time.
+  // Placement: an existing group, or a draft class. Either may be omitted (the
+  // student is placed later, at approval or when a teacher is assigned).
   classId: z.string().uuid().nullable().optional(),
+  draftClassId: z.string().uuid().nullable().optional(),
 });
 
-/** Edit a pending lead's intake details or reassign (swap) its target group. */
+/** Edit a pending lead's intake details or reassign (swap) its placement. */
 export const updateLeadSchema = z.object({
   fullName: z.string().min(1).optional(),
   phone: z.string().nullable().optional(),
+  subject: z.string().nullable().optional(),
   gradeAtSchool: z.string().nullable().optional(),
   level: z.string().nullable().optional(),
   shift: z.enum(shiftEnum.enumValues).optional(),
   classId: z.string().uuid().nullable().optional(),
+  draftClassId: z.string().uuid().nullable().optional(),
+});
+
+/** Create a draft (teacherless) class to sort new students into. */
+export const insertDraftClassSchema = z.object({
+  name: z.string().min(1),
+  subject: z.string().optional(),
+  defaultFee: z.coerce.number().nonnegative().optional(),
+});
+
+/** Assign a teacher to a draft class → materialise it into a real class. */
+export const assignTeacherSchema = z.object({
+  teacherId: z.string().uuid(),
+  defaultFee: z.coerce.number().nonnegative().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 /** Approve a lead into a group; billing starts from `approvalDate` (default today). */

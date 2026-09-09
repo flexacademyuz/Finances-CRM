@@ -73,16 +73,28 @@ export type LeadRow = {
   id: string;
   fullName: string;
   phone: string | null;
+  subject: string | null;
   gradeAtSchool: string | null;
   level: string | null;
   shift: "morning" | "afternoon";
   classId: string | null;
   className: string | null;
   teacherId: string | null;
+  draftClassId: string | null;
+  draftClassName: string | null;
   status: "pending" | "approved" | "rejected";
   decisionNote: string | null;
   approvedStudentId: string | null;
   createdBy: string;
+  createdAt: string;
+};
+
+export type DraftClassRow = {
+  id: string;
+  name: string;
+  subject: string | null;
+  defaultFee: string;
+  studentCount: number;
   createdAt: string;
 };
 

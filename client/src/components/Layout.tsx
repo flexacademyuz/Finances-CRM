@@ -23,6 +23,7 @@ import type { Role, User } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { accessFor } from "../lib/access";
+import { can } from "@shared/permissions";
 import { haptic } from "../lib/telegram";
 
 type NavItem = { href: string; label: StringKey; icon: ReactNode };
@@ -51,6 +52,7 @@ const BOTTOM_NAV: Record<Role, BottomItem[]> = {
   ],
   teacher: [
     { href: "/", label: "myClasses", icon: <Users size={22} /> },
+    { href: "#create", label: "add", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
     { href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={22} /> },
   ],
 };
@@ -165,31 +167,37 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
       </div>
 
       {/* Mobile bottom tab bar — quick access alongside the sidebar drawer. */}
-      <BottomNav items={BOTTOM_NAV[role]} location={location} role={role} />
+      <BottomNav items={BOTTOM_NAV[role]} location={location} user={user} />
     </div>
   );
 }
 
-/** Quick-create options behind the center "+", grouped and role-filtered. */
+/** Quick-create options behind the center "+", gated by the user's permissions. */
 type QuickAction = { label: StringKey; icon: ReactNode; href: string };
-function quickActions(role: Role): QuickAction[] {
-  const recordHref = role === "accountant" ? "/" : "/record";
-  const actions: QuickAction[] = [
-    { label: "recordPayment", icon: <Wallet size={20} />, href: recordHref },
-    { label: "addExpense", icon: <Receipt size={20} />, href: "/expenses" },
-  ];
+function quickActions(user: User): QuickAction[] {
+  const actions: QuickAction[] = [];
+  // Register a new student (lead) — opens the Leads register form.
+  if (can(user, "add_student")) {
+    actions.push({ label: "registerStudent", icon: <UserPlus size={20} />, href: "/leads?register=1" });
+  }
+  if (user.role === "ceo" || can(user, "record_payment")) {
+    actions.push({ label: "recordPayment", icon: <Wallet size={20} />, href: user.role === "accountant" ? "/" : "/record" });
+  }
+  if (user.role === "ceo" || user.role === "accountant" || can(user, "add_expense")) {
+    actions.push({ label: "addExpense", icon: <Receipt size={20} />, href: "/expenses" });
+  }
   // Advances are a CEO-only payroll action (handled on the Payroll screen).
-  if (role === "ceo") {
+  if (user.role === "ceo") {
     actions.push({ label: "advanceToTeacher", icon: <HandCoins size={20} />, href: "/payroll" });
   }
   return actions;
 }
 
-function BottomNav({ items, location, role }: { items: BottomItem[]; location: string; role: Role }) {
+function BottomNav({ items, location, user }: { items: BottomItem[]; location: string; user: User }) {
   const { t } = useI18n();
   const [, navigate] = useLocation();
   const [sheet, setSheet] = useState(false);
-  const actions = quickActions(role);
+  const actions = quickActions(user);
 
   return (
     <>

@@ -15,6 +15,7 @@ import {
   teacherSalaryRules,
   expenses,
   leads,
+  draftClasses,
   type Role,
   type PaymentEdit,
   type StudentStatus,
@@ -379,15 +380,17 @@ export async function effectiveFee(studentId: string): Promise<number> {
 export type LeadFilter = {
   status?: LeadStatus;
   classId?: string;
+  draftClassId?: string;
   // Restrict to leads whose target group belongs to this teacher.
   teacherId?: string;
 };
 
-/** List leads with their target group's name and owning teacher (for scoping). */
+/** List leads with their placement (group or draft) and owning teacher. */
 export async function listLeads(filter: LeadFilter = {}) {
   const conds = [];
   if (filter.status) conds.push(eq(leads.status, filter.status));
   if (filter.classId) conds.push(eq(leads.classId, filter.classId));
+  if (filter.draftClassId) conds.push(eq(leads.draftClassId, filter.draftClassId));
   if (filter.teacherId) conds.push(eq(classes.teacherId, filter.teacherId));
 
   return db
@@ -395,12 +398,15 @@ export async function listLeads(filter: LeadFilter = {}) {
       id: leads.id,
       fullName: leads.fullName,
       phone: leads.phone,
+      subject: leads.subject,
       gradeAtSchool: leads.gradeAtSchool,
       level: leads.level,
       shift: leads.shift,
       classId: leads.classId,
       className: classes.name,
       teacherId: classes.teacherId,
+      draftClassId: leads.draftClassId,
+      draftClassName: draftClasses.name,
       status: leads.status,
       decisionNote: leads.decisionNote,
       approvedStudentId: leads.approvedStudentId,
@@ -409,6 +415,7 @@ export async function listLeads(filter: LeadFilter = {}) {
     })
     .from(leads)
     .leftJoin(classes, eq(leads.classId, classes.id))
+    .leftJoin(draftClasses, eq(leads.draftClassId, draftClasses.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(leads.createdAt));
 }
@@ -421,10 +428,12 @@ export async function getLeadById(id: string) {
 export async function createLead(input: {
   fullName: string;
   phone?: string | null;
+  subject?: string | null;
   gradeAtSchool?: string | null;
   level?: string | null;
   shift: Shift;
   classId?: string | null;
+  draftClassId?: string | null;
   createdBy: string;
 }) {
   const [l] = await db
@@ -432,10 +441,12 @@ export async function createLead(input: {
     .values({
       fullName: input.fullName,
       phone: input.phone ?? null,
+      subject: input.subject ?? null,
       gradeAtSchool: input.gradeAtSchool ?? null,
       level: input.level ?? null,
       shift: input.shift,
       classId: input.classId ?? null,
+      draftClassId: input.draftClassId ?? null,
       createdBy: input.createdBy,
     })
     .returning();
@@ -447,10 +458,12 @@ export async function updateLead(
   patch: Partial<{
     fullName: string;
     phone: string | null;
+    subject: string | null;
     gradeAtSchool: string | null;
     level: string | null;
     shift: Shift;
     classId: string | null;
+    draftClassId: string | null;
   }>,
 ) {
   const [l] = await db
@@ -502,6 +515,107 @@ export async function approveLead(
       .where(eq(leads.id, id))
       .returning();
     return { lead, student };
+  });
+}
+
+/* ──────────────────────────── Draft classes ────────────────────────── */
+
+/** Draft classes with a count of the pending students sorted into each. */
+export async function listDraftClasses() {
+  const rows = await db
+    .select({
+      id: draftClasses.id,
+      name: draftClasses.name,
+      subject: draftClasses.subject,
+      defaultFee: draftClasses.defaultFee,
+      createdAt: draftClasses.createdAt,
+      studentCount: sql<string>`count(${leads.id}) filter (where ${leads.status} = 'pending')`,
+    })
+    .from(draftClasses)
+    .leftJoin(leads, eq(leads.draftClassId, draftClasses.id))
+    .groupBy(draftClasses.id)
+    .orderBy(desc(draftClasses.createdAt));
+  return rows.map((r) => ({ ...r, studentCount: Number(r.studentCount) }));
+}
+
+export async function getDraftClassById(id: string) {
+  const [d] = await db.select().from(draftClasses).where(eq(draftClasses.id, id));
+  return d;
+}
+
+export async function createDraftClass(input: {
+  name: string;
+  subject?: string | null;
+  defaultFee?: number | null;
+  createdBy: string;
+}) {
+  const [d] = await db
+    .insert(draftClasses)
+    .values({
+      name: input.name,
+      subject: input.subject ?? null,
+      defaultFee: input.defaultFee != null ? String(input.defaultFee) : "0",
+      createdBy: input.createdBy,
+    })
+    .returning();
+  return d;
+}
+
+export async function deleteDraftClass(id: string): Promise<void> {
+  // Leads keep their intake record; their draft link is cleared by the FK.
+  await db.delete(draftClasses).where(eq(draftClasses.id, id));
+}
+
+/**
+ * Materialise a draft class: create the real class under the chosen teacher,
+ * convert every pending lead in the draft into a student (billing anchored to
+ * the start date), then remove the draft. The class now appears in the classes
+ * list with its roster.
+ */
+export async function assignTeacherToDraft(
+  draftId: string,
+  opts: { teacherId: string; defaultFee?: number | null; startDate: string },
+) {
+  return db.transaction(async (tx) => {
+    const [draft] = await tx.select().from(draftClasses).where(eq(draftClasses.id, draftId));
+    if (!draft) throw new Error("Draft class not found");
+
+    const fee = opts.defaultFee != null ? String(opts.defaultFee) : draft.defaultFee;
+    const [cls] = await tx
+      .insert(classes)
+      .values({
+        name: draft.name,
+        subject: draft.subject,
+        teacherId: opts.teacherId,
+        defaultFee: fee,
+        startDate: opts.startDate,
+      })
+      .returning();
+
+    const pending = await tx
+      .select()
+      .from(leads)
+      .where(and(eq(leads.draftClassId, draftId), eq(leads.status, "pending")));
+    for (const lead of pending) {
+      const [student] = await tx
+        .insert(students)
+        .values({
+          fullName: lead.fullName,
+          phone: lead.phone,
+          classId: cls.id,
+          enrolledAt: opts.startDate,
+          billingStartDate: opts.startDate,
+          status: "awaiting_payment",
+        })
+        .returning();
+      await tx
+        .update(leads)
+        .set({ status: "approved", classId: cls.id, approvedStudentId: student.id, updatedAt: new Date() })
+        .where(eq(leads.id, lead.id));
+    }
+
+    await tx.delete(draftClasses).where(eq(draftClasses.id, draftId));
+    return { class: cls, approved: pending.length };
   });
 }
 
