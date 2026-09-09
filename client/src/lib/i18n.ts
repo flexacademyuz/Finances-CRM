@@ -312,6 +312,36 @@ const dict = {
     en: "Mark this month as unpaid? It voids the recorded payment.",
     uz: "Bu oyni to'lanmagan deb belgilaysizmi? Kiritilgan to'lov bekor qilinadi.",
   },
+
+  // Credential login / recovery & access requests.
+  login: { en: "Log in", uz: "Kirish" },
+  password: { en: "Password", uz: "Parol" },
+  requestAccess: { en: "Request access", uz: "Ruxsat so'rash" },
+  loginToRecover: {
+    en: "Already have an account? Log in to link this Telegram account to your profile.",
+    uz: "Hisobingiz bormi? Ushbu Telegram hisobini profilingizga bog'lash uchun kiring.",
+  },
+  requestAccessNote: {
+    en: "New here? Request access — the CEO will review and approve you.",
+    uz: "Yangimisiz? Ruxsat so'rang — rahbar ko'rib chiqib tasdiqlaydi.",
+  },
+  requestSent: {
+    en: "Request sent. You'll get access once the CEO approves it.",
+    uz: "So'rov yuborildi. Rahbar tasdiqlagach kirish huquqiga ega bo'lasiz.",
+  },
+  awaitingApproval: { en: "Your access request is awaiting approval.", uz: "So'rovingiz tasdiqlanishini kutmoqda." },
+  myAccount: { en: "My account", uz: "Mening hisobim" },
+  accountRecoveryNote: {
+    en: "Set a username & password so you can recover access if you switch Telegram accounts.",
+    uz: "Telegram hisobingizni o'zgartirsangiz, kirishni tiklash uchun foydalanuvchi nomi va parol o'rnating.",
+  },
+  saveCredentials: { en: "Save login", uz: "Kirishni saqlash" },
+  credentialsSaved: { en: "Saved. Keep them safe.", uz: "Saqlandi. Xavfsiz saqlang." },
+  pendingRequests: { en: "Access requests", uz: "Ruxsat so'rovlari" },
+  approve: { en: "Approve", uz: "Tasdiqlash" },
+  reject: { en: "Reject", uz: "Rad etish" },
+  setLoginCreds: { en: "Set login", uz: "Kirish o'rnatish" },
+  loginUsernameLabel: { en: "Login username", uz: "Kirish nomi" },
 } as const;
 
 export type StringKey = keyof typeof dict;

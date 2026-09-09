@@ -99,6 +99,13 @@
       "when": 1788979619633,
       "tag": "0013_add_assistant_role",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788980228377,
+      "tag": "0014_add_login_credentials",
+      "breakpoints": true
     }
   ]
 }

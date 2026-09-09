@@ -37,7 +37,23 @@ export function UsersPage() {
         <Spinner />
       ) : (
         <div className="space-y-2">
-          {users.data?.map((u) => (
+          {/* Pending access requests (self sign-ups) awaiting approval. */}
+          {(users.data ?? []).some((u) => !u.approved) && (
+            <div className="space-y-2">
+              <div className="text-sm font-semibold text-muted">{t("pendingRequests")}</div>
+              {(users.data ?? [])
+                .filter((u) => !u.approved)
+                .map((u) => (
+                  <PendingCard
+                    key={u.id}
+                    user={u}
+                    onDone={() => qc.invalidateQueries({ queryKey: ["users"] })}
+                  />
+                ))}
+            </div>
+          )}
+
+          {(users.data ?? []).filter((u) => u.approved).map((u) => (
             <Card key={u.id} className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
@@ -108,16 +124,65 @@ export function UsersPage() {
   );
 }
 
+/** A self sign-up awaiting approval: assign a role to approve, or reject it. */
+function PendingCard({ user, onDone }: { user: UserRow; onDone: () => void }) {
+  const { t } = useI18n();
+  const [role, setRole] = useState<Role>(user.role === "ceo" ? "teacher" : user.role);
+  const approve = useMutation({
+    mutationFn: () => api(`/api/users/${user.id}/approve`, { method: "POST", body: { role } }),
+    onSuccess: onDone,
+  });
+  const reject = useMutation({
+    mutationFn: () => api(`/api/users/${user.id}`, { method: "DELETE" }),
+    onSuccess: onDone,
+  });
+
+  return (
+    <Card className="space-y-2 border-dashed">
+      <div className="font-semibold">{user.fullName}</div>
+      <div className="text-xs text-tg-hint">
+        {user.loginUsername ? `@${user.loginUsername} · ` : ""}ID {user.telegramId}
+      </div>
+      <div className="flex items-center gap-2">
+        <Select className="flex-1" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+          {ROLES.filter((r) => r !== "ceo").map((r) => (
+            <option key={r} value={r}>{t(r)}</option>
+          ))}
+        </Select>
+        <Button disabled={approve.isPending} onClick={() => approve.mutate()}>{t("approve")}</Button>
+        <Button variant="ghost" disabled={reject.isPending} onClick={() => reject.mutate()}>{t("reject")}</Button>
+      </div>
+      {(approve.isError || reject.isError) && (
+        <div className="text-sm text-status-overdue">{((approve.error || reject.error) as Error).message}</div>
+      )}
+    </Card>
+  );
+}
+
 function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
   const [telegramId, setTelegramId] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Role>("teacher");
+  const [loginUsername, setLoginUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   const create = useMutation({
     mutationFn: () =>
-      api("/api/users", { method: "POST", body: { telegramId: Number(telegramId), fullName, role } }),
-    onSuccess: () => { setTelegramId(""); setFullName(""); setRole("teacher"); onSaved(); },
+      api("/api/users", {
+        method: "POST",
+        body: {
+          telegramId: Number(telegramId),
+          fullName,
+          role,
+          loginUsername: loginUsername.trim() || undefined,
+          password: password || undefined,
+        },
+      }),
+    onSuccess: () => {
+      setTelegramId(""); setFullName(""); setRole("teacher"); setLoginUsername(""); setPassword("");
+      onSaved();
+    },
   });
 
   return (
@@ -132,9 +197,16 @@ function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () =>
         <Field label={t("role")}>
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             {ROLES.map((r) => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r} value={r}>{t(r)}</option>
             ))}
           </Select>
+        </Field>
+        {/* Optional login credentials for recovery (can also be set later). */}
+        <Field label={`${t("loginUsernameLabel")} (${t("optional")})`}>
+          <Input value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} autoCapitalize="none" />
+        </Field>
+        <Field label={`${t("password")} (${t("optional")})`}>
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         {create.isError && (
           <div className="text-sm text-status-overdue">{(create.error as Error).message}</div>
@@ -165,13 +237,23 @@ function EditUserModal({
   const [fullName, setFullName] = useState(user.fullName);
   const [username, setUsername] = useState(user.username ?? "");
   const [role, setRole] = useState<Role>(user.role);
+  const [loginUsername, setLoginUsername] = useState(user.loginUsername ?? "");
+  const [password, setPassword] = useState("");
 
   const save = useMutation({
-    mutationFn: () =>
-      api(`/api/users/${user.id}`, {
+    mutationFn: async () => {
+      await api(`/api/users/${user.id}`, {
         method: "PATCH",
         body: { fullName, username: username.trim() || null, role },
-      }),
+      });
+      // Only touch credentials when the CEO set both a username and a password.
+      if (loginUsername.trim() && password) {
+        await api(`/api/users/${user.id}/credentials`, {
+          method: "PATCH",
+          body: { username: loginUsername.trim(), password },
+        });
+      }
+    },
     onSuccess: onSaved,
   });
 
@@ -190,6 +272,13 @@ function EditUserModal({
               <option key={r} value={r}>{t(r)}</option>
             ))}
           </Select>
+        </Field>
+        {/* Set / reset login credentials to help a locked-out user recover. */}
+        <Field label={`${t("loginUsernameLabel")} (${t("optional")})`}>
+          <Input value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} autoCapitalize="none" />
+        </Field>
+        <Field label={`${t("password")} (${t("optional")})`}>
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••" />
         </Field>
         {save.isError && (
           <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>

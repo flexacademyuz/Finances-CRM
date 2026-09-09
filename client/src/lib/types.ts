@@ -65,6 +65,8 @@ export type UserRow = {
   fullName: string;
   role: Role;
   permissions: string[];
+  loginUsername: string | null;
+  approved: boolean;
   active: boolean;
   createdAt: string;
 };

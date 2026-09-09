@@ -55,17 +55,138 @@ export async function createUser(input: {
   fullName: string;
   role: Role;
   permissions?: string[];
+  loginUsername?: string | null;
+  passwordHash?: string | null;
+  active?: boolean;
+  approved?: boolean;
 }) {
   return db.transaction(async (tx) => {
     const [u] = await tx
       .insert(users)
-      .values({ ...input, permissions: input.permissions ?? [] })
+      .values({
+        telegramId: input.telegramId,
+        username: input.username ?? null,
+        fullName: input.fullName,
+        role: input.role,
+        permissions: input.permissions ?? [],
+        loginUsername: input.loginUsername ?? null,
+        passwordHash: input.passwordHash ?? null,
+        active: input.active ?? true,
+        approved: input.approved ?? true,
+      })
       .returning();
     if (u.role === "teacher") {
       await tx.insert(teachers).values({ userId: u.id });
     }
     return u;
   });
+}
+
+/* ─── Credential login / recovery & self sign-up ─── */
+
+export async function getUserByLoginUsername(loginUsername: string) {
+  const [u] = await db.select().from(users).where(eq(users.loginUsername, loginUsername));
+  return u;
+}
+
+/**
+ * Point a profile at a NEW Telegram id (account recovery). Removes any pending
+ * self-signup row that already claimed the new id, so the unique id constraint
+ * doesn't clash, then re-links.
+ */
+export async function relinkTelegramId(userId: string, newTelegramId: number) {
+  return db.transaction(async (tx) => {
+    await tx
+      .delete(users)
+      .where(and(eq(users.telegramId, newTelegramId), eq(users.approved, false)));
+    const [u] = await tx
+      .update(users)
+      .set({ telegramId: newTelegramId })
+      .where(eq(users.id, userId))
+      .returning();
+    return u;
+  });
+}
+
+/**
+ * Create (or refresh) a pending access request from a self sign-up: an inactive,
+ * unapproved user the CEO can later approve and assign a role.
+ */
+export async function createSignupRequest(input: {
+  telegramId: number;
+  username?: string | null;
+  fullName: string;
+  loginUsername: string;
+  passwordHash: string;
+}) {
+  const existing = await getUserByTelegramId(input.telegramId);
+  if (existing) {
+    // Already known: refresh the pending request's details, but never touch an
+    // already-approved account this way.
+    if (existing.approved) return { user: existing, alreadyApproved: true };
+    const [u] = await db
+      .update(users)
+      .set({
+        fullName: input.fullName,
+        username: input.username ?? null,
+        loginUsername: input.loginUsername,
+        passwordHash: input.passwordHash,
+      })
+      .where(eq(users.id, existing.id))
+      .returning();
+    return { user: u, alreadyApproved: false };
+  }
+  const [u] = await db
+    .insert(users)
+    .values({
+      telegramId: input.telegramId,
+      username: input.username ?? null,
+      fullName: input.fullName,
+      role: "teacher",
+      loginUsername: input.loginUsername,
+      passwordHash: input.passwordHash,
+      active: false,
+      approved: false,
+    })
+    .returning();
+  return { user: u, alreadyApproved: false };
+}
+
+/** Pending access requests (self-signups awaiting CEO approval). */
+export async function listPendingUsers() {
+  return db.select().from(users).where(eq(users.approved, false)).orderBy(users.createdAt);
+}
+
+/** Approve a pending user with a role (activates them; adds teacher row). */
+export async function approveUser(id: string, role: Role) {
+  return db.transaction(async (tx) => {
+    const [u] = await tx
+      .update(users)
+      .set({ role, approved: true, active: true })
+      .where(eq(users.id, id))
+      .returning();
+    if (!u) return undefined;
+    if (role === "teacher") {
+      const existing = await tx.select().from(teachers).where(eq(teachers.userId, id));
+      if (existing.length === 0) await tx.insert(teachers).values({ userId: id });
+    }
+    return u;
+  });
+}
+
+/** Reject (delete) a pending access request. No-op on already-approved users. */
+export async function rejectPendingUser(id: string): Promise<void> {
+  await db.delete(users).where(and(eq(users.id, id), eq(users.approved, false)));
+}
+
+/** Set (or reset) a user's login username + password hash. */
+export async function setLoginCredentials(id: string, loginUsername: string, passwordHash: string) {
+  const [u] = await db
+    .update(users)
+    .set({ loginUsername, passwordHash })
+    .where(eq(users.id, id))
+    .returning();
+  return u;
 }
 
 /** Change a user's role, creating/removing the teachers row as needed. */

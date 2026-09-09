@@ -10,6 +10,7 @@ import {
   ClipboardList,
   UserCog,
   UserPlus,
+  KeyRound,
   Clock,
   Receipt,
   TrendingUp,
@@ -100,6 +101,8 @@ function buildNav(user: User): NavItem[] {
   if (a.analytics) items.push({ href: "/analytics", label: "analytics", icon: <BarChart3 size={18} /> });
   if (a.users) items.push({ href: "/users", label: "users", icon: <UserCog size={18} /> });
   if (a.salary) items.push({ href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> });
+  // Everyone can manage their own recovery credentials.
+  items.push({ href: "/account", label: "myAccount", icon: <KeyRound size={18} /> });
 
   return items;
 }

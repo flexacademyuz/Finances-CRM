@@ -66,7 +66,16 @@ export const users = pgTable("users", {
   // Extra abilities the CEO grants this user on top of their role defaults.
   // See shared/permissions.ts.
   permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
+  // Optional login credentials, so a user can re-link a NEW Telegram account to
+  // this profile if they lose their old one (deleted Telegram → new id). The
+  // Telegram id above still identifies the day-to-day session; these are the
+  // recovery / sign-in path. password_hash is scrypt "salt:hash".
+  loginUsername: text("login_username").unique(),
+  passwordHash: text("password_hash"),
   active: boolean("active").notNull().default(true),
+  // CEO approval. Self-signups start unapproved (a pending access request);
+  // CEO-invited users are approved. Distinguishes "pending" from "disabled".
+  approved: boolean("approved").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -579,6 +588,26 @@ export const updateUserSchema = z.object({
 
 export const permissionsSchema = z.object({
   permissions: z.array(z.string()),
+});
+
+/* ─── Credential auth: re-link a new Telegram account & self sign-up ─── */
+
+export const loginSchema = z.object({
+  username: z.string().min(3).max(64),
+  password: z.string().min(6).max(128),
+});
+
+/** A new person requesting access (creates a pending user for CEO approval). */
+export const signupSchema = z.object({
+  fullName: z.string().min(1),
+  username: z.string().min(3).max(64),
+  password: z.string().min(6).max(128),
+});
+
+/** Set/change one's own (or, for the CEO, a user's) login username + password. */
+export const credentialsSchema = z.object({
+  username: z.string().min(3).max(64),
+  password: z.string().min(6).max(128),
 });
 
 export const insertClassSchema = createInsertSchema(classes, {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../auth/middleware";
+import authRouter from "./auth";
 import usersRouter from "./users";
 import classesRouter from "./classes";
 import studentsRouter from "./students";
@@ -16,6 +17,10 @@ const api = Router();
 // Public health check (no auth) for hosting platforms. `version` lets you
 // confirm which build is live: open <your-url>/api/health in a browser.
 api.get("/health", (_req, res) => res.json({ ok: true, version: "2.0.0" }));
+
+// Credential login / sign-up: reachable WITHOUT an existing linked account, so
+// they must come before the authenticate gate.
+api.use(authRouter);
 
 // Everything else requires a verified Telegram user.
 api.use(authenticate);

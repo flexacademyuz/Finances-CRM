@@ -41,9 +41,17 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
     const user = await getUserByTelegramId(telegramId);
     if (!user) {
+      // Unknown Telegram account: the client offers "log in" (re-link an
+      // existing profile) or "request access" (sign up).
       return res.status(403).json({
         error: "not_registered",
-        message: "Your Telegram account has not been added by the CEO yet.",
+        message: "Your Telegram account isn't linked yet. Log in or request access.",
+      });
+    }
+    if (!user.approved) {
+      return res.status(403).json({
+        error: "pending",
+        message: "Your access request is awaiting the CEO's approval.",
       });
     }
     if (!user.active) {
