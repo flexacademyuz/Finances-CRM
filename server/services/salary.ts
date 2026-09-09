@@ -2,7 +2,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "../db";
 import { payments, classes, teachers } from "@shared/schema";
 import type { SalaryModel, PayoutStudent } from "@shared/schema";
-import { monthKey, recentMonths, monthLabel } from "@shared/date";
+import { monthKey, academicMonthsSoFar, monthLabel } from "@shared/date";
 import {
   upsertSalaryRecord,
   lastPayout,
@@ -371,9 +371,12 @@ export type SalaryMonthRow = {
   paidOn: string | null;
 };
 
-/** The monthly salary table for a teacher (most recent `count` months first). */
-export async function salaryMonths(teacherId: string, count = 12): Promise<SalaryMonthRow[]> {
-  const months = recentMonths(count).reverse(); // newest first
+/**
+ * The monthly salary table for a teacher — the current academic year so far
+ * (September → this month), newest first. No pre-term months are shown.
+ */
+export async function salaryMonths(teacherId: string): Promise<SalaryMonthRow[]> {
+  const months = academicMonthsSoFar().reverse(); // Sep → current, newest first
   const rows = await Promise.all(
     months.map(async (m) => {
       const [est, paid] = await Promise.all([

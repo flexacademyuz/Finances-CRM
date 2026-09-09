@@ -13,7 +13,7 @@ import {
   getUserById,
   getSalaryRuleForGroup,
 } from "../storage";
-import { recentMonths, monthLabel, normalizeMonth } from "@shared/date";
+import { academicMonthsSoFar, monthLabel, normalizeMonth, monthKey } from "@shared/date";
 
 const router = Router();
 
@@ -31,9 +31,10 @@ router.get(
       return res.status(403).json({ error: "forbidden" });
     }
 
-    const count = req.query.months ? Math.min(Math.max(Number(req.query.months), 1), 12) : 6;
-    const end = typeof req.query.end === "string" ? normalizeMonth(req.query.end) : undefined;
-    const months = recentMonths(count, end);
+    // The payment table runs from the academic year's September up to the
+    // selected end month (default: this month) — never pre-term months.
+    const end = typeof req.query.end === "string" ? normalizeMonth(req.query.end) : monthKey();
+    const months = academicMonthsSoFar(end);
 
     const [teacher, rule] = await Promise.all([
       getTeacherById(cls.teacherId),

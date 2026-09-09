@@ -41,6 +41,34 @@ export function recentMonths(n: number, end: string = monthKey()): string[] {
   return Array.from({ length: n }, (_, i) => shiftMonth(end, -(n - 1 - i)));
 }
 
+/**
+ * First month (September, as `YYYY-MM-01`) of the academic year containing `d`.
+ * The academic year runs September → August, so any month before September
+ * belongs to the year that started the previous September.
+ */
+export function academicYearStart(d: Date = new Date()): string {
+  const year = d.getUTCMonth() >= 8 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
+  return `${year}-09-01`;
+}
+
+/**
+ * Month keys from the current academic year's September up to (and including)
+ * the month of `end`, oldest first. Used so salary cards and class ledgers
+ * always start at September rather than showing pre-term months.
+ */
+export function academicMonthsSoFar(end: string = monthKey()): string[] {
+  const start = academicYearStart(parseDate(end));
+  const months: string[] = [];
+  let m = start;
+  // Guard against an `end` that predates September (shouldn't happen for the
+  // current month, but keep it bounded to a single academic year: 12 months).
+  for (let i = 0; i < 12 && m <= end; i++) {
+    months.push(m);
+    m = shiftMonth(m, 1);
+  }
+  return months.length ? months : [start];
+}
+
 /* ─────────────── Anchor-based (per-student) billing helpers ────────────── */
 
 /** Parse a `YYYY-MM-DD` (or longer) date string to a UTC Date at midnight. */

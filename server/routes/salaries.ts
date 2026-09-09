@@ -126,14 +126,16 @@ router.get(
   }),
 );
 
-/** GET /api/salary/months?teacherId=&count= — the teacher's monthly salary table. */
+/**
+ * GET /api/salary/months?teacherId= — the teacher's monthly salary table for the
+ * current academic year (September onward).
+ */
 router.get(
   "/salary/months",
   asyncHandler(async (req, res) => {
     const teacherId = resolveTeacherId(req);
     if (!teacherId) return res.status(400).json({ error: "bad_request", message: "teacherId required" });
-    const count = req.query.count ? Math.min(Math.max(Number(req.query.count), 1), 24) : 12;
-    res.json(await salaryMonths(teacherId, count));
+    res.json(await salaryMonths(teacherId));
   }),
 );
 

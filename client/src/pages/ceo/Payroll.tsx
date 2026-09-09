@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
-import { monthKey, shiftMonth, monthLabel } from "@shared/date";
+import { monthKey, shiftMonth, monthLabel, academicYearStart } from "@shared/date";
 import type { PayrollData } from "../../lib/types";
 import { Button, Card, Empty, Modal, Spinner, Stat } from "../../components/ui";
 import { SalaryCard } from "../../components/SalaryCard";
@@ -27,6 +27,7 @@ export function PayrollPage() {
   });
 
   const atCurrent = month >= monthKey();
+  const atStart = month <= academicYearStart(); // don't page before September
 
   return (
     <div className="space-y-3">
@@ -34,7 +35,11 @@ export function PayrollPage() {
 
       {/* Month navigator */}
       <div className="flex items-center justify-between rounded-btn border border-border bg-surface px-2 py-1.5">
-        <button className="rounded-lg p-1.5 text-tg-link hover:bg-bg" onClick={() => setMonth(shiftMonth(month, -1))}>
+        <button
+          className="rounded-lg p-1.5 text-tg-link hover:bg-bg disabled:opacity-30"
+          disabled={atStart}
+          onClick={() => setMonth(shiftMonth(month, -1))}
+        >
           <ChevronLeft size={18} />
         </button>
         <div className="text-sm font-semibold">{monthLabel(month)}</div>
