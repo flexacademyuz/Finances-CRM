@@ -9,6 +9,7 @@ import {
   BadgeDollarSign,
   ClipboardList,
   UserCog,
+  UserPlus,
   Clock,
   Receipt,
   TrendingUp,
@@ -66,6 +67,7 @@ const NAV: Record<Role, NavItem[]> = {
     { href: "/", label: "dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/record", label: "recordPayment", icon: <Wallet size={18} /> },
     { href: "/students", label: "students", icon: <GraduationCap size={18} /> },
+    { href: "/leads", label: "leads", icon: <UserPlus size={18} /> },
     { href: "/classes", label: "groups", icon: <BookOpen size={18} /> },
     { href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={18} /> },
     { href: "/payments", label: "payments", icon: <ClipboardList size={18} /> },
@@ -77,6 +79,7 @@ const NAV: Record<Role, NavItem[]> = {
   accountant: [
     { href: "/", label: "recordPayment", icon: <Wallet size={18} /> },
     { href: "/students", label: "students", icon: <GraduationCap size={18} /> },
+    { href: "/leads", label: "leads", icon: <UserPlus size={18} /> },
     { href: "/groups", label: "groups", icon: <BookOpen size={18} /> },
     { href: "/payments", label: "payments", icon: <ClipboardList size={18} /> },
     { href: "/awaiting", label: "awaiting", icon: <Clock size={18} /> },
@@ -84,6 +87,7 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   teacher: [
     { href: "/", label: "myClasses", icon: <Users size={18} /> },
+    { href: "/leads", label: "leads", icon: <UserPlus size={18} /> },
     { href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> },
   ],
 };

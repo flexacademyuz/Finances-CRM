@@ -17,6 +17,7 @@ import { FinancesPage } from "./pages/ceo/Finances";
 import { AnalyticsPage } from "./pages/ceo/Analytics";
 // Shared / accountant
 import { PaymentsLog } from "./pages/PaymentsLog";
+import { LeadsPage } from "./pages/Leads";
 import { ExpensesPage } from "./pages/Expenses";
 import { ClassDetail } from "./pages/ClassDetail";
 import { StudentDetail } from "./pages/StudentDetail";
@@ -50,6 +51,7 @@ function Routes({ me }: { me: Me }) {
           <Route path="/" component={CeoDashboard} />
           <Route path="/record" component={RecordPayment} />
           <Route path="/students" component={StudentsPage} />
+          <Route path="/leads" component={LeadsPage} />
           <Route path="/classes" component={ClassesPage} />
           <Route path="/class/:id" component={ClassDetail} />
           <Route path="/student/:id" component={StudentDetail} />
@@ -71,6 +73,7 @@ function Routes({ me }: { me: Me }) {
         <Switch>
           <Route path="/" component={RecordPayment} />
           <Route path="/students" component={StudentsPage} />
+          <Route path="/leads" component={LeadsPage} />
           <Route path="/groups" component={ClassesPage} />
           <Route path="/class/:id" component={ClassDetail} />
           <Route path="/student/:id" component={StudentDetail} />
@@ -87,6 +90,7 @@ function Routes({ me }: { me: Me }) {
     <Layout role="teacher">
       <Switch>
         <Route path="/" component={MyClasses} />
+        <Route path="/leads" component={LeadsPage} />
         <Route path="/class/:id" component={ClassDetail} />
         <Route path="/student/:id" component={StudentDetail} />
         <Route path="/salary" component={MySalary} />

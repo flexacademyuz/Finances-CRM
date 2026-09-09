@@ -64,6 +64,13 @@
       "when": 1788935114335,
       "tag": "0008_add_user_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788944123141,
+      "tag": "0009_add_leads",
+      "breakpoints": true
     }
   ]
 }

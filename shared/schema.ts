@@ -39,9 +39,15 @@ export const expensePaymentMethodEnum = pgEnum("expense_payment_method", [
 ]);
 export const discountTypeEnum = pgEnum("discount_type", ["percentage", "fixed"]);
 export const freezeStatusEnum = pgEnum("freeze_status", ["active", "lifted", "expired"]);
+// Lead pipeline: a prospective student awaiting a teacher's approval into a group.
+export const leadStatusEnum = pgEnum("lead_status", ["pending", "approved", "rejected"]);
+// Which part of the day the student wants to study.
+export const shiftEnum = pgEnum("shift", ["morning", "afternoon"]);
 
 export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
 export type FreezeStatus = (typeof freezeStatusEnum.enumValues)[number];
+export type LeadStatus = (typeof leadStatusEnum.enumValues)[number];
+export type Shift = (typeof shiftEnum.enumValues)[number];
 
 export type Role = (typeof roleEnum.enumValues)[number];
 export type SalaryModel = (typeof salaryModelEnum.enumValues)[number];
@@ -407,6 +413,47 @@ export const expenses = pgTable(
   }),
 );
 
+/**
+ * Leads — prospective new students registered through the platform before they
+ * join a group. Captures the intake details (grade, level, preferred shift) and
+ * an optional target group. A teacher (or anyone with approve_leads) approves a
+ * lead into a group, which creates the actual student and starts their billing
+ * from the approval date; a lead can also be reassigned (swapped) to a different
+ * group or rejected. (Feature #4.)
+ */
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fullName: text("full_name").notNull(),
+    phone: text("phone"),
+    // The student's grade at their regular school, e.g. "9th grade".
+    gradeAtSchool: text("grade_at_school"),
+    // Their current level for the subject, e.g. "Beginner", "B1".
+    level: text("level"),
+    // Preferred time of day.
+    shift: shiftEnum("shift").notNull().default("morning"),
+    // Target group (existing). Null = not yet placed; chosen at approval.
+    classId: uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
+    status: leadStatusEnum("status").notNull().default("pending"),
+    // Set when rejected/approved to explain the decision.
+    decisionNote: text("decision_note"),
+    // The student row created on approval (null until approved).
+    approvedStudentId: uuid("approved_student_id").references(() => students.id, {
+      onDelete: "set null",
+    }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byStatus: index("leads_status_idx").on(t.status),
+    byClass: index("leads_class_idx").on(t.classId),
+  }),
+);
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const usersRelations = relations(users, ({ one }) => ({
@@ -451,6 +498,7 @@ export type PaymentFreeze = typeof paymentFreezes.$inferSelect;
 export type Discount = typeof discounts.$inferSelect;
 export type TeacherSalaryRule = typeof teacherSalaryRules.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
+export type Lead = typeof leads.$inferSelect;
 
 /* ───────────────────── Zod validation schemas ────────────────────── */
 
@@ -498,6 +546,45 @@ export const insertStudentSchema = createInsertSchema(students, {
   monthlyFee: true,
   enrolledAt: true,
 });
+
+/* ─────────────────────────────── Leads ─────────────────────────────── */
+
+/** Register a prospective student. Only full name is strictly required. */
+export const insertLeadSchema = z.object({
+  fullName: z.string().min(1),
+  phone: z.string().optional(),
+  gradeAtSchool: z.string().optional(),
+  level: z.string().optional(),
+  shift: z.enum(shiftEnum.enumValues),
+  // Optional target group; may be placed later at approval time.
+  classId: z.string().uuid().nullable().optional(),
+});
+
+/** Edit a pending lead's intake details or reassign (swap) its target group. */
+export const updateLeadSchema = z.object({
+  fullName: z.string().min(1).optional(),
+  phone: z.string().nullable().optional(),
+  gradeAtSchool: z.string().nullable().optional(),
+  level: z.string().nullable().optional(),
+  shift: z.enum(shiftEnum.enumValues).optional(),
+  classId: z.string().uuid().nullable().optional(),
+});
+
+/** Approve a lead into a group; billing starts from `approvalDate` (default today). */
+export const approveLeadSchema = z.object({
+  // Required unless the lead already has a target group.
+  classId: z.string().uuid().optional(),
+  approvalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  monthlyFee: z.coerce.number().nonnegative().nullable().optional(),
+  note: z.string().optional(),
+});
+
+export const rejectLeadSchema = z.object({
+  note: z.string().optional(),
+});
+
+export type InsertLeadInput = z.infer<typeof insertLeadSchema>;
+export type ApproveLeadInput = z.infer<typeof approveLeadSchema>;
 
 /** Payment input: the Accountant never supplies date, status, or teacher. */
 export const recordPaymentSchema = z.object({

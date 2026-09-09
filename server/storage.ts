@@ -14,10 +14,13 @@ import {
   discounts,
   teacherSalaryRules,
   expenses,
+  leads,
   type Role,
   type PaymentEdit,
   type StudentStatus,
   type DiscountType,
+  type LeadStatus,
+  type Shift,
 } from "@shared/schema";
 import { monthKey, shiftMonth, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus } from "@shared/billing";
@@ -369,6 +372,150 @@ export async function effectiveFee(studentId: string): Promise<number> {
     .innerJoin(classes, eq(students.classId, classes.id))
     .where(eq(students.id, studentId));
   return row ? Number(row.fee) : 0;
+}
+
+/* ─────────────────────────────── Leads ─────────────────────────────── */
+
+export type LeadFilter = {
+  status?: LeadStatus;
+  classId?: string;
+  // Restrict to leads whose target group belongs to this teacher.
+  teacherId?: string;
+};
+
+/** List leads with their target group's name and owning teacher (for scoping). */
+export async function listLeads(filter: LeadFilter = {}) {
+  const conds = [];
+  if (filter.status) conds.push(eq(leads.status, filter.status));
+  if (filter.classId) conds.push(eq(leads.classId, filter.classId));
+  if (filter.teacherId) conds.push(eq(classes.teacherId, filter.teacherId));
+
+  return db
+    .select({
+      id: leads.id,
+      fullName: leads.fullName,
+      phone: leads.phone,
+      gradeAtSchool: leads.gradeAtSchool,
+      level: leads.level,
+      shift: leads.shift,
+      classId: leads.classId,
+      className: classes.name,
+      teacherId: classes.teacherId,
+      status: leads.status,
+      decisionNote: leads.decisionNote,
+      approvedStudentId: leads.approvedStudentId,
+      createdBy: leads.createdBy,
+      createdAt: leads.createdAt,
+    })
+    .from(leads)
+    .leftJoin(classes, eq(leads.classId, classes.id))
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(leads.createdAt));
+}
+
+export async function getLeadById(id: string) {
+  const [l] = await db.select().from(leads).where(eq(leads.id, id));
+  return l;
+}
+
+export async function createLead(input: {
+  fullName: string;
+  phone?: string | null;
+  gradeAtSchool?: string | null;
+  level?: string | null;
+  shift: Shift;
+  classId?: string | null;
+  createdBy: string;
+}) {
+  const [l] = await db
+    .insert(leads)
+    .values({
+      fullName: input.fullName,
+      phone: input.phone ?? null,
+      gradeAtSchool: input.gradeAtSchool ?? null,
+      level: input.level ?? null,
+      shift: input.shift,
+      classId: input.classId ?? null,
+      createdBy: input.createdBy,
+    })
+    .returning();
+  return l;
+}
+
+export async function updateLead(
+  id: string,
+  patch: Partial<{
+    fullName: string;
+    phone: string | null;
+    gradeAtSchool: string | null;
+    level: string | null;
+    shift: Shift;
+    classId: string | null;
+  }>,
+) {
+  const [l] = await db
+    .update(leads)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(leads.id, id))
+    .returning();
+  return l;
+}
+
+/**
+ * Approve a lead into a group: create the real student (billing anchored to the
+ * approval date, so they start fresh from the day they join) and mark the lead
+ * approved with a link to the new student. Runs in a transaction.
+ */
+export async function approveLead(
+  id: string,
+  opts: {
+    fullName: string;
+    phone?: string | null;
+    classId: string;
+    approvalDate: string;
+    monthlyFee?: number | null;
+    note?: string | null;
+  },
+) {
+  return db.transaction(async (tx) => {
+    const [student] = await tx
+      .insert(students)
+      .values({
+        fullName: opts.fullName,
+        phone: opts.phone ?? null,
+        classId: opts.classId,
+        monthlyFee: opts.monthlyFee != null ? String(opts.monthlyFee) : null,
+        enrolledAt: opts.approvalDate,
+        billingStartDate: opts.approvalDate,
+        status: "awaiting_payment",
+      })
+      .returning();
+    const [lead] = await tx
+      .update(leads)
+      .set({
+        status: "approved",
+        classId: opts.classId,
+        approvedStudentId: student.id,
+        decisionNote: opts.note ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.id, id))
+      .returning();
+    return { lead, student };
+  });
+}
+
+export async function rejectLead(id: string, note?: string | null) {
+  const [l] = await db
+    .update(leads)
+    .set({ status: "rejected", decisionNote: note ?? null, updatedAt: new Date() })
+    .where(eq(leads.id, id))
+    .returning();
+  return l;
+}
+
+export async function deleteLead(id: string): Promise<void> {
+  await db.delete(leads).where(eq(leads.id, id));
 }
 
 /* ─────────────────────────────── Payments ──────────────────────────── */

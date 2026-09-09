@@ -220,6 +220,33 @@ const dict = {
   perm_add_expense: { en: "Manage expenses", uz: "Xarajatlarni boshqarish" },
   perm_manage_discounts: { en: "Manage discounts", uz: "Chegirmalarni boshqarish" },
   perm_approve_leads: { en: "Approve new students", uz: "Yangi o'quvchilarni tasdiqlash" },
+
+  // Leads / new-student intake (feature #4).
+  leads: { en: "Leads", uz: "Yangi o'quvchilar" },
+  registerLead: { en: "Register new student", uz: "Yangi o'quvchini ro'yxatga olish" },
+  gradeAtSchool: { en: "Grade at school", uz: "Maktab sinfi" },
+  level: { en: "Level", uz: "Daraja" },
+  shift: { en: "Shift", uz: "Smena" },
+  morning: { en: "Morning", uz: "Ertalabki" },
+  afternoon: { en: "Afternoon", uz: "Tushdan keyingi" },
+  targetGroup: { en: "Group", uz: "Guruh" },
+  unassignedGroup: { en: "Not placed yet", uz: "Hali biriktirilmagan" },
+  pending: { en: "Pending", uz: "Kutilmoqda" },
+  approved: { en: "Approved", uz: "Tasdiqlangan" },
+  rejected: { en: "Rejected", uz: "Rad etilgan" },
+  approveLead: { en: "Approve", uz: "Tasdiqlash" },
+  rejectLead: { en: "Disapprove", uz: "Rad etish" },
+  swapGroup: { en: "Swap group", uz: "Guruhni almashtirish" },
+  approvalDate: { en: "Start date", uz: "Boshlanish sanasi" },
+  approveLeadTitle: { en: "Approve into group", uz: "Guruhga tasdiqlash" },
+  approveLeadNote: {
+    en: "The student joins this group and billing starts from the date below.",
+    uz: "O'quvchi shu guruhga qo'shiladi va to'lov quyidagi sanadan boshlanadi.",
+  },
+  rejectLeadNote: { en: "Disapprove this lead? You can add a reason.", uz: "Bu o'quvchini rad etasizmi? Sabab qo'shishingiz mumkin." },
+  noLeads: { en: "No leads here", uz: "Bu yerda o'quvchilar yo'q" },
+  deleteLead: { en: "Delete lead", uz: "O'chirish" },
+  chooseGroup: { en: "Choose a group", uz: "Guruhni tanlang" },
 } as const;
 
 export type StringKey = keyof typeof dict;

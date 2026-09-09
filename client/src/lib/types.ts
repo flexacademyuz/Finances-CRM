@@ -69,6 +69,23 @@ export type UserRow = {
   createdAt: string;
 };
 
+export type LeadRow = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  gradeAtSchool: string | null;
+  level: string | null;
+  shift: "morning" | "afternoon";
+  classId: string | null;
+  className: string | null;
+  teacherId: string | null;
+  status: "pending" | "approved" | "rejected";
+  decisionNote: string | null;
+  approvedStudentId: string | null;
+  createdBy: string;
+  createdAt: string;
+};
+
 export type DashboardData = {
   month: string;
   revenue: { total: number; cash: number; online: number; count: number };

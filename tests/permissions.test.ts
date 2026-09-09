@@ -13,10 +13,11 @@ describe("permissions model", () => {
     expect(can({ role: "ceo", permissions: null }, "record_payment")).toBe(true);
   });
 
-  it("teacher has only roster defaults until the CEO grants more", () => {
+  it("teacher has only roster + lead-approval defaults until the CEO grants more", () => {
     const teacher = { role: "teacher" as const, permissions: [] };
     expect(can(teacher, "add_student")).toBe(true); // default
     expect(can(teacher, "edit_student")).toBe(true); // default
+    expect(can(teacher, "approve_leads")).toBe(true); // default (feature #4)
     expect(can(teacher, "record_payment")).toBe(false);
     expect(can(teacher, "add_group")).toBe(false);
   });
