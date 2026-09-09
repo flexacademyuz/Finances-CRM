@@ -66,56 +66,32 @@ export function ClassDetail() {
       {students.length === 0 ? (
         <Empty />
       ) : (
-        <>
-          {/* Monthly payment table (scrolls horizontally) */}
-          <Card className="overflow-x-auto p-0">
-            <table className="w-full min-w-[420px] border-collapse text-sm">
-              <thead>
-                <tr className="text-xs text-tg-hint">
-                  <th className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-semibold">
-                    {t("student")}
-                  </th>
-                  {months.map((m) => (
-                    <th key={m.key} className="px-2 py-2 text-center font-semibold">
-                      {m.label.split(" ")[0].slice(0, 3)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((s) => (
-                  <tr key={s.id} className="border-t border-border">
-                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 font-medium">{s.fullName}</td>
-                    {months.map((m) => (
-                      <td key={m.key} className="px-2 py-2 text-center">
-                        <PaidCell state={s.monthly[m.key]} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-
-          {/* Roster — the row opens the student profile, where actions live. */}
-          <div className="space-y-2">
-            {students.map((s) => (
-              <Card key={s.id} className="p-0">
-                <Link href={`/student/${s.id}`} className="flex min-w-0 items-center gap-2 p-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
-                    <div className="truncate text-xs text-tg-hint">
-                      {money(s.effectiveFee)}
-                      {s.phone ? ` · ${s.phone}` : ""}
-                    </div>
+        /* Roster — each student with their month-by-month paid status (from
+           September). The row opens the profile, where the actions live. */
+        <div className="space-y-2">
+          {students.map((s) => (
+            <Card key={s.id} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Link href={`/student/${s.id}`} className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
+                  <div className="truncate text-xs text-tg-hint">
+                    {money(s.effectiveFee)}
+                    {s.phone ? ` · ${s.phone}` : ""}
                   </div>
-                  <StatusBadge status={s.status} />
-                  <ChevronRight size={18} className="shrink-0 text-tg-hint" />
                 </Link>
-              </Card>
-            ))}
-          </div>
-        </>
+                <StatusBadge status={s.status} />
+                <Link href={`/student/${s.id}`} className="shrink-0 text-tg-hint">
+                  <ChevronRight size={18} />
+                </Link>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {months.map((m) => (
+                  <MonthChip key={m.key} label={m.label} state={s.monthly[m.key]} />
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
 
       {adding && (
@@ -131,22 +107,19 @@ export function ClassDetail() {
   );
 }
 
-function PaidCell({ state }: { state: "paid" | "unpaid" | "frozen" }) {
-  if (state === "paid")
-    return (
-      <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-paid/15 text-status-paid">
-        <Check size={14} />
-      </span>
-    );
-  if (state === "frozen")
-    return (
-      <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-frozen/15 text-status-frozen">
-        🔵
-      </span>
-    );
+/** A compact per-month status chip (month abbreviation + paid/frozen/unpaid). */
+function MonthChip({ label, state }: { label: string; state: "paid" | "unpaid" | "frozen" }) {
+  const abbr = label.split(" ")[0].slice(0, 3);
+  const cls =
+    state === "paid"
+      ? "bg-status-paid/15 text-status-paid"
+      : state === "frozen"
+        ? "bg-status-frozen/15 text-status-frozen"
+        : "bg-tg-bg text-tg-hint";
   return (
-    <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-tg-bg text-tg-hint">
-      <Minus size={14} />
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
+      {abbr}
+      {state === "paid" ? <Check size={11} /> : state === "frozen" ? "🔵" : <Minus size={11} />}
     </span>
   );
 }
