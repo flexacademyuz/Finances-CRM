@@ -22,6 +22,7 @@ import {
   type DiscountType,
   type LeadStatus,
   type Shift,
+  type PayoutStudent,
 } from "@shared/schema";
 import { monthKey, shiftMonth, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus } from "@shared/billing";
@@ -972,6 +973,53 @@ export async function listAdvances(teacherId: string) {
     .orderBy(desc(salaryAdvances.createdAt));
 }
 
+/** The payout for a specific month, if this teacher has already been paid it. */
+export async function getPayoutForMonth(teacherId: string, month: string) {
+  const [r] = await db
+    .select()
+    .from(salaryPayouts)
+    .where(and(eq(salaryPayouts.teacherId, teacherId), eq(salaryPayouts.month, month)));
+  return r;
+}
+
+/**
+ * The students whose (non-voided) payments fall in a given billing month for a
+ * teacher's classes — the justification for that month's salary. `paid` is money
+ * kept (net of refunds); `credit` is the teacher's discount-independent share.
+ */
+export async function salaryStudentsForMonth(
+  teacherId: string,
+  month: string,
+): Promise<PayoutStudent[]> {
+  const rows = await db
+    .select({
+      studentId: students.id,
+      studentName: students.fullName,
+      className: classes.name,
+      paid: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
+      credit: sql<string>`coalesce(sum(coalesce(${payments.teacherCreditAmount}, ${payments.fullTuitionAmount}, ${payments.amount}) - ${payments.refundedTeacherCredit}), 0)`,
+    })
+    .from(payments)
+    .innerJoin(students, eq(payments.studentId, students.id))
+    .innerJoin(classes, eq(payments.classId, classes.id))
+    .where(
+      and(
+        eq(classes.teacherId, teacherId),
+        eq(payments.billingMonth, month),
+        eq(payments.voided, false),
+      ),
+    )
+    .groupBy(students.id, students.fullName, classes.name)
+    .orderBy(classes.name, students.fullName);
+  return rows.map((r) => ({
+    studentId: r.studentId,
+    studentName: r.studentName,
+    className: r.className,
+    paid: Number(r.paid),
+    credit: Number(r.credit),
+  }));
+}
+
 /** The teacher's most recent payout — its `paidAt` bounds the current cycle. */
 export async function lastPayout(teacherId: string) {
   const [r] = await db
@@ -999,12 +1047,14 @@ export async function listPayouts(teacherId: string) {
  */
 export async function createPayoutAndSettle(input: {
   teacherId: string;
+  month: string;
   grossEarned: number;
   advancesDeducted: number;
   amount: number;
   method: "cash" | "online";
   paidOn: string;
   note: string | null;
+  breakdown: PayoutStudent[];
   periodStart: Date | null;
   createdBy: string;
 }) {
@@ -1013,12 +1063,14 @@ export async function createPayoutAndSettle(input: {
       .insert(salaryPayouts)
       .values({
         teacherId: input.teacherId,
+        month: input.month,
         grossEarned: String(input.grossEarned),
         advancesDeducted: String(input.advancesDeducted),
         amount: String(input.amount),
         method: input.method,
         paidOn: input.paidOn,
         note: input.note,
+        breakdown: input.breakdown,
         periodStart: input.periodStart,
         createdBy: input.createdBy,
       })

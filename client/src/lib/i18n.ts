@@ -273,6 +273,27 @@ const dict = {
     uz: "Qoralama sinf o'qituvchi biriktirilgunicha o'quvchilarni saqlaydi. Keyin haqiqiy sinfga aylanadi.",
   },
   emptyDraft: { en: "No students sorted here yet", uz: "Bu yerga hali o'quvchi saralanmagan" },
+
+  // Salary section (month-based).
+  salaries: { en: "Salaries", uz: "Maoshlar" },
+  monthlySalaries: { en: "Monthly salaries", uz: "Oylik maoshlar" },
+  salaryForMonth: { en: "Salary for", uz: "Maosh —" },
+  payThisMonth: { en: "Pay this month", uz: "Shu oyni to'lash" },
+  notPaid: { en: "Not paid", uz: "To'lanmagan" },
+  salaryStudents: { en: "Students in this salary", uz: "Ushbu maoshdagi o'quvchilar" },
+  justifyNote: {
+    en: "These students' payments make up this month's salary.",
+    uz: "Ushbu o'quvchilarning to'lovlari shu oylik maoshni tashkil qiladi.",
+  },
+  share: { en: "Share", uz: "Ulush" },
+  totalPaidSalary: { en: "Total paid", uz: "Jami to'langan" },
+  avgMonthly: { en: "Avg / month", uz: "O'rtacha / oy" },
+  unpaidMonths: { en: "Unpaid months", uz: "To'lanmagan oylar" },
+  thisMonth: { en: "This month", uz: "Shu oy" },
+  openSalaryCard: { en: "Salary card", uz: "Maosh kartasi" },
+  selectMonth: { en: "Month", uz: "Oy" },
+  salaryAlreadyPaid: { en: "Already paid for this month", uz: "Bu oy uchun to'langan" },
+  noSalaryStudents: { en: "No student payments this month", uz: "Bu oyda to'lovlar yo'q" },
 } as const;
 
 export type StringKey = keyof typeof dict;

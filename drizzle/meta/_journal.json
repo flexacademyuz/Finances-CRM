@@ -78,6 +78,13 @@
       "when": 1788958218335,
       "tag": "0010_add_subject_and_draft_classes",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788976337083,
+      "tag": "0011_add_monthly_payouts",
+      "breakpoints": true
     }
   ]
 }

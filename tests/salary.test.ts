@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applySalaryRule, netSalaryOwed, suggestedPayout } from "../server/services/salary";
+import { createPayoutSchema } from "../shared/schema";
 
 /** Teacher salary estimation rules (spec §3.4). */
 describe("applySalaryRule", () => {
@@ -40,5 +41,15 @@ describe("netSalaryOwed / suggestedPayout", () => {
 
   it("keeps two decimals", () => {
     expect(netSalaryOwed(150.25, 50.1)).toBe(100.15);
+  });
+});
+
+/** A payout is always tied to a specific month (one payout per month). */
+describe("createPayoutSchema", () => {
+  it("requires the month being paid", () => {
+    const teacherId = "11111111-1111-1111-1111-111111111111";
+    expect(createPayoutSchema.parse({ teacherId, month: "2026-02" }).month).toBe("2026-02");
+    expect(() => createPayoutSchema.parse({ teacherId })).toThrow();
+    expect(() => createPayoutSchema.parse({ teacherId, month: "Feb 2026" })).toThrow();
   });
 });

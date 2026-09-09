@@ -283,6 +283,13 @@ export const salaryPayouts = pgTable(
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
     method: paymentMethodEnum("method").notNull().default("cash"),
     note: text("note"),
+    // The billing month (YYYY-MM-01) this salary is for. One payout per teacher
+    // per month — once paid, that month is closed and never recomputed. Null on
+    // legacy (pre-monthly) payouts.
+    month: date("month"),
+    // Snapshot of the students whose payments justified this month's salary, so
+    // the payout can be explained to the teacher later even if payments change.
+    breakdown: jsonb("breakdown").$type<PayoutStudent[]>(),
     // Cycle boundary: previous payout's paidAt (null for the first cycle).
     periodStart: timestamp("period_start", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
@@ -293,8 +300,21 @@ export const salaryPayouts = pgTable(
       .references(() => users.id, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ byTeacher: index("payouts_teacher_idx").on(t.teacherId) }),
+  (t) => ({
+    byTeacher: index("payouts_teacher_idx").on(t.teacherId),
+    // At most one payout per teacher per month (legacy null months are exempt).
+    uniqTeacherMonth: unique("payouts_teacher_month_uniq").on(t.teacherId, t.month),
+  }),
 );
+
+/** One student's contribution to a month's salary — the payout justification. */
+export type PayoutStudent = {
+  studentId: string;
+  studentName: string;
+  className: string;
+  paid: number;
+  credit: number;
+};
 
 /** Center-wide, CEO-configurable settings (single row, id = 'global'). */
 export const settings = pgTable("settings", {
@@ -724,9 +744,14 @@ export const createAdvanceSchema = z.object({
   note: z.string().optional(),
 });
 
-/** Record a salary payment to a teacher (CEO). `amount` defaults to net owed. */
+/**
+ * Record a salary payment to a teacher for one month (CEO). `amount` defaults to
+ * that month's computed salary minus open advances.
+ */
 export const createPayoutSchema = z.object({
   teacherId: z.string().uuid(),
+  // The month being paid (YYYY-MM or YYYY-MM-01). One payout per month.
+  month: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/),
   amount: z.coerce.number().nonnegative().optional(),
   method: z.enum(paymentMethodEnum.enumValues).optional(),
   paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

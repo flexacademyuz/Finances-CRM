@@ -129,6 +129,7 @@ export type SalaryEstimate = {
 };
 
 export type PayrollData = {
+  month: string;
   total: number;
   teachers: {
     teacherId: string;
@@ -140,7 +141,62 @@ export type PayrollData = {
     earned: number;
     advancesTotal: number;
     netOwed: number;
+    paid: boolean;
+    paidAmount: number | null;
   }[];
+};
+
+/** One student's contribution to a month's salary (the justification list). */
+export type PayoutStudent = {
+  studentId: string;
+  studentName: string;
+  className: string;
+  paid: number;
+  credit: number;
+};
+
+/** A teacher's salary for a single billing month. */
+export type MonthlySalary = {
+  teacherId: string;
+  month: string;
+  monthLabel: string;
+  salaryModel: SalaryModel;
+  salaryValue: number;
+  estimatedSalary: number;
+  collectedTotal: number;
+  paidStudents: number;
+  breakdown: {
+    classId: string;
+    className: string;
+    paidStudents: number;
+    collected: number;
+    cash: number;
+    online: number;
+    teacherShare: number;
+  }[];
+  students: PayoutStudent[];
+  advancesTotal: number;
+  paid: null | {
+    id: string;
+    amount: number;
+    grossEarned: number;
+    advancesDeducted: number;
+    method: string;
+    paidOn: string;
+    note: string | null;
+    students: PayoutStudent[];
+  };
+};
+
+/** A row in the teacher's monthly salary table. */
+export type SalaryMonthRow = {
+  month: string;
+  label: string;
+  estimatedSalary: number;
+  paidStudents: number;
+  paid: boolean;
+  paidAmount: number | null;
+  paidOn: string | null;
 };
 
 /** A teacher's live salary cycle (earned since last payout − open advances). */
@@ -180,6 +236,8 @@ export type AdvanceRow = {
 export type PayoutRow = {
   id: string;
   teacherId: string;
+  month: string | null;
+  breakdown: PayoutStudent[] | null;
   grossEarned: string;
   advancesDeducted: string;
   amount: string;

@@ -10,7 +10,14 @@ import {
   listAdvances,
   listPayouts,
 } from "../storage";
-import { estimateSalary, salaryCycle, recordPayout, payrollNow } from "../services/salary";
+import {
+  estimateSalary,
+  salaryCycle,
+  monthlySalary,
+  salaryMonths,
+  recordMonthlyPayout,
+  payrollMonthView,
+} from "../services/salary";
 import { monthKey, normalizeMonth } from "@shared/date";
 import { createAdvanceSchema, createPayoutSchema } from "@shared/schema";
 
@@ -105,6 +112,31 @@ router.get(
   }),
 );
 
+/**
+ * GET /api/salary/month?month=&teacherId= — one month's salary for a teacher:
+ * the amount, the per-class and per-student justification, and whether it's paid.
+ */
+router.get(
+  "/salary/month",
+  asyncHandler(async (req, res) => {
+    const teacherId = resolveTeacherId(req);
+    if (!teacherId) return res.status(400).json({ error: "bad_request", message: "teacherId required" });
+    const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
+    res.json(await monthlySalary(teacherId, month));
+  }),
+);
+
+/** GET /api/salary/months?teacherId=&count= — the teacher's monthly salary table. */
+router.get(
+  "/salary/months",
+  asyncHandler(async (req, res) => {
+    const teacherId = resolveTeacherId(req);
+    if (!teacherId) return res.status(400).json({ error: "bad_request", message: "teacherId required" });
+    const count = req.query.count ? Math.min(Math.max(Number(req.query.count), 1), 24) : 12;
+    res.json(await salaryMonths(teacherId, count));
+  }),
+);
+
 /** GET /api/salary/payouts — a teacher's salary payment history. */
 router.get(
   "/salary/payouts",
@@ -115,7 +147,10 @@ router.get(
   }),
 );
 
-/** POST /api/salary/payout — record a salary payment, settling the cycle (CEO). */
+/**
+ * POST /api/salary/payout — pay a teacher for one month (CEO). Closes that month
+ * (one payout per month) and snapshots the student justification.
+ */
 router.post(
   "/salary/payout",
   requireRole("ceo"),
@@ -123,14 +158,25 @@ router.post(
     const input = createPayoutSchema.parse(req.body);
     const teacher = await getTeacherById(input.teacherId);
     if (!teacher) return res.status(404).json({ error: "not_found", message: "Teacher not found" });
-    const payout = await recordPayout(input.teacherId, {
-      amount: input.amount,
-      method: input.method ?? "cash",
-      paidOn: input.paidOn ?? new Date().toISOString().slice(0, 10),
-      note: input.note ?? null,
-      createdBy: req.authUser!.id,
-    });
-    res.status(201).json(payout);
+    try {
+      const payout = await recordMonthlyPayout(input.teacherId, {
+        month: normalizeMonth(input.month),
+        amount: input.amount,
+        method: input.method ?? "cash",
+        paidOn: input.paidOn ?? new Date().toISOString().slice(0, 10),
+        note: input.note ?? null,
+        createdBy: req.authUser!.id,
+      });
+      res.status(201).json(payout);
+    } catch (err) {
+      if ((err as Error).message === "already_paid") {
+        return res.status(409).json({
+          error: "already_paid",
+          message: "This teacher's salary for that month has already been paid.",
+        });
+      }
+      throw err;
+    }
   }),
 );
 
@@ -164,26 +210,33 @@ router.post(
   }),
 );
 
-/** GET /api/salary/payroll — current payroll obligation, cycle-based (CEO). */
+/**
+ * GET /api/salary/payroll?month= — payroll for a month (CEO): each teacher's
+ * salary for that month and whether it has been paid. Defaults to this month.
+ */
 router.get(
   "/salary/payroll",
   requireRole("ceo"),
-  asyncHandler(async (_req, res) => {
-    const payroll = await payrollNow();
+  asyncHandler(async (req, res) => {
+    const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
+    const payroll = await payrollMonthView(month);
     const teachers = await listTeachers();
     const byId = new Map(teachers.map((t) => [t.id, t]));
     res.json({
+      month: payroll.month,
       total: payroll.total,
       teachers: payroll.perTeacher.map((p) => ({
         teacherId: p.teacherId,
         name: byId.get(p.teacherId)?.fullName ?? "—",
-        salaryModel: p.cycle.salaryModel,
-        salaryValue: p.cycle.salaryValue,
-        collectedTotal: p.cycle.collectedTotal,
-        paidStudents: p.cycle.paidStudents,
-        earned: p.cycle.earned,
-        advancesTotal: p.cycle.advancesTotal,
-        netOwed: p.cycle.netOwed,
+        salaryModel: p.salaryModel,
+        salaryValue: p.salaryValue,
+        collectedTotal: p.collectedTotal,
+        paidStudents: p.paidStudents,
+        earned: p.estimatedSalary,
+        advancesTotal: p.advancesTotal,
+        netOwed: p.netOwed,
+        paid: p.paid,
+        paidAmount: p.paidAmount,
       })),
     });
   }),

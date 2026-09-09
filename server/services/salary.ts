@@ -1,13 +1,15 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "../db";
 import { payments, classes, teachers } from "@shared/schema";
-import type { SalaryModel } from "@shared/schema";
-import { monthKey } from "@shared/date";
+import type { SalaryModel, PayoutStudent } from "@shared/schema";
+import { monthKey, recentMonths, monthLabel } from "@shared/date";
 import {
   upsertSalaryRecord,
   lastPayout,
   openAdvances,
   createPayoutAndSettle,
+  getPayoutForMonth,
+  salaryStudentsForMonth,
 } from "../storage";
 
 export type ClassBreakdown = {
@@ -288,38 +290,168 @@ export async function salaryCycle(teacherId: string): Promise<SalaryCycle> {
   };
 }
 
+/* ─────────────────── Month-based salary (V18) ─────────────────── */
+
+export type MonthlySalary = {
+  teacherId: string;
+  month: string;
+  monthLabel: string;
+  salaryModel: SalaryModel;
+  salaryValue: number;
+  estimatedSalary: number;
+  collectedTotal: number;
+  paidStudents: number;
+  breakdown: ClassBreakdown[];
+  /** Per-student justification for this month's salary. */
+  students: PayoutStudent[];
+  /** Open advances (deducted when this month is paid). */
+  advancesTotal: number;
+  /** The payout if this month has already been paid (locked), else null. */
+  paid: null | {
+    id: string;
+    amount: number;
+    grossEarned: number;
+    advancesDeducted: number;
+    method: string;
+    paidOn: string;
+    note: string | null;
+    students: PayoutStudent[];
+  };
+};
+
 /**
- * Record a salary payment: closes the current cycle and settles its advances.
- * `amount` defaults to the suggested net owed (never negative).
+ * A teacher's salary for one billing month: the amount owed, the per-class and
+ * per-student breakdown (justification), and whether it's already been paid.
+ * Each payment counts only in its own billing month, so paying one month never
+ * affects another.
  */
-export async function recordPayout(
+export async function monthlySalary(teacherId: string, month: string = monthKey()): Promise<MonthlySalary> {
+  const est = await estimateSalary(teacherId, month);
+  const [students, paidRow, open] = await Promise.all([
+    salaryStudentsForMonth(teacherId, month),
+    getPayoutForMonth(teacherId, month),
+    openAdvances(teacherId),
+  ]);
+  const advancesTotal = open.reduce((s, a) => s + Number(a.amount), 0);
+
+  return {
+    teacherId,
+    month,
+    monthLabel: monthLabel(month),
+    salaryModel: est.salaryModel,
+    salaryValue: est.salaryValue,
+    estimatedSalary: est.estimatedSalary,
+    collectedTotal: est.collectedTotal,
+    paidStudents: est.paidStudents,
+    breakdown: est.breakdown,
+    students,
+    advancesTotal: +advancesTotal.toFixed(2),
+    paid: paidRow
+      ? {
+          id: paidRow.id,
+          amount: Number(paidRow.amount),
+          grossEarned: Number(paidRow.grossEarned),
+          advancesDeducted: Number(paidRow.advancesDeducted),
+          method: paidRow.method,
+          paidOn: paidRow.paidOn,
+          note: paidRow.note,
+          students: paidRow.breakdown ?? [],
+        }
+      : null,
+  };
+}
+
+export type SalaryMonthRow = {
+  month: string;
+  label: string;
+  estimatedSalary: number;
+  paidStudents: number;
+  paid: boolean;
+  paidAmount: number | null;
+  paidOn: string | null;
+};
+
+/** The monthly salary table for a teacher (most recent `count` months first). */
+export async function salaryMonths(teacherId: string, count = 12): Promise<SalaryMonthRow[]> {
+  const months = recentMonths(count).reverse(); // newest first
+  const rows = await Promise.all(
+    months.map(async (m) => {
+      const [est, paid] = await Promise.all([
+        estimateSalary(teacherId, m),
+        getPayoutForMonth(teacherId, m),
+      ]);
+      return {
+        month: m,
+        label: monthLabel(m),
+        estimatedSalary: est.estimatedSalary,
+        paidStudents: est.paidStudents,
+        paid: !!paid,
+        paidAmount: paid ? Number(paid.amount) : null,
+        paidOn: paid ? paid.paidOn : null,
+      };
+    }),
+  );
+  return rows;
+}
+
+/**
+ * Pay a teacher for one month. Closes that month (one payout per month), settles
+ * open advances, and snapshots the student justification. `amount` defaults to
+ * the month's computed salary minus open advances.
+ */
+export async function recordMonthlyPayout(
   teacherId: string,
-  opts: { amount?: number; method: "cash" | "online"; paidOn: string; note: string | null; createdBy: string },
+  opts: { month: string; amount?: number; method: "cash" | "online"; paidOn: string; note: string | null; createdBy: string },
 ) {
-  const cycle = await salaryCycle(teacherId);
+  const existing = await getPayoutForMonth(teacherId, opts.month);
+  if (existing) throw new Error("already_paid");
+
+  const detail = await monthlySalary(teacherId, opts.month);
+  const amount = opts.amount != null ? opts.amount : suggestedPayout(detail.estimatedSalary, detail.advancesTotal);
   const last = await lastPayout(teacherId);
-  const amount = opts.amount != null ? opts.amount : suggestedPayout(cycle.earned, cycle.advancesTotal);
   return createPayoutAndSettle({
     teacherId,
-    grossEarned: cycle.earned,
-    advancesDeducted: cycle.advancesTotal,
+    month: opts.month,
+    grossEarned: detail.estimatedSalary,
+    advancesDeducted: detail.advancesTotal,
     amount: +amount.toFixed(2),
     method: opts.method,
     paidOn: opts.paidOn,
     note: opts.note,
+    breakdown: detail.students,
     periodStart: last?.paidAt ?? null,
     createdBy: opts.createdBy,
   });
 }
 
-/** Current payroll obligation across all teachers: sum of net owed (≥0). */
-export async function payrollNow() {
+/** CEO payroll for one month: each teacher's salary and whether it's paid. */
+export async function payrollMonthView(month: string = monthKey()) {
   const allTeachers = await db.select().from(teachers);
   const perTeacher = await Promise.all(
-    allTeachers.map(async (t) => ({ teacherId: t.id, cycle: await salaryCycle(t.id) })),
+    allTeachers.map(async (t) => {
+      const [est, paid, open] = await Promise.all([
+        estimateSalary(t.id, month),
+        getPayoutForMonth(t.id, month),
+        openAdvances(t.id),
+      ]);
+      const advancesTotal = open.reduce((s, a) => s + Number(a.amount), 0);
+      return {
+        teacherId: t.id,
+        salaryModel: est.salaryModel,
+        salaryValue: est.salaryValue,
+        estimatedSalary: est.estimatedSalary,
+        collectedTotal: est.collectedTotal,
+        paidStudents: est.paidStudents,
+        advancesTotal: +advancesTotal.toFixed(2),
+        netOwed: suggestedPayout(est.estimatedSalary, advancesTotal),
+        paid: !!paid,
+        paidAmount: paid ? Number(paid.amount) : null,
+      };
+    }),
   );
-  const total = perTeacher.reduce((s, p) => s + Math.max(0, p.cycle.netOwed), 0);
-  return { total: +total.toFixed(2), perTeacher };
+  // Outstanding = unpaid months only.
+  const total = perTeacher.reduce((s, p) => s + (p.paid ? 0 : p.netOwed), 0);
+  return { month, total: +total.toFixed(2), perTeacher };
 }
 
 /** Count of students who paid at least once (non-voided) in the given month. */
