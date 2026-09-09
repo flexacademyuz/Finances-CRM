@@ -6,9 +6,21 @@ import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { can } from "@shared/permissions";
+import { haptic } from "../lib/telegram";
 import { money } from "../lib/format";
-import type { ClassLedger } from "../lib/types";
-import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge } from "../components/ui";
+import type { ClassLedger, PaymentRow } from "../lib/types";
+import type { PaymentMethod } from "@shared/schema";
+import { Button, Card, Empty, Field, Input, Modal, Segmented, Spinner, StatusBadge } from "../components/ui";
+
+/** A grid cell the CEO/accountant tapped, to mark a month paid or unpaid. */
+type CellTarget = {
+  studentId: string;
+  fullName: string;
+  effectiveFee: string;
+  month: string;
+  label: string;
+  state: "paid" | "unpaid" | "frozen";
+};
 
 /**
  * Class "folder" detail: the class's students and a monthly payment table
@@ -21,14 +33,17 @@ export function ClassDetail() {
   const params = useParams();
   const classId = params.id!;
   const [adding, setAdding] = useState(false);
+  const [cell, setCell] = useState<CellTarget | null>(null);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["class-ledger", classId],
-    queryFn: () => api<ClassLedger>(`/api/classes/${classId}/ledger`, { query: { months: "6" } }),
+    queryFn: () => api<ClassLedger>(`/api/classes/${classId}/ledger`),
   });
 
   const canManage = can(user, "add_student");
+  // Tick a month paid/unpaid straight from the grid (records or voids a payment).
+  const canRecord = can(user, "record_payment");
 
   if (isLoading || !data) return <Spinner />;
   const { class: cls, months, students } = data;
@@ -66,32 +81,89 @@ export function ClassDetail() {
       {students.length === 0 ? (
         <Empty />
       ) : (
-        /* Roster — each student with their month-by-month paid status (from
-           September). The row opens the profile, where the actions live. */
-        <div className="space-y-2">
-          {students.map((s) => (
-            <Card key={s.id} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Link href={`/student/${s.id}`} className="min-w-0 flex-1">
-                  <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
-                  <div className="truncate text-xs text-tg-hint">
-                    {money(s.effectiveFee)}
-                    {s.phone ? ` · ${s.phone}` : ""}
-                  </div>
-                </Link>
-                <StatusBadge status={s.status} />
-                <Link href={`/student/${s.id}`} className="shrink-0 text-tg-hint">
-                  <ChevronRight size={18} />
-                </Link>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {months.map((m) => (
-                  <MonthChip key={m.key} label={m.label} state={s.monthly[m.key]} />
+        <>
+          {/* Monthly payment table (from September). Cells are tickable: tap an
+              unpaid month to record a payment, or a paid one to unmark it. */}
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full min-w-[420px] border-collapse text-sm">
+              <thead>
+                <tr className="text-xs text-tg-hint">
+                  <th className="sticky left-0 z-10 bg-surface px-3 py-2 text-left font-semibold">
+                    {t("student")}
+                  </th>
+                  {months.map((m) => (
+                    <th key={m.key} className="px-2 py-2 text-center font-semibold">
+                      {m.label.split(" ")[0].slice(0, 3)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s) => (
+                  <tr key={s.id} className="border-t border-border">
+                    <td className="sticky left-0 z-10 bg-surface px-3 py-2 font-medium">{s.fullName}</td>
+                    {months.map((m) => {
+                      const state = s.monthly[m.key];
+                      const tickable = canRecord && state !== "frozen";
+                      return (
+                        <td key={m.key} className="px-2 py-2 text-center">
+                          {tickable ? (
+                            <button
+                              type="button"
+                              aria-label={`${s.fullName} — ${m.label}`}
+                              onClick={() =>
+                                setCell({
+                                  studentId: s.id,
+                                  fullName: s.fullName,
+                                  effectiveFee: s.effectiveFee,
+                                  month: m.key,
+                                  label: m.label,
+                                  state,
+                                })
+                              }
+                              className="transition hover:scale-110"
+                            >
+                              <PaidCell state={state} />
+                            </button>
+                          ) : (
+                            <PaidCell state={state} />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))}
-              </div>
-            </Card>
-          ))}
-        </div>
+              </tbody>
+            </table>
+          </Card>
+
+          {/* Roster — the row opens the student profile, where actions live. */}
+          <div className="space-y-2">
+            {students.map((s) => (
+              <Card key={s.id} className="p-0">
+                <Link href={`/student/${s.id}`} className="flex min-w-0 items-center gap-2 p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
+                    <div className="truncate text-xs text-tg-hint">
+                      {money(s.effectiveFee)}
+                      {s.phone ? ` · ${s.phone}` : ""}
+                    </div>
+                  </div>
+                  <StatusBadge status={s.status} />
+                  <ChevronRight size={18} className="shrink-0 text-tg-hint" />
+                </Link>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {cell && (
+        <CellModal
+          target={cell}
+          onClose={() => setCell(null)}
+          onSaved={() => { setCell(null); qc.invalidateQueries({ queryKey: ["class-ledger", classId] }); }}
+        />
       )}
 
       {adding && (
@@ -107,20 +179,124 @@ export function ClassDetail() {
   );
 }
 
-/** A compact per-month status chip (month abbreviation + paid/frozen/unpaid). */
-function MonthChip({ label, state }: { label: string; state: "paid" | "unpaid" | "frozen" }) {
-  const abbr = label.split(" ")[0].slice(0, 3);
-  const cls =
-    state === "paid"
-      ? "bg-status-paid/15 text-status-paid"
-      : state === "frozen"
-        ? "bg-status-frozen/15 text-status-frozen"
-        : "bg-tg-bg text-tg-hint";
+function PaidCell({ state }: { state: "paid" | "unpaid" | "frozen" }) {
+  if (state === "paid")
+    return (
+      <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-paid/15 text-status-paid">
+        <Check size={14} />
+      </span>
+    );
+  if (state === "frozen")
+    return (
+      <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-frozen/15 text-status-frozen">
+        🔵
+      </span>
+    );
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
-      {abbr}
-      {state === "paid" ? <Check size={11} /> : state === "frozen" ? "🔵" : <Minus size={11} />}
+    <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-tg-bg text-tg-hint">
+      <Minus size={14} />
     </span>
+  );
+}
+
+/**
+ * Tapping a grid cell: an unpaid month opens a quick record-payment form
+ * (amount pre-filled with the student's fee); a paid month offers to unmark it,
+ * which voids that month's payment.
+ */
+function CellModal({
+  target,
+  onClose,
+  onSaved,
+}: {
+  target: CellTarget;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const [amount, setAmount] = useState(String(Number(target.effectiveFee) || ""));
+  const [method, setMethod] = useState<PaymentMethod>("cash");
+
+  const record = useMutation({
+    mutationFn: () =>
+      api("/api/payments", {
+        method: "POST",
+        body: { studentId: target.studentId, amount: Number(amount), method, billingMonth: target.month },
+      }),
+    onSuccess: () => { haptic("success"); onSaved(); },
+    onError: () => haptic("error"),
+  });
+
+  // For a paid cell we need the payment id to void it.
+  const paidQ = useQuery({
+    queryKey: ["cell-payment", target.studentId, target.month],
+    queryFn: () =>
+      api<PaymentRow[]>("/api/payments", {
+        query: { studentId: target.studentId, billingMonth: target.month, scope: "all" },
+      }),
+    enabled: target.state === "paid",
+  });
+  const active = paidQ.data?.find((p) => !p.voided);
+
+  const unmark = useMutation({
+    mutationFn: () =>
+      api(`/api/payments/${active!.id}/void`, { method: "POST", body: { reason: "Unmarked from class grid" } }),
+    onSuccess: () => { haptic("success"); onSaved(); },
+    onError: () => haptic("error"),
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${target.fullName} — ${target.label}`}>
+      {target.state === "paid" ? (
+        <div className="space-y-4">
+          <div className="rounded-lg bg-status-overdue/10 px-3 py-2 text-sm text-tg-text">
+            {t("markUnpaidConfirm")}
+          </div>
+          {active && <div className="text-sm text-tg-hint">{money(active.amount)} · {t(active.method)}</div>}
+          {unmark.isError && (
+            <div className="text-sm text-status-overdue">{(unmark.error as Error).message}</div>
+          )}
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={onClose}>{t("cancel")}</Button>
+            <Button
+              className="flex-1"
+              disabled={paidQ.isLoading || !active || unmark.isPending}
+              onClick={() => unmark.mutate()}
+            >
+              {t("markUnpaid")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("markPaidNote")}</div>
+          <Field label={t("amount")}>
+            <Input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
+          <Field label={t("method")}>
+            <Segmented
+              full
+              value={method}
+              onChange={setMethod}
+              options={[
+                { value: "cash", label: t("cash") },
+                { value: "online", label: t("online") },
+              ]}
+            />
+          </Field>
+          {record.isError && (
+            <div className="text-sm text-status-overdue">{(record.error as Error).message}</div>
+          )}
+          <Button
+            className="w-full"
+            disabled={!Number(amount) || record.isPending}
+            onClick={() => record.mutate()}
+          >
+            {t("markPaid")}
+          </Button>
+        </div>
+      )}
+    </Modal>
   );
 }
 

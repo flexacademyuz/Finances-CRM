@@ -301,6 +301,16 @@ const dict = {
     en: "Includes remainder from earlier months paid late.",
     uz: "Kech to'langan oldingi oylar qoldig'ini o'z ichiga oladi.",
   },
+  markPaid: { en: "Mark paid", uz: "To'langan deb belgilash" },
+  markUnpaid: { en: "Mark unpaid", uz: "To'lanmagan deb belgilash" },
+  markPaidNote: {
+    en: "Record this month's payment for the student.",
+    uz: "O'quvchining shu oylik to'lovini kiriting.",
+  },
+  markUnpaidConfirm: {
+    en: "Mark this month as unpaid? It voids the recorded payment.",
+    uz: "Bu oyni to'lanmagan deb belgilaysizmi? Kiritilgan to'lov bekor qilinadi.",
+  },
 } as const;
 
 export type StringKey = keyof typeof dict;
