@@ -48,6 +48,7 @@ const dict = {
   teacher: { en: "Teacher", uz: "O'qituvchi" },
   ceo: { en: "CEO", uz: "Rahbar" },
   accountant: { en: "Accountant", uz: "Hisobchi" },
+  assistant: { en: "Assistant", uz: "Yordamchi" },
   class: { en: "Class", uz: "Guruh" },
   student: { en: "Student", uz: "O'quvchi" },
   amount: { en: "Amount", uz: "Summa" },

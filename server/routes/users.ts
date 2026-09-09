@@ -7,6 +7,7 @@ import {
   salaryRuleSchema,
   updateUserSchema,
   permissionsSchema,
+  roleEnum,
 } from "@shared/schema";
 import {
   listUsers,
@@ -81,7 +82,7 @@ router.patch(
 router.patch(
   "/users/:id/role",
   asyncHandler(async (req, res) => {
-    const { role } = z.object({ role: z.enum(["ceo", "accountant", "teacher"]) }).parse(req.body);
+    const { role } = z.object({ role: z.enum(roleEnum.enumValues) }).parse(req.body);
     const user = await updateUserRole(req.params.id, role);
     if (!user) return res.status(404).json({ error: "not_found" });
     res.json(user);

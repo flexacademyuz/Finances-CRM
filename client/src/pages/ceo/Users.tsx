@@ -9,7 +9,7 @@ import type { Role, SalaryModel } from "@shared/schema";
 import { PERMISSIONS, ROLE_DEFAULTS, type Permission } from "@shared/permissions";
 import { Button, Card, Field, Input, Modal, Select, Spinner } from "../../components/ui";
 
-const ROLES: Role[] = ["ceo", "accountant", "teacher"];
+const ROLES: Role[] = ["ceo", "accountant", "teacher", "assistant"];
 const MODELS: SalaryModel[] = ["percentage", "per_student", "fixed"];
 
 /** CEO-only user & role management + teacher salary rules (spec §2, §3.4). */

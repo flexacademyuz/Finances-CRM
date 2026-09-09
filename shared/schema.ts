@@ -18,7 +18,7 @@ import { z } from "zod";
 
 /* ────────────────────────────── Enums ────────────────────────────── */
 
-export const roleEnum = pgEnum("role", ["ceo", "accountant", "teacher"]);
+export const roleEnum = pgEnum("role", ["ceo", "accountant", "teacher", "assistant"]);
 export const salaryModelEnum = pgEnum("salary_model", [
   "percentage",
   "per_student",

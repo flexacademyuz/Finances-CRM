@@ -55,6 +55,13 @@ const BOTTOM_NAV: Record<Role, BottomItem[]> = {
     { href: "#create", label: "add", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
     { href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={22} /> },
   ],
+  assistant: [
+    { href: "/students", label: "students", icon: <GraduationCap size={22} /> },
+    { href: "/leads", label: "leads", icon: <UserPlus size={22} /> },
+    { href: "/", label: "recordPayment", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
+    { href: "/payments", label: "payments", icon: <ClipboardList size={22} /> },
+    { href: "/awaiting", label: "awaiting", icon: <Clock size={22} /> },
+  ],
 };
 
 /** Highlight the tab for the current route, including student/class detail pages. */
@@ -75,12 +82,12 @@ function buildNav(user: User): NavItem[] {
   const items: NavItem[] = [];
 
   if (a.role === "ceo") items.push({ href: "/", label: "dashboard", icon: <LayoutDashboard size={18} /> });
-  else if (a.role === "accountant") items.push({ href: "/", label: "recordPayment", icon: <Wallet size={18} /> });
-  else items.push({ href: "/", label: "myClasses", icon: <Users size={18} /> });
+  else if (a.role === "teacher") items.push({ href: "/", label: "myClasses", icon: <Users size={18} /> });
+  else items.push({ href: "/", label: "recordPayment", icon: <Wallet size={18} /> }); // accountant / assistant
 
-  // A dedicated Record item for anyone granted it (the accountant already
-  // records from the home screen above).
-  if (a.record && a.role !== "accountant")
+  // A dedicated Record item for anyone granted it whose home isn't already the
+  // record screen.
+  if (a.record && a.recordPath === "/record")
     items.push({ href: "/record", label: "recordPayment", icon: <Wallet size={18} /> });
   if (a.students) items.push({ href: "/students", label: "students", icon: <GraduationCap size={18} /> });
   items.push({ href: "/leads", label: "leads", icon: <UserPlus size={18} /> });
@@ -181,7 +188,8 @@ function quickActions(user: User): QuickAction[] {
     actions.push({ label: "registerStudent", icon: <UserPlus size={20} />, href: "/leads?register=1" });
   }
   if (user.role === "ceo" || can(user, "record_payment")) {
-    actions.push({ label: "recordPayment", icon: <Wallet size={20} />, href: user.role === "accountant" ? "/" : "/record" });
+    const recordHref = user.role === "accountant" || user.role === "assistant" ? "/" : "/record";
+    actions.push({ label: "recordPayment", icon: <Wallet size={20} />, href: recordHref });
   }
   if (user.role === "ceo" || user.role === "accountant" || can(user, "add_expense")) {
     actions.push({ label: "addExpense", icon: <Receipt size={20} />, href: "/expenses" });

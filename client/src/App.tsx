@@ -46,7 +46,7 @@ function Routes({ me }: { me: Me }) {
   const role = me.user.role;
   const a = accessFor(me.user);
 
-  const home = role === "ceo" ? CeoDashboard : role === "accountant" ? RecordPayment : MyClasses;
+  const home = role === "ceo" ? CeoDashboard : role === "teacher" ? MyClasses : RecordPayment;
 
   // Routes gated by capability (role baseline + CEO-granted permissions), so a
   // granted user actually reaches the page — enforcement still lives server-side.
@@ -54,7 +54,7 @@ function Routes({ me }: { me: Me }) {
     <Layout role={role}>
       <Switch>
         <Route path="/" component={home} />
-        {a.record && role !== "accountant" && <Route path="/record" component={RecordPayment} />}
+        {a.record && a.recordPath === "/record" && <Route path="/record" component={RecordPayment} />}
         {a.students && <Route path="/students" component={StudentsPage} />}
         <Route path="/leads" component={LeadsPage} />
         {a.groups && <Route path={a.groupsPath} component={ClassesPage} />}

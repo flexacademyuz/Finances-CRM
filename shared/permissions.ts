@@ -49,6 +49,9 @@ export const ROLE_DEFAULTS: Record<Role, Permission[]> = {
   // Teachers manage their own class rosters and approve leads for their own
   // groups by default; everything else is granted per-user by the CEO.
   teacher: ["add_student", "edit_student", "approve_leads"],
+  // Assistants handle the front desk: recording payments and registering /
+  // approving new students. The CEO can grant more per-user.
+  assistant: ["record_payment", "add_student", "edit_student", "approve_leads"],
 };
 
 export function isPermission(p: string): p is Permission {

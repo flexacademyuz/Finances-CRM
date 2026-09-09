@@ -92,6 +92,13 @@
       "when": 1788978177607,
       "tag": "0012_add_payout_allocations",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788979619633,
+      "tag": "0013_add_assistant_role",
+      "breakpoints": true
     }
   ]
 }

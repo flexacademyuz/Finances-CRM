@@ -30,6 +30,18 @@ describe("permissions model", () => {
     expect(can(teacher, "delete_student")).toBe(false);
   });
 
+  it("assistant handles payments and student registration by default", () => {
+    const asst = { role: "assistant" as const, permissions: [] };
+    expect(can(asst, "record_payment")).toBe(true);
+    expect(can(asst, "add_student")).toBe(true);
+    expect(can(asst, "edit_student")).toBe(true);
+    expect(can(asst, "approve_leads")).toBe(true);
+    // Not a manager: no groups/expenses/deletes unless the CEO grants them.
+    expect(can(asst, "add_group")).toBe(false);
+    expect(can(asst, "add_expense")).toBe(false);
+    expect(can(asst, "delete_student")).toBe(false);
+  });
+
   it("accountant defaults exclude delete_student unless granted", () => {
     expect(can({ role: "accountant", permissions: [] }, "delete_student")).toBe(false);
     expect(can({ role: "accountant", permissions: ["delete_student"] }, "delete_student")).toBe(true);
