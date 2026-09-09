@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, ChevronRight, Search, X, SlidersHorizontal, Archive } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
+import { useSession } from "../../lib/session";
+import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { StudentRow, Class, TeacherRow } from "../../lib/types";
 import type { StudentStatus } from "@shared/schema";
@@ -42,7 +44,9 @@ function IconButton({
 
 export function StudentsPage() {
   const { t } = useI18n();
+  const { user } = useSession();
   const qc = useQueryClient();
+  const canAdd = can(user, "add_student");
   // Deep-linkable status filter (e.g. dashboard "Overdue" → /students?status=overdue).
   const qs = useSearch();
   const [view, setView] = useState<"active" | "archived">("active");
@@ -83,9 +87,11 @@ export function StudentsPage() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{t("students")}</h1>
-        <Button onClick={() => setAdding(true)}>
-          <Plus size={16} /> {t("add")}
-        </Button>
+        {canAdd && (
+          <Button onClick={() => setAdding(true)}>
+            <Plus size={16} /> {t("add")}
+          </Button>
+        )}
       </div>
 
       {/* Icon toolbar — tap to reveal. Archive toggles the view, the magnifier

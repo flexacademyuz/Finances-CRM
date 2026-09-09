@@ -39,7 +39,12 @@ export function StudentDetail() {
         ? t("dueToday")
         : t("overdueByDays").replace("{n}", String(-days));
 
-  const canManage = user.role === "ceo" || user.role === "accountant";
+  const canEdit = can(user, "edit_student");
+  const canDiscount = can(user, "manage_discounts");
+  const canDelete = can(user, "delete_student");
+  const canRecord = can(user, "record_payment");
+  // Show the actions cluster if the user can do at least one of them.
+  const canManage = canEdit || canDiscount || canDelete;
 
   return (
     <div className="space-y-4">
@@ -72,7 +77,9 @@ export function StudentDetail() {
                   fullName: student.fullName,
                   effectiveFee: String(billing.effectiveFee),
                 }}
-                canDelete={can(user, "delete_student")}
+                canEdit={canEdit}
+                canDiscount={canDiscount}
+                canDelete={canDelete}
               />
             )}
           </div>
@@ -125,7 +132,7 @@ export function StudentDetail() {
                   </div>
                   <div className="flex items-center gap-2">
                     <MethodTag method={p.method} />
-                    {canManage && (
+                    {canRecord && (
                       <button
                         className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
                         title={t("removePayment")}

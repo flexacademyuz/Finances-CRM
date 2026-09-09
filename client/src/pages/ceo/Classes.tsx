@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Folder, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
+import { useSession } from "../../lib/session";
+import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../../components/ui";
@@ -14,8 +16,11 @@ import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../..
  */
 export function ClassesPage() {
   const { t } = useI18n();
+  const { user } = useSession();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Class | null | "new">(null);
+  const canAdd = can(user, "add_group");
+  const canEdit = can(user, "edit_group");
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
   const teachers = useQuery({ queryKey: ["teachers"], queryFn: () => api<TeacherRow[]>("/api/teachers") });
@@ -25,9 +30,11 @@ export function ClassesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">{t("groups")}</h1>
-        <Button onClick={() => setEditing("new")}>
-          <Plus size={18} /> {t("add")}
-        </Button>
+        {canAdd && (
+          <Button onClick={() => setEditing("new")}>
+            <Plus size={18} /> {t("add")}
+          </Button>
+        )}
       </div>
 
       {classes.isLoading ? (
@@ -49,9 +56,11 @@ export function ClassesPage() {
                 </span>
               </Link>
               <div className="flex shrink-0 items-center gap-1">
-                <button className="p-1 text-tg-link" onClick={() => setEditing(c)} aria-label={t("edit")}>
-                  <Pencil size={16} />
-                </button>
+                {canEdit && (
+                  <button className="p-1 text-tg-link" onClick={() => setEditing(c)} aria-label={t("edit")}>
+                    <Pencil size={16} />
+                  </button>
+                )}
                 <Link href={`/class/${c.id}`} className="p-1 text-tg-hint">
                   <ChevronRight size={18} />
                 </Link>

@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Check, Minus, ChevronRight } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
+import { can } from "@shared/permissions";
 import { money } from "../lib/format";
 import type { ClassLedger } from "../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge } from "../components/ui";
@@ -27,7 +28,7 @@ export function ClassDetail() {
     queryFn: () => api<ClassLedger>(`/api/classes/${classId}/ledger`, { query: { months: "6" } }),
   });
 
-  const canManage = user.role === "ceo" || user.role === "accountant" || user.role === "teacher";
+  const canManage = can(user, "add_student");
 
   if (isLoading || !data) return <Spinner />;
   const { class: cls, months, students } = data;

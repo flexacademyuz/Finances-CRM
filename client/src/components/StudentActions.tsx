@@ -15,48 +15,68 @@ type ActionStudent = { id: string; classId: string; fullName: string; effectiveF
  * Per-student actions available to Accountant and CEO from any active student
  * row: freeze (1B), discount (1C), change group, and stop learning.
  */
-export function StudentActions({ student, canDelete }: { student: ActionStudent; canDelete?: boolean }) {
+export function StudentActions({
+  student,
+  canEdit = true,
+  canDiscount = true,
+  canDelete,
+}: {
+  student: ActionStudent;
+  canEdit?: boolean;
+  canDiscount?: boolean;
+  canDelete?: boolean;
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState<null | "edit" | "freeze" | "discount" | "group" | "stop" | "delete">(null);
 
   return (
     <>
       <div className="flex gap-1">
-        <button
-          className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
-          title={t("editStudent")}
-          onClick={() => setOpen("edit")}
-        >
-          <Pencil size={16} />
-        </button>
-        <button
-          className="rounded-lg bg-tg-bg p-1.5 text-status-frozen"
-          title={t("freezePayment")}
-          onClick={() => setOpen("freeze")}
-        >
-          <Snowflake size={16} />
-        </button>
-        <button
-          className="rounded-lg bg-tg-bg p-1.5 text-status-discount"
-          title={t("addDiscount")}
-          onClick={() => setOpen("discount")}
-        >
-          <Tag size={16} />
-        </button>
-        <button
-          className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
-          title={t("changeGroup")}
-          onClick={() => setOpen("group")}
-        >
-          <ArrowLeftRight size={16} />
-        </button>
-        <button
-          className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
-          title={t("stopStudent")}
-          onClick={() => setOpen("stop")}
-        >
-          <LogOut size={16} />
-        </button>
+        {canEdit && (
+          <button
+            className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+            title={t("editStudent")}
+            onClick={() => setOpen("edit")}
+          >
+            <Pencil size={16} />
+          </button>
+        )}
+        {canDiscount && (
+          <button
+            className="rounded-lg bg-tg-bg p-1.5 text-status-frozen"
+            title={t("freezePayment")}
+            onClick={() => setOpen("freeze")}
+          >
+            <Snowflake size={16} />
+          </button>
+        )}
+        {canDiscount && (
+          <button
+            className="rounded-lg bg-tg-bg p-1.5 text-status-discount"
+            title={t("addDiscount")}
+            onClick={() => setOpen("discount")}
+          >
+            <Tag size={16} />
+          </button>
+        )}
+        {canEdit && (
+          <button
+            className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+            title={t("changeGroup")}
+            onClick={() => setOpen("group")}
+          >
+            <ArrowLeftRight size={16} />
+          </button>
+        )}
+        {canEdit && (
+          <button
+            className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
+            title={t("stopStudent")}
+            onClick={() => setOpen("stop")}
+          >
+            <LogOut size={16} />
+          </button>
+        )}
         {canDelete && (
           <button
             className="rounded-lg bg-status-overdue/10 p-1.5 text-status-overdue"

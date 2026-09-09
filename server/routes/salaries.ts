@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "./helpers";
 import { requireRole } from "../auth/middleware";
+import { can } from "@shared/permissions";
 import {
   listTeachers,
   listSalaryHistory,
@@ -27,15 +28,29 @@ function resolveTeacherId(req: import("express").Request, fromBody = false): str
 }
 
 /**
- * GET /api/teachers — active teacher list.
- * Available to CEO and Accountant (Accountant selects a teacher first when
- * recording a payment, per spec §3.2).
+ * GET /api/teachers — active teacher list. Needed to pick a teacher/class when
+ * recording a payment and to show teacher names on the Groups screen, so it's
+ * open to anyone the CEO has granted those abilities — not just CEO/Accountant.
+ * Salary figures are stripped for callers who aren't CEO/Accountant, so a
+ * granted teacher never sees a colleague's pay.
  */
 router.get(
   "/teachers",
-  requireRole("ceo", "accountant"),
-  asyncHandler(async (_req, res) => {
-    res.json(await listTeachers(true));
+  asyncHandler(async (req, res) => {
+    const u = req.authUser!;
+    const privileged = u.role === "ceo" || u.role === "accountant";
+    const allowed =
+      privileged || can(u, "record_payment") || can(u, "add_group") || can(u, "edit_group");
+    if (!allowed) {
+      return res.status(403).json({ error: "forbidden", message: "Insufficient permission." });
+    }
+    const rows = await listTeachers(true);
+    // Hide pay details from non-finance callers.
+    res.json(
+      privileged
+        ? rows
+        : rows.map(({ salaryModel: _sm, salaryValue: _sv, ...rest }) => rest),
+    );
   }),
 );
 

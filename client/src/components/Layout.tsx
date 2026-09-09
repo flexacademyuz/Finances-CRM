@@ -19,9 +19,10 @@ import {
   HandCoins,
   X,
 } from "lucide-react";
-import type { Role } from "@shared/schema";
+import type { Role, User } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
 import { useSession } from "../lib/session";
+import { accessFor } from "../lib/access";
 import { haptic } from "../lib/telegram";
 
 type NavItem = { href: string; label: StringKey; icon: ReactNode };
@@ -62,35 +63,37 @@ function bottomActive(href: string, location: string): boolean {
   return false;
 }
 
-const NAV: Record<Role, NavItem[]> = {
-  ceo: [
-    { href: "/", label: "dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/record", label: "recordPayment", icon: <Wallet size={18} /> },
-    { href: "/students", label: "students", icon: <GraduationCap size={18} /> },
-    { href: "/leads", label: "leads", icon: <UserPlus size={18} /> },
-    { href: "/classes", label: "groups", icon: <BookOpen size={18} /> },
-    { href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={18} /> },
-    { href: "/payments", label: "payments", icon: <ClipboardList size={18} /> },
-    { href: "/expenses", label: "expenses", icon: <Receipt size={18} /> },
-    { href: "/finances", label: "finances", icon: <TrendingUp size={18} /> },
-    { href: "/analytics", label: "analytics", icon: <BarChart3 size={18} /> },
-    { href: "/users", label: "users", icon: <UserCog size={18} /> },
-  ],
-  accountant: [
-    { href: "/", label: "recordPayment", icon: <Wallet size={18} /> },
-    { href: "/students", label: "students", icon: <GraduationCap size={18} /> },
-    { href: "/leads", label: "leads", icon: <UserPlus size={18} /> },
-    { href: "/groups", label: "groups", icon: <BookOpen size={18} /> },
-    { href: "/payments", label: "payments", icon: <ClipboardList size={18} /> },
-    { href: "/awaiting", label: "awaiting", icon: <Clock size={18} /> },
-    { href: "/expenses", label: "expenses", icon: <Receipt size={18} /> },
-  ],
-  teacher: [
-    { href: "/", label: "myClasses", icon: <Users size={18} /> },
-    { href: "/leads", label: "leads", icon: <UserPlus size={18} /> },
-    { href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> },
-  ],
-};
+/**
+ * Build the sidebar menu from what the user can actually reach (role baseline +
+ * CEO-granted permissions), so a granted ability shows up as a menu item. Keeps
+ * a stable order across roles.
+ */
+function buildNav(user: User): NavItem[] {
+  const a = accessFor(user);
+  const items: NavItem[] = [];
+
+  if (a.role === "ceo") items.push({ href: "/", label: "dashboard", icon: <LayoutDashboard size={18} /> });
+  else if (a.role === "accountant") items.push({ href: "/", label: "recordPayment", icon: <Wallet size={18} /> });
+  else items.push({ href: "/", label: "myClasses", icon: <Users size={18} /> });
+
+  // A dedicated Record item for anyone granted it (the accountant already
+  // records from the home screen above).
+  if (a.record && a.role !== "accountant")
+    items.push({ href: "/record", label: "recordPayment", icon: <Wallet size={18} /> });
+  if (a.students) items.push({ href: "/students", label: "students", icon: <GraduationCap size={18} /> });
+  items.push({ href: "/leads", label: "leads", icon: <UserPlus size={18} /> });
+  if (a.groups) items.push({ href: a.groupsPath, label: "groups", icon: <BookOpen size={18} /> });
+  if (a.payroll) items.push({ href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={18} /> });
+  if (a.payments) items.push({ href: "/payments", label: "payments", icon: <ClipboardList size={18} /> });
+  if (a.awaiting) items.push({ href: "/awaiting", label: "awaiting", icon: <Clock size={18} /> });
+  if (a.expenses) items.push({ href: "/expenses", label: "expenses", icon: <Receipt size={18} /> });
+  if (a.finances) items.push({ href: "/finances", label: "finances", icon: <TrendingUp size={18} /> });
+  if (a.analytics) items.push({ href: "/analytics", label: "analytics", icon: <BarChart3 size={18} /> });
+  if (a.users) items.push({ href: "/users", label: "users", icon: <UserCog size={18} /> });
+  if (a.salary) items.push({ href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> });
+
+  return items;
+}
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
@@ -101,7 +104,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
   const { user } = useSession();
   const [location] = useLocation();
   const [drawer, setDrawer] = useState(false);
-  const items = NAV[role];
+  const items = buildNav(user);
 
   // Title from the matching nav item, with sensible fallbacks for detail pages.
   let titleKey = items.find((i) => i.href === location)?.label;

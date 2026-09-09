@@ -3,6 +3,7 @@ import { Route, Switch, Redirect } from "wouter";
 import { LocaleContext, type Locale, useI18n } from "./lib/i18n";
 import { detectLocale } from "./lib/telegram";
 import { SessionProvider, type Me } from "./lib/session";
+import { accessFor } from "./lib/access";
 import { Layout } from "./components/Layout";
 import { Spinner } from "./components/ui";
 import type { ApiError } from "./lib/api";
@@ -43,57 +44,30 @@ function Gate({ err }: { err: ApiError }) {
 
 function Routes({ me }: { me: Me }) {
   const role = me.user.role;
+  const a = accessFor(me.user);
 
-  if (role === "ceo") {
-    return (
-      <Layout role="ceo">
-        <Switch>
-          <Route path="/" component={CeoDashboard} />
-          <Route path="/record" component={RecordPayment} />
-          <Route path="/students" component={StudentsPage} />
-          <Route path="/leads" component={LeadsPage} />
-          <Route path="/classes" component={ClassesPage} />
-          <Route path="/class/:id" component={ClassDetail} />
-          <Route path="/student/:id" component={StudentDetail} />
-          <Route path="/payroll" component={PayrollPage} />
-          <Route path="/payments" component={PaymentsLog} />
-          <Route path="/expenses" component={ExpensesPage} />
-          <Route path="/finances" component={FinancesPage} />
-          <Route path="/analytics" component={AnalyticsPage} />
-          <Route path="/users" component={UsersPage} />
-          <Route><Redirect to="/" /></Route>
-        </Switch>
-      </Layout>
-    );
-  }
+  const home = role === "ceo" ? CeoDashboard : role === "accountant" ? RecordPayment : MyClasses;
 
-  if (role === "accountant") {
-    return (
-      <Layout role="accountant">
-        <Switch>
-          <Route path="/" component={RecordPayment} />
-          <Route path="/students" component={StudentsPage} />
-          <Route path="/leads" component={LeadsPage} />
-          <Route path="/groups" component={ClassesPage} />
-          <Route path="/class/:id" component={ClassDetail} />
-          <Route path="/student/:id" component={StudentDetail} />
-          <Route path="/payments" component={PaymentsLog} />
-          <Route path="/awaiting" component={AwaitingPage} />
-          <Route path="/expenses" component={ExpensesPage} />
-          <Route><Redirect to="/" /></Route>
-        </Switch>
-      </Layout>
-    );
-  }
-
+  // Routes gated by capability (role baseline + CEO-granted permissions), so a
+  // granted user actually reaches the page — enforcement still lives server-side.
   return (
-    <Layout role="teacher">
+    <Layout role={role}>
       <Switch>
-        <Route path="/" component={MyClasses} />
+        <Route path="/" component={home} />
+        {a.record && role !== "accountant" && <Route path="/record" component={RecordPayment} />}
+        {a.students && <Route path="/students" component={StudentsPage} />}
         <Route path="/leads" component={LeadsPage} />
+        {a.groups && <Route path={a.groupsPath} component={ClassesPage} />}
         <Route path="/class/:id" component={ClassDetail} />
         <Route path="/student/:id" component={StudentDetail} />
-        <Route path="/salary" component={MySalary} />
+        {a.payments && <Route path="/payments" component={PaymentsLog} />}
+        {a.awaiting && <Route path="/awaiting" component={AwaitingPage} />}
+        {a.expenses && <Route path="/expenses" component={ExpensesPage} />}
+        {a.payroll && <Route path="/payroll" component={PayrollPage} />}
+        {a.finances && <Route path="/finances" component={FinancesPage} />}
+        {a.analytics && <Route path="/analytics" component={AnalyticsPage} />}
+        {a.users && <Route path="/users" component={UsersPage} />}
+        {a.salary && <Route path="/salary" component={MySalary} />}
         <Route><Redirect to="/" /></Route>
       </Switch>
     </Layout>
