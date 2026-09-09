@@ -290,6 +290,10 @@ export const salaryPayouts = pgTable(
     // Snapshot of the students whose payments justified this month's salary, so
     // the payout can be explained to the teacher later even if payments change.
     breakdown: jsonb("breakdown").$type<PayoutStudent[]>(),
+    // How this payment is split across months: the current month plus any
+    // carried-over remainders from earlier months that were topped up here
+    // (e.g. a September fee paid in October, rolled into October's salary).
+    allocations: jsonb("allocations").$type<SalaryAllocation[]>(),
     // Cycle boundary: previous payout's paidAt (null for the first cycle).
     periodStart: timestamp("period_start", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
@@ -314,6 +318,17 @@ export type PayoutStudent = {
   className: string;
   paid: number;
   credit: number;
+};
+
+/**
+ * How a payout's gross is attributed across months: the month being paid
+ * ("current") plus any earlier months topped up in the same payment
+ * ("carryover"), so each month's settled total can be reconstructed.
+ */
+export type SalaryAllocation = {
+  month: string;
+  amount: number;
+  kind: "current" | "carryover";
 };
 
 /** Center-wide, CEO-configurable settings (single row, id = 'global'). */

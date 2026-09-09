@@ -294,6 +294,13 @@ const dict = {
   selectMonth: { en: "Month", uz: "Oy" },
   salaryAlreadyPaid: { en: "Already paid for this month", uz: "Bu oy uchun to'langan" },
   noSalaryStudents: { en: "No student payments this month", uz: "Bu oyda to'lovlar yo'q" },
+  owedRemaining: { en: "Still owed", uz: "Qoldiq qarz" },
+  rollsNext: { en: "rolls into next month", uz: "keyingi oyga o'tadi" },
+  carriedFrom: { en: "Carried from", uz: "O'tkazilgan" },
+  includesCarryover: {
+    en: "Includes remainder from earlier months paid late.",
+    uz: "Kech to'langan oldingi oylar qoldig'ini o'z ichiga oladi.",
+  },
 } as const;
 
 export type StringKey = keyof typeof dict;

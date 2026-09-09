@@ -1,7 +1,7 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "../db";
 import { payments, classes, teachers } from "@shared/schema";
-import type { SalaryModel, PayoutStudent } from "@shared/schema";
+import type { SalaryModel, PayoutStudent, SalaryAllocation } from "@shared/schema";
 import { monthKey, academicMonthsSoFar, monthLabel } from "@shared/date";
 import {
   upsertSalaryRecord,
@@ -10,6 +10,7 @@ import {
   createPayoutAndSettle,
   getPayoutForMonth,
   salaryStudentsForMonth,
+  listPayouts,
 } from "../storage";
 
 export type ClassBreakdown = {
@@ -292,6 +293,8 @@ export async function salaryCycle(teacherId: string): Promise<SalaryCycle> {
 
 /* ─────────────────── Month-based salary (V18) ─────────────────── */
 
+export type CarryoverLine = { month: string; label: string; amount: number };
+
 export type MonthlySalary = {
   teacherId: string;
   month: string;
@@ -304,6 +307,17 @@ export type MonthlySalary = {
   breakdown: ClassBreakdown[];
   /** Per-student justification for this month's salary. */
   students: PayoutStudent[];
+  /** Gross already settled toward this month (across payouts). */
+  paidAmount: number;
+  /** estimatedSalary − paidAmount. Positive = a late top-up is owed. */
+  remaining: number;
+  /**
+   * Remainders from earlier already-paid months that would roll into this
+   * month's payout (only meaningful when this month is still unpaid).
+   */
+  carryover: CarryoverLine[];
+  /** estimatedSalary + carried remainders — the gross payable if paying now. */
+  grossPayable: number;
   /** Open advances (deducted when this month is paid). */
   advancesTotal: number;
   /** The payout if this month has already been paid (locked), else null. */
@@ -319,20 +333,59 @@ export type MonthlySalary = {
   };
 };
 
+/** Gross settled per month (from payout allocations), and which months are paid. */
+async function payoutState(teacherId: string) {
+  const payouts = await listPayouts(teacherId);
+  const settled = new Map<string, number>();
+  const paidMonths = new Set<string>();
+  for (const p of payouts) {
+    if (p.month) paidMonths.add(p.month);
+    // Legacy payouts (before allocations) attribute their whole gross to `month`.
+    const allocs: SalaryAllocation[] =
+      p.allocations ?? (p.month ? [{ month: p.month, amount: Number(p.grossEarned), kind: "current" }] : []);
+    for (const a of allocs) settled.set(a.month, +((settled.get(a.month) ?? 0) + a.amount).toFixed(2));
+  }
+  return { settled, paidMonths };
+}
+
+/**
+ * Remainders owed on earlier, already-paid months (e.g. a September fee paid in
+ * October pushes September's earned above what was paid). These roll into the
+ * next month's payout.
+ */
+async function computeCarryovers(
+  teacherId: string,
+  month: string,
+  state: { settled: Map<string, number>; paidMonths: Set<string> },
+): Promise<CarryoverLine[]> {
+  const prior = academicMonthsSoFar(month).filter((m) => m < month && state.paidMonths.has(m));
+  const lines: CarryoverLine[] = [];
+  for (const m of prior) {
+    const earned = (await estimateSalary(teacherId, m)).estimatedSalary;
+    const rem = +(earned - (state.settled.get(m) ?? 0)).toFixed(2);
+    if (rem > 0.009) lines.push({ month: m, label: monthLabel(m), amount: rem });
+  }
+  return lines;
+}
+
 /**
  * A teacher's salary for one billing month: the amount owed, the per-class and
- * per-student breakdown (justification), and whether it's already been paid.
- * Each payment counts only in its own billing month, so paying one month never
- * affects another.
+ * per-student justification, whether it's paid, how much is still owed on it
+ * (late top-ups), and which earlier remainders would roll into it.
  */
 export async function monthlySalary(teacherId: string, month: string = monthKey()): Promise<MonthlySalary> {
   const est = await estimateSalary(teacherId, month);
-  const [students, paidRow, open] = await Promise.all([
+  const [students, paidRow, open, state] = await Promise.all([
     salaryStudentsForMonth(teacherId, month),
     getPayoutForMonth(teacherId, month),
     openAdvances(teacherId),
+    payoutState(teacherId),
   ]);
   const advancesTotal = open.reduce((s, a) => s + Number(a.amount), 0);
+  const paidAmount = state.settled.get(month) ?? 0;
+  const remaining = +(est.estimatedSalary - paidAmount).toFixed(2);
+  const carryover = await computeCarryovers(teacherId, month, state);
+  const carryTotal = carryover.reduce((s, c) => s + c.amount, 0);
 
   return {
     teacherId,
@@ -345,6 +398,10 @@ export async function monthlySalary(teacherId: string, month: string = monthKey(
     paidStudents: est.paidStudents,
     breakdown: est.breakdown,
     students,
+    paidAmount,
+    remaining,
+    carryover,
+    grossPayable: +(est.estimatedSalary + carryTotal).toFixed(2),
     advancesTotal: +advancesTotal.toFixed(2),
     paid: paidRow
       ? {
@@ -368,7 +425,8 @@ export type SalaryMonthRow = {
   paidStudents: number;
   paid: boolean;
   paidAmount: number | null;
-  paidOn: string | null;
+  /** Still owed on this month after what's been settled (late top-ups). */
+  remaining: number;
 };
 
 /**
@@ -377,20 +435,20 @@ export type SalaryMonthRow = {
  */
 export async function salaryMonths(teacherId: string): Promise<SalaryMonthRow[]> {
   const months = academicMonthsSoFar().reverse(); // Sep → current, newest first
+  const state = await payoutState(teacherId);
   const rows = await Promise.all(
     months.map(async (m) => {
-      const [est, paid] = await Promise.all([
-        estimateSalary(teacherId, m),
-        getPayoutForMonth(teacherId, m),
-      ]);
+      const est = await estimateSalary(teacherId, m);
+      const settled = state.settled.get(m) ?? 0;
+      const primary = state.paidMonths.has(m);
       return {
         month: m,
         label: monthLabel(m),
         estimatedSalary: est.estimatedSalary,
         paidStudents: est.paidStudents,
-        paid: !!paid,
-        paidAmount: paid ? Number(paid.amount) : null,
-        paidOn: paid ? paid.paidOn : null,
+        paid: primary,
+        paidAmount: primary ? settled : null,
+        remaining: +(est.estimatedSalary - settled).toFixed(2),
       };
     }),
   );
@@ -398,9 +456,9 @@ export async function salaryMonths(teacherId: string): Promise<SalaryMonthRow[]>
 }
 
 /**
- * Pay a teacher for one month. Closes that month (one payout per month), settles
- * open advances, and snapshots the student justification. `amount` defaults to
- * the month's computed salary minus open advances.
+ * Pay a teacher for one month. Closes that month (one primary payout per month),
+ * settles open advances, snapshots the student justification, and rolls any
+ * outstanding remainders from earlier paid months into this payment.
  */
 export async function recordMonthlyPayout(
   teacherId: string,
@@ -409,19 +467,35 @@ export async function recordMonthlyPayout(
   const existing = await getPayoutForMonth(teacherId, opts.month);
   if (existing) throw new Error("already_paid");
 
-  const detail = await monthlySalary(teacherId, opts.month);
-  const amount = opts.amount != null ? opts.amount : suggestedPayout(detail.estimatedSalary, detail.advancesTotal);
+  const [est, students, open, state] = await Promise.all([
+    estimateSalary(teacherId, opts.month),
+    salaryStudentsForMonth(teacherId, opts.month),
+    openAdvances(teacherId),
+    payoutState(teacherId),
+  ]);
+  const advancesTotal = open.reduce((s, a) => s + Number(a.amount), 0);
+  const carryover = await computeCarryovers(teacherId, opts.month, state);
+  const carryTotal = carryover.reduce((s, c) => s + c.amount, 0);
+  const grossEarned = +(est.estimatedSalary + carryTotal).toFixed(2);
+  const amount = opts.amount != null ? opts.amount : suggestedPayout(grossEarned, advancesTotal);
+
+  const allocations: SalaryAllocation[] = [
+    { month: opts.month, amount: est.estimatedSalary, kind: "current" },
+    ...carryover.map((c) => ({ month: c.month, amount: c.amount, kind: "carryover" as const })),
+  ];
+
   const last = await lastPayout(teacherId);
   return createPayoutAndSettle({
     teacherId,
     month: opts.month,
-    grossEarned: detail.estimatedSalary,
-    advancesDeducted: detail.advancesTotal,
+    grossEarned,
+    advancesDeducted: advancesTotal,
     amount: +amount.toFixed(2),
     method: opts.method,
     paidOn: opts.paidOn,
     note: opts.note,
-    breakdown: detail.students,
+    breakdown: students,
+    allocations,
     periodStart: last?.paidAt ?? null,
     createdBy: opts.createdBy,
   });
@@ -432,12 +506,16 @@ export async function payrollMonthView(month: string = monthKey()) {
   const allTeachers = await db.select().from(teachers);
   const perTeacher = await Promise.all(
     allTeachers.map(async (t) => {
-      const [est, paid, open] = await Promise.all([
+      const [est, paid, open, state] = await Promise.all([
         estimateSalary(t.id, month),
         getPayoutForMonth(t.id, month),
         openAdvances(t.id),
+        payoutState(t.id),
       ]);
       const advancesTotal = open.reduce((s, a) => s + Number(a.amount), 0);
+      const carryover = await computeCarryovers(t.id, month, state);
+      const carryTotal = carryover.reduce((s, c) => s + c.amount, 0);
+      const grossPayable = +(est.estimatedSalary + carryTotal).toFixed(2);
       return {
         teacherId: t.id,
         salaryModel: est.salaryModel,
@@ -446,13 +524,15 @@ export async function payrollMonthView(month: string = monthKey()) {
         collectedTotal: est.collectedTotal,
         paidStudents: est.paidStudents,
         advancesTotal: +advancesTotal.toFixed(2),
-        netOwed: suggestedPayout(est.estimatedSalary, advancesTotal),
+        carryoverTotal: carryTotal,
+        netOwed: suggestedPayout(grossPayable, advancesTotal),
         paid: !!paid,
         paidAmount: paid ? Number(paid.amount) : null,
       };
     }),
   );
-  // Outstanding = unpaid months only.
+  // Outstanding = unpaid months only (paid months' late remainders roll into the
+  // next month, so they're counted there, not here).
   const total = perTeacher.reduce((s, p) => s + (p.paid ? 0 : p.netOwed), 0);
   return { month, total: +total.toFixed(2), perTeacher };
 }

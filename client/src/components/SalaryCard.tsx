@@ -69,7 +69,11 @@ export function SalaryCard({
                   <span className="figure font-semibold">
                     {money(r.paid ? (r.paidAmount ?? 0) : r.estimatedSalary)}
                   </span>
-                  {r.paid ? (
+                  {r.paid && r.remaining > 0.5 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                      +{money(r.remaining)}
+                    </span>
+                  ) : r.paid ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-status-paid/15 px-2 py-0.5 text-[11px] font-semibold text-status-paid">
                       <Check size={11} /> {t("salaryPaid")}
                     </span>
@@ -115,7 +119,8 @@ function MonthDetail({
 
   if (detail.isLoading || !detail.data) return <Spinner />;
   const s = detail.data;
-  const net = Math.max(0, s.estimatedSalary - s.advancesTotal);
+  // What you'd pay now = this month's earned + earlier late remainders − advances.
+  const net = Math.max(0, s.grossPayable - s.advancesTotal);
   // Once paid, the justification is the stored snapshot; otherwise it's live.
   const students = s.paid ? s.paid.students : s.students;
 
@@ -133,18 +138,38 @@ function MonthDetail({
       </div>
 
       <div className="rounded-btn border border-border bg-bg p-3 text-sm">
-        <Row label={t("earned")} value={money(s.paid ? s.paid.grossEarned : s.estimatedSalary)} />
-        {(s.paid ? s.paid.advancesDeducted : s.advancesTotal) > 0 && (
-          <Row
-            label={t("advancesDeducted")}
-            value={`−${money(s.paid ? s.paid.advancesDeducted : s.advancesTotal)}`}
-          />
-        )}
-        <div className="mt-1 border-t border-border pt-1">
-          <Row label={s.paid ? t("salaryPaid") : t("netOwed")} value={money(s.paid ? s.paid.amount : net)} bold />
-        </div>
-        {s.paid && (
-          <div className="mt-1 text-xs text-muted">{formatDate(s.paid.paidOn, locale)}</div>
+        {s.paid ? (
+          <>
+            <Row label={t("earned")} value={money(s.paid.grossEarned)} />
+            {s.paid.advancesDeducted > 0 && (
+              <Row label={t("advancesDeducted")} value={`−${money(s.paid.advancesDeducted)}`} />
+            )}
+            <div className="mt-1 border-t border-border pt-1">
+              <Row label={t("salaryPaid")} value={money(s.paid.amount)} bold />
+            </div>
+            <div className="mt-1 text-xs text-muted">{formatDate(s.paid.paidOn, locale)}</div>
+            {s.remaining > 0.5 && (
+              <div className="mt-2 rounded-lg bg-warning/10 px-2 py-1 text-xs font-medium text-warning">
+                {t("owedRemaining")}: {money(s.remaining)} · {t("rollsNext")}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <Row label={t("earned")} value={money(s.estimatedSalary)} />
+            {s.carryover.map((c) => (
+              <Row key={c.month} label={`${t("carriedFrom")} ${c.label}`} value={`+${money(c.amount)}`} />
+            ))}
+            {s.advancesTotal > 0 && (
+              <Row label={t("advancesDeducted")} value={`−${money(s.advancesTotal)}`} />
+            )}
+            <div className="mt-1 border-t border-border pt-1">
+              <Row label={t("netOwed")} value={money(net)} bold />
+            </div>
+            {s.carryover.length > 0 && (
+              <div className="mt-1 text-xs text-tg-hint">{t("includesCarryover")}</div>
+            )}
+          </>
         )}
       </div>
 
@@ -256,7 +281,10 @@ function PayMonthModal({
     <Modal open onClose={onClose} title={`${t("payThisMonth")} — ${detail.monthLabel}`}>
       <div className="space-y-3">
         <div className="rounded-btn border border-border bg-bg p-3 text-sm">
-          <Row label={t("earned")} value={money(detail.estimatedSalary)} />
+          <Row label={`${t("earned")} · ${detail.monthLabel}`} value={money(detail.estimatedSalary)} />
+          {detail.carryover.map((c) => (
+            <Row key={c.month} label={`${t("carriedFrom")} ${c.label}`} value={`+${money(c.amount)}`} />
+          ))}
           {detail.advancesTotal > 0 && (
             <Row label={t("advancesDeducted")} value={`−${money(detail.advancesTotal)}`} />
           )}

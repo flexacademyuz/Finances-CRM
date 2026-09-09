@@ -140,6 +140,7 @@ export type PayrollData = {
     paidStudents: number;
     earned: number;
     advancesTotal: number;
+    carryoverTotal: number;
     netOwed: number;
     paid: boolean;
     paidAmount: number | null;
@@ -175,6 +176,10 @@ export type MonthlySalary = {
     teacherShare: number;
   }[];
   students: PayoutStudent[];
+  paidAmount: number;
+  remaining: number;
+  carryover: { month: string; label: string; amount: number }[];
+  grossPayable: number;
   advancesTotal: number;
   paid: null | {
     id: string;
@@ -196,7 +201,7 @@ export type SalaryMonthRow = {
   paidStudents: number;
   paid: boolean;
   paidAmount: number | null;
-  paidOn: string | null;
+  remaining: number;
 };
 
 /** A teacher's live salary cycle (earned since last payout − open advances). */
@@ -238,6 +243,7 @@ export type PayoutRow = {
   teacherId: string;
   month: string | null;
   breakdown: PayoutStudent[] | null;
+  allocations: { month: string; amount: number; kind: "current" | "carryover" }[] | null;
   grossEarned: string;
   advancesDeducted: string;
   amount: string;

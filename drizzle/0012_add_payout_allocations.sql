@@ -1,0 +1,1 @@
+ALTER TABLE "salary_payouts" ADD COLUMN "allocations" jsonb;

@@ -23,6 +23,7 @@ import {
   type LeadStatus,
   type Shift,
   type PayoutStudent,
+  type SalaryAllocation,
 } from "@shared/schema";
 import { monthKey, shiftMonth, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus } from "@shared/billing";
@@ -1055,6 +1056,7 @@ export async function createPayoutAndSettle(input: {
   paidOn: string;
   note: string | null;
   breakdown: PayoutStudent[];
+  allocations: SalaryAllocation[];
   periodStart: Date | null;
   createdBy: string;
 }) {
@@ -1071,6 +1073,7 @@ export async function createPayoutAndSettle(input: {
         paidOn: input.paidOn,
         note: input.note,
         breakdown: input.breakdown,
+        allocations: input.allocations,
         periodStart: input.periodStart,
         createdBy: input.createdBy,
       })
