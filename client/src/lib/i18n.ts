@@ -259,9 +259,20 @@ const dict = {
     en: "Assigning a teacher turns this draft into a real class and enrolls its students from the start date.",
     uz: "O'qituvchi biriktirilsa, qoralama haqiqiy sinfga aylanadi va o'quvchilar boshlanish sanasidan ro'yxatga olinadi.",
   },
-  noDrafts: { en: "No draft classes", uz: "Qoralama sinflar yo'q" },
+  noDrafts: { en: "No draft classes yet", uz: "Hozircha qoralama sinflar yo'q" },
   studentsCount: { en: "students", uz: "o'quvchi" },
   deleteDraft: { en: "Delete draft", uz: "Qoralamani o'chirish" },
+  addDraftClass: { en: "New draft class", uz: "Yangi qoralama sinf" },
+  sort: { en: "Sort", uz: "Saralash" },
+  sortInto: { en: "Sort into a class", uz: "Sinfga saralash" },
+  notSorted: { en: "Not sorted yet", uz: "Hali saralanmagan" },
+  className: { en: "Class name", uz: "Sinf nomi" },
+  studentsTab: { en: "Students", uz: "O'quvchilar" },
+  createDraftNote: {
+    en: "A draft class holds students until you assign a teacher. Then it becomes a real class.",
+    uz: "Qoralama sinf o'qituvchi biriktirilgunicha o'quvchilarni saqlaydi. Keyin haqiqiy sinfga aylanadi.",
+  },
+  emptyDraft: { en: "No students sorted here yet", uz: "Bu yerga hali o'quvchi saralanmagan" },
 } as const;
 
 export type StringKey = keyof typeof dict;

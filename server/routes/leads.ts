@@ -209,6 +209,7 @@ router.post(
     const input = assignTeacherSchema.parse(req.body);
     const result = await assignTeacherToDraft(req.params.id, {
       teacherId: input.teacherId,
+      name: input.name ?? null,
       defaultFee: input.defaultFee ?? null,
       startDate: input.startDate ?? new Date().toISOString().slice(0, 10),
     });

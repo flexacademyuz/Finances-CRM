@@ -574,7 +574,7 @@ export async function deleteDraftClass(id: string): Promise<void> {
  */
 export async function assignTeacherToDraft(
   draftId: string,
-  opts: { teacherId: string; defaultFee?: number | null; startDate: string },
+  opts: { teacherId: string; name?: string | null; defaultFee?: number | null; startDate: string },
 ) {
   return db.transaction(async (tx) => {
     const [draft] = await tx.select().from(draftClasses).where(eq(draftClasses.id, draftId));
@@ -584,7 +584,7 @@ export async function assignTeacherToDraft(
     const [cls] = await tx
       .insert(classes)
       .values({
-        name: draft.name,
+        name: opts.name?.trim() || draft.name,
         subject: draft.subject,
         teacherId: opts.teacherId,
         defaultFee: fee,

@@ -610,6 +610,8 @@ export const insertDraftClassSchema = z.object({
 /** Assign a teacher to a draft class → materialise it into a real class. */
 export const assignTeacherSchema = z.object({
   teacherId: z.string().uuid(),
+  // Optionally give the real class a different name than the draft.
+  name: z.string().min(1).optional(),
   defaultFee: z.coerce.number().nonnegative().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });

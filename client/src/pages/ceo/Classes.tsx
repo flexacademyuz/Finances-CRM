@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Folder, ChevronRight, UserPlus, Trash2, FileEdit } from "lucide-react";
+import { Plus, Pencil, Folder, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
 import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
-import type { Class, TeacherRow, DraftClassRow } from "../../lib/types";
+import type { Class, TeacherRow } from "../../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../../components/ui";
 
 /**
@@ -19,23 +19,12 @@ export function ClassesPage() {
   const { user } = useSession();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Class | null | "new">(null);
-  const [assigning, setAssigning] = useState<DraftClassRow | null>(null);
   const canAdd = can(user, "add_group");
   const canEdit = can(user, "edit_group");
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
   const teachers = useQuery({ queryKey: ["teachers"], queryFn: () => api<TeacherRow[]>("/api/teachers") });
-  const drafts = useQuery({
-    queryKey: ["draft-classes"],
-    queryFn: () => api<DraftClassRow[]>("/api/draft-classes"),
-    enabled: canAdd,
-  });
   const teacherName = (id: string) => teachers.data?.find((x) => x.id === id)?.fullName ?? "—";
-
-  const del = useMutation({
-    mutationFn: (id: string) => api(`/api/draft-classes/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["draft-classes"] }),
-  });
 
   return (
     <div className="space-y-4">
@@ -47,37 +36,6 @@ export function ClassesPage() {
           </Button>
         )}
       </div>
-
-      {/* Draft classes — teacherless buckets awaiting a teacher assignment. */}
-      {canAdd && drafts.data && drafts.data.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-muted">
-            <FileEdit size={16} /> {t("draftClasses")}
-          </div>
-          {drafts.data.map((d) => (
-            <Card key={d.id} className="flex items-center justify-between gap-2 border-dashed">
-              <div className="min-w-0">
-                <div className="truncate font-semibold">{d.name}</div>
-                <div className="truncate text-xs text-tg-hint">
-                  {d.subject ? `${d.subject} · ` : ""}{d.studentCount} {t("studentsCount")}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button variant="ghost" onClick={() => setAssigning(d)}>
-                  <UserPlus size={15} /> {t("assignTeacher")}
-                </Button>
-                <button
-                  className="p-1 text-status-overdue"
-                  aria-label={t("deleteDraft")}
-                  onClick={() => del.mutate(d.id)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
 
       {classes.isLoading ? (
         <Spinner />
@@ -122,76 +80,7 @@ export function ClassesPage() {
           onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["classes"] }); }}
         />
       )}
-      {assigning && (
-        <AssignTeacherModal
-          draft={assigning}
-          teachers={teachers.data ?? []}
-          onClose={() => setAssigning(null)}
-          onSaved={() => {
-            setAssigning(null);
-            qc.invalidateQueries({ queryKey: ["classes"] });
-            qc.invalidateQueries({ queryKey: ["draft-classes"] });
-          }}
-        />
-      )}
     </div>
-  );
-}
-
-/** Assign a teacher to a draft class → it becomes a real class with its roster. */
-function AssignTeacherModal({
-  draft,
-  teachers,
-  onClose,
-  onSaved,
-}: {
-  draft: DraftClassRow;
-  teachers: TeacherRow[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { t } = useI18n();
-  const [teacherId, setTeacherId] = useState("");
-  const [defaultFee, setDefaultFee] = useState(draft.defaultFee && Number(draft.defaultFee) > 0 ? String(draft.defaultFee) : "");
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-
-  const assign = useMutation({
-    mutationFn: () =>
-      api(`/api/draft-classes/${draft.id}/assign-teacher`, {
-        method: "POST",
-        body: { teacherId, defaultFee: defaultFee ? Number(defaultFee) : undefined, startDate },
-      }),
-    onSuccess: onSaved,
-  });
-
-  return (
-    <Modal open onClose={onClose} title={`${t("assignTeacher")} — ${draft.name}`}>
-      <div className="space-y-3">
-        <div className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("assignTeacherNote")}</div>
-        <Field label={t("teacher")}>
-          <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-            <option value="">—</option>
-            {teachers.map((x) => (
-              <option key={x.id} value={x.id}>{x.fullName}</option>
-            ))}
-          </Select>
-        </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label={t("fee")}>
-            <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} placeholder="0" />
-          </Field>
-          <Field label={t("startDate")}>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </Field>
-        </div>
-        {assign.isError && (
-          <div className="text-sm text-status-overdue">{(assign.error as Error).message}</div>
-        )}
-        <Button className="w-full" disabled={!teacherId || assign.isPending} onClick={() => assign.mutate()}>
-          {t("assignTeacher")}
-        </Button>
-      </div>
-    </Modal>
   );
 }
 

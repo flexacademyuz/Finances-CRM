@@ -1,37 +1,61 @@
 import { useEffect, useState } from "react";
 import { useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Check, X, ArrowLeftRight, Phone, GraduationCap, Clock, BookOpen } from "lucide-react";
+import {
+  Plus,
+  Check,
+  X,
+  ArrowLeftRight,
+  Phone,
+  GraduationCap,
+  Clock,
+  BookOpen,
+  UserPlus,
+  Trash2,
+  FolderPlus,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { can } from "@shared/permissions";
-import type { LeadRow, Class, DraftClassRow } from "../lib/types";
+import { money } from "../lib/format";
+import type { LeadRow, Class, DraftClassRow, TeacherRow } from "../lib/types";
 
 import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../components/ui";
 
 type LeadStatus = "pending" | "approved" | "rejected";
 const TABS: LeadStatus[] = ["pending", "approved", "rejected"];
+type View = "students" | "drafts";
 
-/** New-student intake pipeline (feature #4): register, approve, swap, reject. */
+/**
+ * New-student intake pipeline (feature #4). Two views:
+ *  - Students: the lead list (pending / approved / rejected) with approve /
+ *    sort / reject actions.
+ *  - Draft classes: create teacherless "pre-classes", sort students into them,
+ *    then assign a teacher (optionally under a new name) to make them real.
+ */
 export function LeadsPage() {
   const { t } = useI18n();
   const { user } = useSession();
   const qc = useQueryClient();
   const search = useSearch();
+  const [view, setView] = useState<View>("students");
   const [tab, setTab] = useState<LeadStatus>("pending");
   const [registering, setRegistering] = useState(false);
+  const [newDraft, setNewDraft] = useState(false);
+  const [approving, setApproving] = useState<LeadRow | null>(null);
+  const [sorting, setSorting] = useState<LeadRow | null>(null);
+  const [rejecting, setRejecting] = useState<LeadRow | null>(null);
+  const [assigning, setAssigning] = useState<DraftClassRow | null>(null);
+
+  const canRegister = can(user, "add_student");
+  const canDecide = can(user, "approve_leads");
+  const canAssign = can(user, "add_group");
 
   // Opened from the bottom "+" quick action (/leads?register=1).
   useEffect(() => {
     if (new URLSearchParams(search).get("register") === "1") setRegistering(true);
   }, [search]);
-  const [approving, setApproving] = useState<LeadRow | null>(null);
-  const [swapping, setSwapping] = useState<LeadRow | null>(null);
-  const [rejecting, setRejecting] = useState<LeadRow | null>(null);
-
-  const canRegister = can(user, "add_student");
-  const canDecide = can(user, "approve_leads");
 
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
   const drafts = useQuery({
@@ -39,15 +63,34 @@ export function LeadsPage() {
     queryFn: () => api<DraftClassRow[]>("/api/draft-classes"),
     enabled: canRegister,
   });
+  const teachers = useQuery({
+    queryKey: ["teachers"],
+    queryFn: () => api<TeacherRow[]>("/api/teachers"),
+    enabled: canAssign,
+  });
   const leads = useQuery({
     queryKey: ["leads", tab],
     queryFn: () => api<LeadRow[]>("/api/leads", { query: { status: tab } }),
+    enabled: view === "students",
+  });
+  const pending = useQuery({
+    queryKey: ["leads", "pending"],
+    queryFn: () => api<LeadRow[]>("/api/leads", { query: { status: "pending" } }),
+    enabled: view === "drafts",
   });
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["leads"] });
     qc.invalidateQueries({ queryKey: ["draft-classes"] });
+    qc.invalidateQueries({ queryKey: ["classes"] });
   };
+
+  const del = useMutation({
+    mutationFn: (id: string) => api(`/api/draft-classes/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["draft-classes"] }),
+  });
+
+  const unsorted = (pending.data ?? []).filter((l) => !l.classId && !l.draftClassId);
 
   return (
     <div className="space-y-3">
@@ -60,77 +103,160 @@ export function LeadsPage() {
         )}
       </div>
 
-      {/* Status tabs */}
+      {/* View switch: the lead list vs. draft-class sorting. */}
       <div className="flex gap-1 rounded-full bg-bg p-1 ring-1 ring-border">
-        {TABS.map((s) => (
+        {(["students", "drafts"] as View[]).map((v) => (
           <button
-            key={s}
-            onClick={() => setTab(s)}
+            key={v}
+            onClick={() => setView(v)}
             className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium transition ${
-              tab === s ? "bg-primary text-white" : "text-muted hover:text-text"
+              view === v ? "bg-primary text-white" : "text-muted hover:text-text"
             }`}
           >
-            {t(s)}
+            {v === "students" ? t("studentsTab") : t("draftClasses")}
           </button>
         ))}
       </div>
 
-      {leads.isLoading ? (
-        <Spinner />
-      ) : leads.data && leads.data.length > 0 ? (
-        <div className="space-y-2">
-          {leads.data.map((l) => (
-            <Card key={l.id} className="space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate font-semibold">{l.fullName}</div>
-                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-tg-hint">
-                    {l.phone && (
-                      <span className="inline-flex items-center gap-1"><Phone size={12} /> {l.phone}</span>
-                    )}
-                    {l.subject && (
-                      <span className="inline-flex items-center gap-1"><BookOpen size={12} /> {l.subject}</span>
-                    )}
-                    {l.gradeAtSchool && (
-                      <span className="inline-flex items-center gap-1"><GraduationCap size={12} /> {l.gradeAtSchool}</span>
-                    )}
-                    {l.level && <span>{l.level}</span>}
-                    <span className="inline-flex items-center gap-1"><Clock size={12} /> {t(l.shift)}</span>
-                  </div>
-                  <div className="mt-1 text-xs">
-                    <span className="text-tg-hint">{t("targetGroup")}: </span>
-                    {l.className ? (
-                      <span className="font-medium">{l.className}</span>
-                    ) : l.draftClassName ? (
-                      <span className="font-medium">{l.draftClassName} · {t("draftClass")}</span>
-                    ) : (
-                      <span className="text-muted">{t("unassignedGroup")}</span>
-                    )}
-                  </div>
-                  {l.decisionNote && (
-                    <div className="mt-1 text-xs italic text-tg-hint">“{l.decisionNote}”</div>
-                  )}
-                </div>
-              </div>
+      {view === "students" ? (
+        <>
+          {/* Status tabs */}
+          <div className="flex gap-1 rounded-full bg-bg p-1 ring-1 ring-border">
+            {TABS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setTab(s)}
+                className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                  tab === s ? "bg-primary text-white" : "text-muted hover:text-text"
+                }`}
+              >
+                {t(s)}
+              </button>
+            ))}
+          </div>
 
-              {l.status === "pending" && canDecide && (
-                <div className="flex flex-wrap gap-2 border-t border-border pt-2">
-                  <Button variant="ghost" onClick={() => setApproving(l)}>
-                    <Check size={15} /> {t("approveLead")}
-                  </Button>
-                  <Button variant="ghost" onClick={() => setSwapping(l)}>
-                    <ArrowLeftRight size={15} /> {t("swapGroup")}
-                  </Button>
-                  <Button variant="ghost" onClick={() => setRejecting(l)}>
-                    <X size={15} /> {t("rejectLead")}
-                  </Button>
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
+          {leads.isLoading ? (
+            <Spinner />
+          ) : leads.data && leads.data.length > 0 ? (
+            <div className="space-y-2">
+              {leads.data.map((l) => (
+                <LeadCard key={l.id} lead={l}>
+                  {l.status === "pending" && (
+                    <div className="flex flex-wrap gap-2 border-t border-border pt-2">
+                      {canDecide && (
+                        <Button variant="ghost" onClick={() => setApproving(l)}>
+                          <Check size={15} /> {t("approveLead")}
+                        </Button>
+                      )}
+                      {canRegister && (
+                        <Button variant="ghost" onClick={() => setSorting(l)}>
+                          <ArrowLeftRight size={15} /> {t("sort")}
+                        </Button>
+                      )}
+                      {canDecide && (
+                        <Button variant="ghost" onClick={() => setRejecting(l)}>
+                          <X size={15} /> {t("rejectLead")}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </LeadCard>
+              ))}
+            </div>
+          ) : (
+            <Empty>{t("noLeads")}</Empty>
+          )}
+        </>
       ) : (
-        <Empty>{t("noLeads")}</Empty>
+        /* ── Draft classes view ── */
+        <div className="space-y-3">
+          {canRegister && (
+            <Button variant="ghost" className="w-full" onClick={() => setNewDraft(true)}>
+              <FolderPlus size={16} /> {t("addDraftClass")}
+            </Button>
+          )}
+
+          {pending.isLoading || drafts.isLoading ? (
+            <Spinner />
+          ) : (
+            <>
+              {(drafts.data ?? []).map((d) => {
+                const roster = (pending.data ?? []).filter((l) => l.draftClassId === d.id);
+                return (
+                  <Card key={d.id} className="space-y-2 border-dashed">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">{d.name}</div>
+                        <div className="text-xs text-tg-hint">
+                          {d.subject ? `${d.subject} · ` : ""}
+                          {roster.length} {t("studentsCount")}
+                          {Number(d.defaultFee) > 0 ? ` · ${money(d.defaultFee)}` : ""}
+                        </div>
+                      </div>
+                      <button
+                        className="shrink-0 p-1 text-status-overdue"
+                        aria-label={t("deleteDraft")}
+                        onClick={() => del.mutate(d.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+
+                    {roster.length > 0 ? (
+                      <div className="divide-y divide-border rounded-lg bg-bg">
+                        {roster.map((l) => (
+                          <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                            <span className="min-w-0 truncate">
+                              {l.fullName}
+                              {l.subject ? <span className="text-tg-hint"> · {l.subject}</span> : ""}
+                            </span>
+                            {canRegister && (
+                              <button className="shrink-0 text-xs text-tg-link" onClick={() => setSorting(l)}>
+                                {t("sort")}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-bg px-3 py-2 text-xs text-tg-hint">{t("emptyDraft")}</div>
+                    )}
+
+                    {canAssign && (
+                      <Button className="w-full" disabled={roster.length === 0} onClick={() => setAssigning(d)}>
+                        <UserPlus size={15} /> {t("assignTeacher")}
+                      </Button>
+                    )}
+                  </Card>
+                );
+              })}
+
+              {(drafts.data ?? []).length === 0 && <Empty>{t("noDrafts")}</Empty>}
+
+              {/* Students registered but not yet sorted into any class. */}
+              {unsorted.length > 0 && (
+                <Card className="space-y-2">
+                  <div className="text-sm font-semibold text-muted">{t("notSorted")}</div>
+                  <div className="divide-y divide-border rounded-lg bg-bg">
+                    {unsorted.map((l) => (
+                      <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="min-w-0 truncate">
+                          {l.fullName}
+                          {l.subject ? <span className="text-tg-hint"> · {l.subject}</span> : ""}
+                        </span>
+                        {canRegister && (
+                          <button className="shrink-0 text-xs text-tg-link" onClick={() => setSorting(l)}>
+                            {t("sortInto")}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       {registering && (
@@ -141,6 +267,9 @@ export function LeadsPage() {
           onSaved={() => { setRegistering(false); refresh(); }}
         />
       )}
+      {newDraft && (
+        <NewDraftModal onClose={() => setNewDraft(false)} onSaved={() => { setNewDraft(false); refresh(); }} />
+      )}
       {approving && (
         <ApproveLeadModal
           lead={approving}
@@ -149,12 +278,13 @@ export function LeadsPage() {
           onSaved={() => { setApproving(null); refresh(); }}
         />
       )}
-      {swapping && (
-        <SwapGroupModal
-          lead={swapping}
+      {sorting && (
+        <SortModal
+          lead={sorting}
           classes={classes.data ?? []}
-          onClose={() => setSwapping(null)}
-          onSaved={() => { setSwapping(null); refresh(); }}
+          drafts={drafts.data ?? []}
+          onClose={() => setSorting(null)}
+          onSaved={() => { setSorting(null); refresh(); }}
         />
       )}
       {rejecting && (
@@ -164,7 +294,48 @@ export function LeadsPage() {
           onSaved={() => { setRejecting(null); refresh(); }}
         />
       )}
+      {assigning && (
+        <AssignDraftModal
+          draft={assigning}
+          teachers={teachers.data ?? []}
+          onClose={() => setAssigning(null)}
+          onSaved={() => { setAssigning(null); refresh(); }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Shared lead summary card (details + optional action row as children). */
+function LeadCard({ lead: l, children }: { lead: LeadRow; children?: React.ReactNode }) {
+  const { t } = useI18n();
+  return (
+    <Card className="space-y-2">
+      <div className="min-w-0">
+        <div className="truncate font-semibold">{l.fullName}</div>
+        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-tg-hint">
+          {l.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {l.phone}</span>}
+          {l.subject && <span className="inline-flex items-center gap-1"><BookOpen size={12} /> {l.subject}</span>}
+          {l.gradeAtSchool && (
+            <span className="inline-flex items-center gap-1"><GraduationCap size={12} /> {l.gradeAtSchool}</span>
+          )}
+          {l.level && <span>{l.level}</span>}
+          <span className="inline-flex items-center gap-1"><Clock size={12} /> {t(l.shift)}</span>
+        </div>
+        <div className="mt-1 text-xs">
+          <span className="text-tg-hint">{t("targetGroup")}: </span>
+          {l.className ? (
+            <span className="font-medium">{l.className}</span>
+          ) : l.draftClassName ? (
+            <span className="font-medium">{l.draftClassName} · {t("draftClass")}</span>
+          ) : (
+            <span className="text-muted">{t("unassignedGroup")}</span>
+          )}
+        </div>
+        {l.decisionNote && <div className="mt-1 text-xs italic text-tg-hint">“{l.decisionNote}”</div>}
+      </div>
+      {children}
+    </Card>
   );
 }
 
@@ -195,7 +366,6 @@ function RegisterLeadModal({
       let classId: string | null = null;
       let draftClassId: string | null = null;
       if (placement === "__new__") {
-        // Create the draft class first, then place the student into it.
         const draft = await api<{ id: string }>("/api/draft-classes", {
           method: "POST",
           body: { name: newClassName, subject: subject || undefined },
@@ -293,6 +463,48 @@ function RegisterLeadModal({
   );
 }
 
+/** Create a new draft (teacherless) class to sort students into. */
+function NewDraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n();
+  const [name, setName] = useState("");
+  const [subject, setSubject] = useState("");
+  const [defaultFee, setDefaultFee] = useState("");
+
+  const create = useMutation({
+    mutationFn: () =>
+      api("/api/draft-classes", {
+        method: "POST",
+        body: { name, subject: subject || undefined, defaultFee: defaultFee ? Number(defaultFee) : undefined },
+      }),
+    onSuccess: onSaved,
+  });
+
+  return (
+    <Modal open onClose={onClose} title={t("addDraftClass")}>
+      <div className="space-y-3">
+        <div className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("createDraftNote")}</div>
+        <Field label={t("className")}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t("subject")}>
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </Field>
+          <Field label={t("fee")}>
+            <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} placeholder="0" />
+          </Field>
+        </div>
+        {create.isError && (
+          <div className="text-sm text-status-overdue">{(create.error as Error).message}</div>
+        )}
+        <Button className="w-full" disabled={!name || create.isPending} onClick={() => create.mutate()}>
+          {t("save")}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 function ApproveLeadModal({
   lead,
   classes,
@@ -343,36 +555,55 @@ function ApproveLeadModal({
   );
 }
 
-/** Reassign a still-pending lead to a different group without approving yet. */
-function SwapGroupModal({
+/** Sort a pending lead into a draft class or an existing group (or unassign). */
+function SortModal({
   lead,
   classes,
+  drafts,
   onClose,
   onSaved,
 }: {
   lead: LeadRow;
   classes: Class[];
+  drafts: DraftClassRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const [classId, setClassId] = useState(lead.classId ?? "");
+  const initial = lead.classId ? `group:${lead.classId}` : lead.draftClassId ? `draft:${lead.draftClassId}` : "";
+  const [placement, setPlacement] = useState(initial);
 
   const save = useMutation({
-    mutationFn: () =>
-      api(`/api/leads/${lead.id}`, { method: "PATCH", body: { classId: classId || null } }),
+    mutationFn: () => {
+      let classId: string | null = null;
+      let draftClassId: string | null = null;
+      if (placement.startsWith("group:")) classId = placement.slice(6);
+      else if (placement.startsWith("draft:")) draftClassId = placement.slice(6);
+      return api(`/api/leads/${lead.id}`, { method: "PATCH", body: { classId, draftClassId } });
+    },
     onSuccess: onSaved,
   });
 
   return (
-    <Modal open onClose={onClose} title={`${t("swapGroup")} — ${lead.fullName}`}>
+    <Modal open onClose={onClose} title={`${t("sortInto")} — ${lead.fullName}`}>
       <div className="space-y-3">
-        <Field label={t("targetGroup")}>
-          <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+        <Field label={t("placement")}>
+          <Select value={placement} onChange={(e) => setPlacement(e.target.value)}>
             <option value="">{t("unassignedGroup")}</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            {classes.length > 0 && (
+              <optgroup label={t("groups")}>
+                {classes.map((c) => (
+                  <option key={c.id} value={`group:${c.id}`}>{c.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {drafts.length > 0 && (
+              <optgroup label={t("draftClasses")}>
+                {drafts.map((d) => (
+                  <option key={d.id} value={`draft:${d.id}`}>{d.name}</option>
+                ))}
+              </optgroup>
+            )}
           </Select>
         </Field>
         {save.isError && (
@@ -380,6 +611,72 @@ function SwapGroupModal({
         )}
         <Button className="w-full" disabled={save.isPending} onClick={() => save.mutate()}>
           {t("save")}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Assign a teacher to a draft class (optionally renaming it) → real class. */
+function AssignDraftModal({
+  draft,
+  teachers,
+  onClose,
+  onSaved,
+}: {
+  draft: DraftClassRow;
+  teachers: TeacherRow[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const [teacherId, setTeacherId] = useState("");
+  const [name, setName] = useState(draft.name);
+  const [defaultFee, setDefaultFee] = useState(Number(draft.defaultFee) > 0 ? String(draft.defaultFee) : "");
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const assign = useMutation({
+    mutationFn: () =>
+      api(`/api/draft-classes/${draft.id}/assign-teacher`, {
+        method: "POST",
+        body: {
+          teacherId,
+          name: name.trim() || undefined,
+          defaultFee: defaultFee ? Number(defaultFee) : undefined,
+          startDate,
+        },
+      }),
+    onSuccess: onSaved,
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("assignTeacher")} — ${draft.name}`}>
+      <div className="space-y-3">
+        <div className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("assignTeacherNote")}</div>
+        <Field label={t("className")}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label={t("teacher")}>
+          <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
+            <option value="">—</option>
+            {teachers.map((x) => (
+              <option key={x.id} value={x.id}>{x.fullName}</option>
+            ))}
+          </Select>
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t("fee")}>
+            <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} placeholder="0" />
+          </Field>
+          <Field label={t("startDate")}>
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </Field>
+        </div>
+        {assign.isError && (
+          <div className="text-sm text-status-overdue">{(assign.error as Error).message}</div>
+        )}
+        <Button className="w-full" disabled={!teacherId || !name.trim() || assign.isPending} onClick={() => assign.mutate()}>
+          {t("assignTeacher")}
         </Button>
       </div>
     </Modal>
