@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { Check, Search } from "lucide-react";
+import { Check, Search, ChevronRight } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
@@ -8,7 +8,7 @@ import { haptic } from "../../lib/telegram";
 import { money } from "../../lib/format";
 import type { TeacherRow, Class, StudentRow, PaymentPreview } from "../../lib/types";
 import type { PaymentMethod } from "@shared/schema";
-import { Button, Card, Field, Input, Modal, Spinner } from "../../components/ui";
+import { Button, Card, Field, Input, Modal, Spinner, StatusBadge } from "../../components/ui";
 
 /**
  * Accountant "Record Payment" flow (spec §3.2):
@@ -31,6 +31,7 @@ export function RecordPayment() {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  const [studentSearch, setStudentSearch] = useState(false);
 
   const teachers = useQuery({
     queryKey: ["teachers"],
@@ -55,6 +56,24 @@ export function RecordPayment() {
     queryFn: () => api<PaymentPreview>(`/api/payments/preview/${student!.id}`),
     enabled: !!student,
   });
+
+  // All active students, for the "search a student directly" shortcut (scoped to
+  // the teacher's own students server-side for the teacher role).
+  const allStudents = useQuery({
+    queryKey: ["all-active-students"],
+    queryFn: () => api<StudentRow[]>("/api/students", { query: { activeOnly: "1" } }),
+    enabled: studentSearch,
+  });
+
+  /** Jump straight to a student found by name, back-filling teacher/class. */
+  function pickStudentDirect(s: StudentRow) {
+    haptic("light");
+    setTeacherId(s.teacherId);
+    setClassId(s.classId);
+    setStudent(s);
+    setAmount("");
+    setStudentSearch(false);
+  }
 
   // Pre-fill amount from the student's effective fee when it loads.
   useEffect(() => {
@@ -98,15 +117,42 @@ export function RecordPayment() {
   }
 
   const teacherName = teachers.data?.find((x) => x.id === teacherId)?.fullName;
-  const className = classes.data?.find((x) => x.id === classId)?.name;
+  // Prefer the picked student's own class name (set when found via direct search,
+  // before the class list for that teacher has loaded).
+  const className = student?.className ?? classes.data?.find((x) => x.id === classId)?.name;
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">{t("recordPayment")}</h1>
 
-      {/* Step 1: Teacher (accountant/CEO only) */}
+      {/* Shortcut: find any student by name instead of drilling teacher → group. */}
+      {!student && (
+        <>
+          <button
+            onClick={() => setStudentSearch(true)}
+            className="flex w-full items-center gap-3 rounded-card border border-border bg-surface p-4 text-left shadow-card transition hover:border-primary hover:bg-primary-soft active:scale-[0.99]"
+          >
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-white shadow-brand">
+              <Search size={20} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold">{t("searchStudentDirect")}</div>
+              <div className="text-xs text-muted">{t("searchStudentHint")}</div>
+            </div>
+            <ChevronRight size={18} className="shrink-0 text-muted" />
+          </button>
+          <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-muted">
+            <div className="h-px flex-1 bg-border" />
+            {t("orPickManually")}
+            <div className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
+
+      {/* Step 1: Teacher (accountant/CEO only) — shown as avatar cards. */}
       {!isTeacher && (
         <SearchStep
+          cards
           title={`1. ${t("selectTeacher")}`}
           selected={teacherName}
           onClear={() => { setTeacherId(undefined); setClassId(undefined); setStudent(undefined); }}
@@ -206,6 +252,15 @@ export function RecordPayment() {
         </Card>
       )}
 
+      {/* Direct student search */}
+      <StudentSearchModal
+        open={studentSearch}
+        onClose={() => setStudentSearch(false)}
+        loading={allStudents.isLoading}
+        students={allStudents.data ?? []}
+        onPick={pickStudentDirect}
+      />
+
       {/* Confirmation summary before final save */}
       <Modal open={confirming} onClose={() => setConfirming(false)} title={t("confirmPayment")}>
         <div className="space-y-2 text-sm">
@@ -242,7 +297,83 @@ function Row({ label, value }: { label: string; value?: string }) {
   );
 }
 
-/** A collapsible searchable picker for a single step. */
+/** Global student typeahead — find any student by name and jump to the amount
+ *  step, skipping the teacher → group drill-down. */
+function StudentSearchModal({
+  open,
+  onClose,
+  loading,
+  students,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  loading?: boolean;
+  students: StudentRow[];
+  onPick: (s: StudentRow) => void;
+}) {
+  const { t } = useI18n();
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const filtered = query
+    ? students.filter(
+        (s) => s.fullName.toLowerCase().includes(query) || (s.phone ?? "").includes(query),
+      )
+    : students;
+
+  return (
+    <Modal open={open} onClose={onClose} title={t("searchStudentDirect")}>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 rounded-input bg-tg-bg px-3">
+          <Search size={16} className="text-tg-hint" />
+          <input
+            autoFocus
+            className="w-full bg-transparent py-2.5 outline-none"
+            placeholder={t("search")}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        {loading ? (
+          <Spinner />
+        ) : (
+          <div className="max-h-[55vh] space-y-1 overflow-y-auto">
+            {filtered.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => onPick(s)}
+                className="flex w-full items-center gap-3 rounded-input p-2 text-left transition hover:bg-primary-soft"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white shadow-brand">
+                  {initials(s.fullName)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{s.fullName}</div>
+                  <div className="truncate text-xs text-muted">
+                    {s.className}
+                    {s.phone ? ` · ${s.phone}` : ""}
+                  </div>
+                </div>
+                <StatusBadge status={s.status} />
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="py-6 text-center text-sm text-muted">{t("noData")}</div>
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** Two-letter initials for an avatar chip. */
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
+}
+
+/** A collapsible searchable picker for a single step. Pass `cards` to show the
+ *  options as an avatar-card grid (used for the teacher step) instead of a list. */
 function SearchStep({
   title,
   selected,
@@ -250,6 +381,7 @@ function SearchStep({
   items,
   onPick,
   loading,
+  cards,
 }: {
   title: string;
   selected?: string;
@@ -257,6 +389,7 @@ function SearchStep({
   items: { id: string; label: string }[];
   onPick: (id: string) => void;
   loading?: boolean;
+  cards?: boolean;
 }) {
   const { t } = useI18n();
   const [q, setQ] = useState("");
@@ -277,9 +410,9 @@ function SearchStep({
   }
 
   return (
-    <Card className="space-y-2">
+    <Card className="space-y-3">
       <div className="text-sm font-semibold">{title}</div>
-      <div className="flex items-center gap-2 rounded-xl bg-tg-bg px-3">
+      <div className="flex items-center gap-2 rounded-input bg-tg-bg px-3">
         <Search size={16} className="text-tg-hint" />
         <input
           className="w-full bg-transparent py-2.5 outline-none"
@@ -290,6 +423,24 @@ function SearchStep({
       </div>
       {loading ? (
         <Spinner />
+      ) : cards ? (
+        <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+          {filtered.map((i) => (
+            <button
+              key={i.id}
+              onClick={() => { haptic("light"); onPick(i.id); }}
+              className="flex items-center gap-2.5 rounded-input border border-border bg-surface p-2.5 text-left transition hover:border-primary hover:bg-primary-soft"
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white shadow-brand">
+                {initials(i.label)}
+              </span>
+              <span className="min-w-0 text-sm font-medium leading-tight line-clamp-2">{i.label}</span>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <div className="col-span-full py-4 text-center text-sm text-tg-hint">—</div>
+          )}
+        </div>
       ) : (
         <div className="max-h-56 overflow-y-auto">
           {filtered.map((i) => (

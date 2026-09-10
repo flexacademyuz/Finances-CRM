@@ -67,6 +67,9 @@ const dict = {
   selectTeacher: { en: "Select a teacher", uz: "O'qituvchini tanlang" },
   selectClass: { en: "Select a class", uz: "Guruhni tanlang" },
   selectStudent: { en: "Select a student", uz: "O'quvchini tanlang" },
+  searchStudentDirect: { en: "Search a student directly", uz: "O'quvchini to'g'ridan-to'g'ri qidiring" },
+  searchStudentHint: { en: "Skip the teacher & group — find any student by name.", uz: "O'qituvchi va guruhni o'tkazib yuboring — istalgan o'quvchini ism bo'yicha toping." },
+  orPickManually: { en: "or pick step by step", uz: "yoki bosqichma-bosqich tanlang" },
   confirmPayment: { en: "Confirm payment", uz: "To'lovni tasdiqlang" },
   paymentRecorded: { en: "Payment recorded", uz: "To'lov qabul qilindi" },
   notRegistered: {
