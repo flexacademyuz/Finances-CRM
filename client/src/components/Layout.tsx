@@ -172,8 +172,10 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
           </div>
         </header>
 
-        {/* Extra bottom padding on mobile so the tab bar never covers content. */}
-        <main className="mx-auto max-w-[1280px] px-4 pb-28 pt-4 md:px-6 md:pb-16">{children}</main>
+        {/* Extra bottom padding on mobile so the tab bar never covers content.
+            A tighter max width keeps the content column contained and glamorous
+            on large monitors instead of stretching cards edge-to-edge. */}
+        <main className="mx-auto max-w-[1080px] px-4 pb-28 pt-4 md:px-6 md:pb-16">{children}</main>
       </div>
 
       {/* Mobile bottom tab bar — quick access alongside the sidebar drawer. */}

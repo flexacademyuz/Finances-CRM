@@ -83,8 +83,10 @@ export function ClassDetail() {
       ) : (
         <>
           {/* Monthly payment table (from September). Cells are tickable: tap an
-              unpaid month to record a payment, or a paid one to unmark it. */}
-          <Card className="overflow-x-auto p-0">
+              unpaid month to record a payment, or a paid one to unmark it.
+              Desktop only — on a narrow (Telegram) viewport this becomes a tiny
+              horizontal-scroll window, so the mobile view below uses chips. */}
+          <Card className="hidden overflow-x-auto p-0 md:block">
             <table className="w-full min-w-[420px] border-collapse text-sm">
               <thead>
                 <tr className="text-xs text-tg-hint">
@@ -137,6 +139,47 @@ export function ClassDetail() {
             </table>
           </Card>
 
+          {/* Mobile: the wide table can't fit a Telegram mini-app's narrow
+              viewport (it collapses to a tiny scroll window where the months are
+              hidden), so each student gets a card with their months as wrapping,
+              tappable chips — every month visible at once. */}
+          <div className="space-y-2 md:hidden">
+            {students.map((s) => (
+              <Card key={s.id} className="p-3">
+                <div className="mb-2 truncate text-sm font-semibold">{s.fullName}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {months.map((m) => {
+                    const state = s.monthly[m.key];
+                    const tickable = canRecord && state !== "frozen";
+                    const chip = <MonthChip label={m.label} state={state} />;
+                    return tickable ? (
+                      <button
+                        key={m.key}
+                        type="button"
+                        aria-label={`${s.fullName} — ${m.label}`}
+                        onClick={() =>
+                          setCell({
+                            studentId: s.id,
+                            fullName: s.fullName,
+                            effectiveFee: s.effectiveFee,
+                            month: m.key,
+                            label: m.label,
+                            state,
+                          })
+                        }
+                        className="transition active:scale-95"
+                      >
+                        {chip}
+                      </button>
+                    ) : (
+                      <span key={m.key}>{chip}</span>
+                    );
+                  })}
+                </div>
+              </Card>
+            ))}
+          </div>
+
           {/* Roster — the row opens the student profile, where actions live. */}
           <div className="space-y-2">
             {students.map((s) => (
@@ -176,6 +219,24 @@ export function ClassDetail() {
         />
       )}
     </div>
+  );
+}
+
+/** Mobile month chip — a labeled pill (month + paid/unpaid/frozen) that wraps to
+ *  fit any width, so all months stay visible on a narrow Telegram viewport. */
+function MonthChip({ label, state }: { label: string; state: "paid" | "unpaid" | "frozen" }) {
+  const mon = label.split(" ")[0].slice(0, 3);
+  const cls =
+    state === "paid"
+      ? "bg-status-paid/12 text-status-paid ring-status-paid/30"
+      : state === "frozen"
+        ? "bg-status-frozen/12 text-status-frozen ring-status-frozen/30"
+        : "bg-bg text-muted ring-border";
+  return (
+    <span className={`inline-flex min-w-[3.25rem] items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ${cls}`}>
+      {mon}
+      {state === "paid" ? <Check size={12} /> : state === "frozen" ? <span className="text-[10px] leading-none">🔵</span> : <Minus size={12} />}
+    </span>
   );
 }
 
