@@ -196,12 +196,15 @@ export function Modal({
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 animate-fade-in sm:items-center"
       onClick={onClose}
     >
+      {/* Capped to the dynamic viewport height with a scrollable body so tall
+          forms stay fully reachable when the on-screen keyboard is open (the
+          title stays pinned; fields scroll under it). */}
       <div
-        className="w-full max-w-md rounded-t-2xl bg-surface p-5 pb-8 shadow-card-hover animate-scale-in sm:rounded-2xl"
+        className="flex max-h-[90dvh] w-full max-w-md flex-col rounded-t-2xl bg-surface shadow-card-hover animate-scale-in sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 text-lg font-bold">{title}</div>
-        {children}
+        <div className="shrink-0 px-5 pb-3 pt-5 text-lg font-bold">{title}</div>
+        <div className="overflow-y-auto px-5 pb-8">{children}</div>
       </div>
     </div>
   );
