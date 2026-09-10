@@ -198,7 +198,7 @@ export function LeadsPage() {
               {(drafts.data ?? []).map((d) => {
                 const roster = (pending.data ?? []).filter((l) => l.draftClassId === d.id);
                 return (
-                  <Card key={d.id} className="space-y-2 border-dashed">
+                  <Card key={d.id} className="space-y-3 border-dashed bg-bg">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate font-semibold">{d.name}</div>
@@ -218,23 +218,28 @@ export function LeadsPage() {
                     </div>
 
                     {roster.length > 0 ? (
-                      <div className="divide-y divide-border rounded-lg bg-bg">
+                      /* Full interactive student cards: clickable to edit, a tel:
+                         Call button, delete, plus the Sort action. */
+                      <div className="grid gap-2 sm:grid-cols-2">
                         {roster.map((l) => (
-                          <div key={l.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                            <span className="min-w-0 truncate">
-                              {l.fullName}
-                              {l.subject ? <span className="text-tg-hint"> · {l.subject}</span> : ""}
-                            </span>
+                          <LeadCard
+                            key={l.id}
+                            lead={l}
+                            onEdit={canRegister ? () => setEditing(l) : undefined}
+                            onDelete={canRegister ? () => setDeleting(l) : undefined}
+                          >
                             {canRegister && (
-                              <button className="shrink-0 text-xs text-tg-link" onClick={() => setSorting(l)}>
-                                {t("sort")}
-                              </button>
+                              <div className="flex border-t border-border pt-2">
+                                <Button variant="ghost" onClick={() => setSorting(l)}>
+                                  <ArrowLeftRight size={15} /> {t("sort")}
+                                </Button>
+                              </div>
                             )}
-                          </div>
+                          </LeadCard>
                         ))}
                       </div>
                     ) : (
-                      <div className="rounded-lg bg-bg px-3 py-2 text-xs text-tg-hint">{t("emptyDraft")}</div>
+                      <div className="rounded-lg bg-surface px-3 py-2 text-xs text-tg-hint">{t("emptyDraft")}</div>
                     )}
 
                     {canAssign && (
