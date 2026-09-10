@@ -23,8 +23,14 @@
   --brand-gradient: linear-gradient(135deg, #3b6ef5 0%, #7256f2 100%);
   --accent: #7a8699;
   --dark: #1a2338;
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* LimeTalk-style headings: bold with tight negative tracking so display type
+   reads crisp and modern. */
+h1, h2, h3 {
+  letter-spacing: -0.02em;
 }
 
 html,
@@ -46,29 +52,33 @@ body {
 
 @layer components {
   .card {
-    @apply rounded-card border border-border bg-surface p-4 shadow-card transition-colors;
+    @apply rounded-card border border-border bg-surface p-5 shadow-card transition;
   }
   /* Signature brand panel — the blue→violet gradient hero from the Figma design.
-     White text/figures sit on it; used for the dashboard revenue header. */
+     Floated on the dreamy `float`-style shadow LimeTalk uses under hero cards. */
   .hero {
-    @apply rounded-card p-5 text-white shadow-brand;
+    @apply rounded-card p-5 text-white;
     background: var(--brand-gradient);
+    box-shadow: 0 20px 45px -20px rgba(52, 87, 245, 0.55);
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-btn px-3.5 py-2 text-sm font-medium transition active:scale-[0.98] disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-btn px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50;
   }
+  /* Tactile "pressable" primary (LimeTalk's chunky button): top inset highlight,
+     a hard bottom edge in the darker brand tone, and a soft colored glow. It
+     sinks 3px on press. Uses a flat brand tone so the bottom edge reads cleanly. */
   .btn-primary {
-    @apply border-0 font-semibold text-white shadow-brand hover:brightness-105;
-    background: var(--brand-gradient);
+    @apply border-0 text-white shadow-tactile hover:brightness-[1.03] active:translate-y-[3px] active:shadow-tactile-press;
+    background: var(--primary);
   }
   .btn-ghost {
-    @apply border border-border bg-surface text-text hover:border-primary hover:bg-primary-soft hover:text-primary;
+    @apply border border-border bg-surface text-text hover:border-primary hover:bg-primary-soft hover:text-primary active:scale-[0.98];
   }
   .btn-danger {
-    @apply border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger/5;
+    @apply border border-danger/40 bg-surface text-danger hover:border-danger hover:bg-danger/5 active:scale-[0.98];
   }
   .input {
-    @apply w-full rounded-btn border border-border bg-surface px-3 py-2 text-sm text-text outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20;
+    @apply w-full rounded-input border border-border bg-surface px-3.5 py-2.5 text-sm text-text outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20;
   }
   /* Modern dropdown: custom chevron, no native OS arrow, roomy hit area. The
      native option list can't be fully themed cross-browser, but the trigger and
@@ -98,5 +108,15 @@ body {
     font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
+  }
+  /* Inline icon-chip (LimeTalk's "~60s to grade / C1 rewrite" row): a small
+     pill with an optional leading icon, used for lightweight metadata. */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-pill bg-bg px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-inset ring-border;
+  }
+  /* Corner pill-badge — the small rounded score badge LimeTalk pins to a card's
+     top-right. Sits on a soft brand wash by default. */
+  .badge-pill {
+    @apply inline-flex items-center rounded-pill bg-primary-soft px-2 py-0.5 text-xs font-bold text-primary-hover;
   }
 }

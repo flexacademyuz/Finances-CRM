@@ -61,7 +61,9 @@ export function Segmented<T extends string>({
     <div
       role="tablist"
       className={twMerge(
-        "inline-flex rounded-btn border border-border bg-surface p-0.5",
+        // LimeTalk segmented: a soft gray pill track; the active tab is a white
+        // pill floating on a subtle shadow (rather than a solid-fill highlight).
+        "inline-flex rounded-pill bg-bg p-1",
         full && "flex w-full",
         className,
       )}
@@ -76,9 +78,11 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={twMerge(
-              "rounded-[5px] px-3 py-1.5 text-sm font-medium transition-colors",
+              "rounded-pill px-3.5 py-1.5 text-sm font-semibold transition-colors",
               full && "flex-1",
-              active ? "bg-primary text-white shadow-sm" : "text-muted hover:text-text",
+              active
+                ? "bg-surface text-text shadow-[0_1px_3px_rgba(16,24,40,0.12),0_1px_2px_-1px_rgba(16,24,40,0.10)]"
+                : "text-muted hover:text-text",
             )}
           >
             {o.label}

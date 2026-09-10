@@ -64,17 +64,30 @@ export default {
         brand: "var(--brand-gradient)",
       },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        // Manrope — a rounded geometric sans (LimeTalk's UI face) leads; Inter is
+        // kept as the first fallback so figures stay familiar if Manrope is slow.
+        sans: ["Manrope", "Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "monospace"],
       },
       borderRadius: {
-        card: "16px",
-        btn: "10px",
+        // Softer, larger radii (LimeTalk form language): roomy cards, pill-ish
+        // buttons/inputs. `pill` is fully round for segmented tracks & chips.
+        card: "20px",
+        btn: "14px",
+        input: "16px",
+        pill: "999px",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(16,24,40,0.04), 0 4px 16px rgba(16,24,40,0.05)",
-        "card-hover": "0 6px 24px rgba(16,24,40,0.10), 0 2px 6px rgba(16,24,40,0.05)",
-        brand: "0 8px 24px rgba(52,87,245,0.28)",
+        // Diffuse, low-contrast card shadows; `float` is the dreamy large-offset
+        // shadow LimeTalk floats its hero cards on. `brand` keeps the colored glow.
+        card: "0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.10)",
+        "card-hover": "0 8px 30px -10px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.05)",
+        float: "0 30px 60px -30px rgba(16,24,40,0.28)",
+        brand: "0 14px 30px -12px rgba(52,87,245,0.45)",
+        // Tactile "pressable" primary: inset top highlight + hard bottom edge
+        // (darker primary) + soft colored glow. Pair with `active:translate-y`.
+        tactile: "inset 0 1px 0 rgba(255,255,255,0.45), 0 4px 0 0 var(--primary-hover), 0 16px 30px -10px rgba(52,87,245,0.45)",
+        "tactile-press": "inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 0 0 var(--primary-hover), 0 8px 16px -8px rgba(52,87,245,0.45)",
       },
       keyframes: {
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
