@@ -104,7 +104,9 @@ export function ClassDetail() {
                 {students.map((s) => (
                   <tr key={s.id} className="border-t border-border">
                     <td className="sticky left-0 z-10 border-r border-border bg-surface px-3 py-2 font-medium">
-                      <div className="max-w-[8.5rem] truncate" title={s.fullName}>{s.fullName}</div>
+                      {/* Cap + truncate only on a narrow (mobile) viewport so the
+                          month columns get room; show the full name on desktop. */}
+                      <div className="max-w-[8.5rem] truncate md:max-w-none md:overflow-visible" title={s.fullName}>{s.fullName}</div>
                     </td>
                     {months.map((m) => {
                       const state = s.monthly[m.key];

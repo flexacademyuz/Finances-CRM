@@ -7,6 +7,7 @@ import {
   X,
   ArrowLeftRight,
   Phone,
+  Pencil,
   GraduationCap,
   Clock,
   BookOpen,
@@ -46,6 +47,8 @@ export function LeadsPage() {
   const [approving, setApproving] = useState<LeadRow | null>(null);
   const [sorting, setSorting] = useState<LeadRow | null>(null);
   const [rejecting, setRejecting] = useState<LeadRow | null>(null);
+  const [editing, setEditing] = useState<LeadRow | null>(null);
+  const [deleting, setDeleting] = useState<LeadRow | null>(null);
   const [assigning, setAssigning] = useState<DraftClassRow | null>(null);
 
   const canRegister = can(user, "add_student");
@@ -88,6 +91,11 @@ export function LeadsPage() {
   const del = useMutation({
     mutationFn: (id: string) => api(`/api/draft-classes/${id}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["draft-classes"] }),
+  });
+
+  const delLead = useMutation({
+    mutationFn: (id: string) => api(`/api/leads/${id}`, { method: "DELETE" }),
+    onSuccess: () => { setDeleting(null); refresh(); },
   });
 
   const unsorted = (pending.data ?? []).filter((l) => !l.classId && !l.draftClassId);
@@ -138,10 +146,17 @@ export function LeadsPage() {
           {leads.isLoading ? (
             <Spinner />
           ) : leads.data && leads.data.length > 0 ? (
-            <div className="space-y-2">
+            // Two/three-up grid so the cards stay compact instead of stretching
+            // into long full-width bars.
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {leads.data.map((l) => (
-                <LeadCard key={l.id} lead={l}>
-                  {l.status === "pending" && (
+                <LeadCard
+                  key={l.id}
+                  lead={l}
+                  onEdit={l.status === "pending" && canRegister ? () => setEditing(l) : undefined}
+                  onDelete={canRegister ? () => setDeleting(l) : undefined}
+                >
+                  {l.status === "pending" && (canDecide || canRegister) && (
                     <div className="flex flex-wrap gap-2 border-t border-border pt-2">
                       {canDecide && (
                         <Button variant="ghost" onClick={() => setApproving(l)}>
@@ -267,6 +282,41 @@ export function LeadsPage() {
           onSaved={() => { setRegistering(false); refresh(); }}
         />
       )}
+      {editing && (
+        <RegisterLeadModal
+          editing={editing}
+          classes={classes.data ?? []}
+          drafts={drafts.data ?? []}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); refresh(); }}
+        />
+      )}
+      {deleting && (
+        <Modal open onClose={() => setDeleting(null)} title={t("deleteLead")}>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-status-overdue/10 px-3 py-2 text-sm text-tg-text">
+              {t("deleteLeadConfirm")}
+            </div>
+            <div className="text-sm font-medium">{deleting.fullName}</div>
+            {delLead.isError && (
+              <div className="text-sm text-status-overdue">{(delLead.error as Error).message}</div>
+            )}
+            <div className="flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setDeleting(null)}>
+                {t("cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                disabled={delLead.isPending}
+                onClick={() => delLead.mutate(deleting.id)}
+              >
+                <Trash2 size={15} /> {t("deleteLead")}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {newDraft && (
         <NewDraftModal onClose={() => setNewDraft(false)} onSaved={() => { setNewDraft(false); refresh(); }} />
       )}
@@ -306,34 +356,99 @@ export function LeadsPage() {
   );
 }
 
-/** Shared lead summary card (details + optional action row as children). */
-function LeadCard({ lead: l, children }: { lead: LeadRow; children?: React.ReactNode }) {
+/** Name + details block shared by the editable and read-only card variants. */
+function LeadSummary({ l, editable }: { l: LeadRow; editable?: boolean }) {
   const { t } = useI18n();
   return (
-    <Card className="space-y-2">
-      <div className="min-w-0">
-        <div className="truncate font-semibold">{l.fullName}</div>
-        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-tg-hint">
-          {l.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {l.phone}</span>}
-          {l.subject && <span className="inline-flex items-center gap-1"><BookOpen size={12} /> {l.subject}</span>}
-          {l.gradeAtSchool && (
-            <span className="inline-flex items-center gap-1"><GraduationCap size={12} /> {l.gradeAtSchool}</span>
-          )}
-          {l.level && <span>{l.level}</span>}
-          <span className="inline-flex items-center gap-1"><Clock size={12} /> {t(l.shift)}</span>
-        </div>
-        <div className="mt-1 text-xs">
-          <span className="text-tg-hint">{t("targetGroup")}: </span>
-          {l.className ? (
-            <span className="font-medium">{l.className}</span>
-          ) : l.draftClassName ? (
-            <span className="font-medium">{l.draftClassName} · {t("draftClass")}</span>
-          ) : (
-            <span className="text-muted">{t("unassignedGroup")}</span>
-          )}
-        </div>
-        {l.decisionNote && <div className="mt-1 text-xs italic text-tg-hint">“{l.decisionNote}”</div>}
+    <div className="min-w-0">
+      <div className={`truncate font-semibold ${editable ? "text-tg-link" : ""}`}>{l.fullName}</div>
+      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-tg-hint">
+        {l.subject && <span className="inline-flex items-center gap-1"><BookOpen size={12} /> {l.subject}</span>}
+        {l.gradeAtSchool && (
+          <span className="inline-flex items-center gap-1"><GraduationCap size={12} /> {l.gradeAtSchool}</span>
+        )}
+        {l.level && <span>{l.level}</span>}
+        <span className="inline-flex items-center gap-1"><Clock size={12} /> {t(l.shift)}</span>
       </div>
+      <div className="mt-1 text-xs">
+        <span className="text-tg-hint">{t("targetGroup")}: </span>
+        {l.className ? (
+          <span className="font-medium">{l.className}</span>
+        ) : l.draftClassName ? (
+          <span className="font-medium">{l.draftClassName} · {t("draftClass")}</span>
+        ) : (
+          <span className="text-muted">{t("unassignedGroup")}</span>
+        )}
+      </div>
+      {l.decisionNote && <div className="mt-1 text-xs italic text-tg-hint">“{l.decisionNote}”</div>}
+    </div>
+  );
+}
+
+/**
+ * Shared lead card. When `onEdit` is set the summary is clickable (opens the
+ * edit form); a `tel:` Call button opens the phone dialer on mobile; `onDelete`
+ * adds a trash control. The action row (approve/sort/reject) comes as children.
+ */
+function LeadCard({
+  lead: l,
+  onEdit,
+  onDelete,
+  children,
+}: {
+  lead: LeadRow;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  children?: React.ReactNode;
+}) {
+  const { t } = useI18n();
+  return (
+    <Card className="flex h-full flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        {onEdit ? (
+          <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+            <LeadSummary l={l} editable />
+          </button>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <LeadSummary l={l} />
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {onEdit && (
+            <button
+              type="button"
+              aria-label={t("editLead")}
+              onClick={onEdit}
+              className="rounded-full p-1.5 text-muted transition hover:bg-primary-soft hover:text-primary"
+            >
+              <Pencil size={15} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              aria-label={t("deleteLead")}
+              onClick={onDelete}
+              className="rounded-full p-1.5 text-muted transition hover:bg-danger/10 hover:text-danger"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Contact — a tel: link opens the phone's dialer on mobile (harmless on the
+          website). */}
+      {l.phone && (
+        <a
+          href={`tel:${l.phone}`}
+          className="chip w-fit transition hover:text-primary hover:ring-primary/40"
+        >
+          <Phone size={13} /> {l.phone} · {t("call")}
+        </a>
+      )}
+
       {children}
     </Card>
   );
@@ -342,23 +457,28 @@ function LeadCard({ lead: l, children }: { lead: LeadRow; children?: React.React
 function RegisterLeadModal({
   classes,
   drafts,
+  editing,
   onClose,
   onSaved,
 }: {
   classes: Class[];
   drafts: DraftClassRow[];
+  /** When set, the form edits this pending lead (PATCH) instead of creating. */
+  editing?: LeadRow | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [subject, setSubject] = useState("");
-  const [gradeAtSchool, setGradeAtSchool] = useState("");
-  const [level, setLevel] = useState("");
-  const [shift, setShift] = useState<"morning" | "afternoon">("morning");
+  const [fullName, setFullName] = useState(editing?.fullName ?? "");
+  const [phone, setPhone] = useState(editing?.phone ?? "");
+  const [subject, setSubject] = useState(editing?.subject ?? "");
+  const [gradeAtSchool, setGradeAtSchool] = useState(editing?.gradeAtSchool ?? "");
+  const [level, setLevel] = useState(editing?.level ?? "");
+  const [shift, setShift] = useState<"morning" | "afternoon">(editing?.shift ?? "morning");
   // Placement: "" | group:<id> | draft:<id> | __new__
-  const [placement, setPlacement] = useState("");
+  const [placement, setPlacement] = useState(
+    editing?.classId ? `group:${editing.classId}` : editing?.draftClassId ? `draft:${editing.draftClassId}` : "",
+  );
   const [newClassName, setNewClassName] = useState("");
 
   const create = useMutation({
@@ -376,19 +496,22 @@ function RegisterLeadModal({
       } else if (placement.startsWith("draft:")) {
         draftClassId = placement.slice(6);
       }
-      return api("/api/leads", {
-        method: "POST",
-        body: {
-          fullName,
-          phone: phone || undefined,
-          subject: subject || undefined,
-          gradeAtSchool: gradeAtSchool || undefined,
-          level: level || undefined,
-          shift,
-          classId,
-          draftClassId,
-        },
-      });
+      // Create omits blanks (schema is optional, not nullable); edit sends null
+      // so a cleared field is actually unset.
+      const blank = editing ? null : undefined;
+      const body = {
+        fullName,
+        phone: phone || blank,
+        subject: subject || blank,
+        gradeAtSchool: gradeAtSchool || blank,
+        level: level || blank,
+        shift,
+        classId,
+        draftClassId,
+      };
+      return editing
+        ? api(`/api/leads/${editing.id}`, { method: "PATCH", body })
+        : api("/api/leads", { method: "POST", body });
     },
     onSuccess: onSaved,
   });
@@ -396,7 +519,7 @@ function RegisterLeadModal({
   const needsName = placement === "__new__";
 
   return (
-    <Modal open onClose={onClose} title={t("registerStudent")}>
+    <Modal open onClose={onClose} title={editing ? t("editLead") : t("registerStudent")}>
       <div className="space-y-3">
         <Field label={t("fullName")}>
           <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />

@@ -147,13 +147,13 @@ export function Stat({
   const card = (
     <Card
       className={twMerge(
-        "h-full flex-1",
+        "h-full flex-1 !p-4",
         accent && `border-l-4 ${ACCENTS[accent]}`,
         href && "cursor-pointer transition hover:border-primary/40 hover:shadow-card-hover",
       )}
     >
-      <div className="flex items-start justify-between">
-        <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
         {icon}
       </div>
       <div className="figure mt-1 text-xl font-bold">{value}</div>

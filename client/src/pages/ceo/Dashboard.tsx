@@ -49,13 +49,12 @@ export function CeoDashboard() {
         </div>
       </Link>
 
-      <div className="flex gap-3">
+      {/* Compact KPI tiles in one responsive grid (up to 5 across) so the cards
+          stay tidy instead of stretching into long bars on wide screens. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label={t("paid")} value={data.statusCounts.paid} accent="accent" href="/students?status=paid" />
         <Stat label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} accent="warning" href="/students?status=awaiting_payment" />
         <Stat label={t("overdue")} value={data.statusCounts.overdue} accent="danger" href="/students?status=overdue" />
-      </div>
-
-      <div className="flex gap-3">
         <Stat label={t("totalStudents")} value={data.totalStudents} accent="primary" href="/students" />
         <Stat label={t("payrollObligation")} value={money(data.payrollObligation)} accent="discount" href="/payroll" />
       </div>

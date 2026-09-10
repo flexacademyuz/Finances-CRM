@@ -247,6 +247,12 @@ const dict = {
   rejectLeadNote: { en: "Disapprove this lead? You can add a reason.", uz: "Bu o'quvchini rad etasizmi? Sabab qo'shishingiz mumkin." },
   noLeads: { en: "No leads here", uz: "Bu yerda o'quvchilar yo'q" },
   deleteLead: { en: "Delete lead", uz: "O'chirish" },
+  editLead: { en: "Edit lead", uz: "O'quvchini tahrirlash" },
+  deleteLeadConfirm: {
+    en: "Permanently delete this lead? This can't be undone.",
+    uz: "Bu o'quvchini butunlay o'chirasizmi? Buni qaytarib bo'lmaydi.",
+  },
+  call: { en: "Call", uz: "Qo'ng'iroq" },
   chooseGroup: { en: "Choose a group", uz: "Guruhni tanlang" },
   subject: { en: "Subject", uz: "Fan" },
   registerStudent: { en: "Register student", uz: "O'quvchini ro'yxatga olish" },
