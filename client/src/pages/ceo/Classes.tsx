@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Folder, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Folder } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
@@ -40,31 +40,31 @@ export function ClassesPage() {
       {classes.isLoading ? (
         <Spinner />
       ) : classes.data?.length ? (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {classes.data.map((c) => (
-            <Card key={c.id} className="flex items-center justify-between gap-2">
-              <Link href={`/class/${c.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Card key={c.id} className="relative flex flex-col gap-2 !p-3">
+              {canEdit && (
+                <button
+                  className="absolute right-2 top-2 p-1 text-tg-link"
+                  onClick={() => setEditing(c)}
+                  aria-label={t("edit")}
+                >
+                  <Pencil size={15} />
+                </button>
+              )}
+              <Link href={`/class/${c.id}`} className="flex flex-col gap-2">
+                <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">
                   <Folder size={18} />
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{c.name}</span>
-                  <span className="block truncate text-xs text-tg-hint">
-                    {teacherName(c.teacherId)} · {money(c.defaultFee)}
-                    {c.room ? ` · ${c.room}` : ""}
-                  </span>
+                  <span className="block truncate text-xs text-tg-hint">{teacherName(c.teacherId)}</span>
+                </span>
+                <span className="flex items-center justify-between gap-1 text-xs">
+                  <span className="font-medium text-tg-text">{money(c.defaultFee)}</span>
+                  {c.room && <span className="text-tg-hint">{c.room}</span>}
                 </span>
               </Link>
-              <div className="flex shrink-0 items-center gap-1">
-                {canEdit && (
-                  <button className="p-1 text-tg-link" onClick={() => setEditing(c)} aria-label={t("edit")}>
-                    <Pencil size={16} />
-                  </button>
-                )}
-                <Link href={`/class/${c.id}`} className="p-1 text-tg-hint">
-                  <ChevronRight size={18} />
-                </Link>
-              </div>
             </Card>
           ))}
         </div>
