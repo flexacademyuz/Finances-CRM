@@ -77,6 +77,26 @@ export function parseDate(s: string): Date {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
+/**
+ * The billing anchor date (day-of-month `anchorDay`, clamped to the month's
+ * length) that falls on or before `d`. Used to keep a student's billing day
+ * fixed on their start day-of-month: a payment made anywhere inside a billing
+ * window is credited to that window's anchor, so the due day never drifts to
+ * the day they happened to pay.
+ *
+ *   anchorOnOrBefore(15 Sep, 4) → 4 Sep     (anchor already passed this month)
+ *   anchorOnOrBefore(2 Sep, 4)  → 4 Aug     (anchor not reached yet → previous)
+ */
+export function anchorOnOrBefore(d: Date, anchorDay: number): Date {
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth();
+  const lastThis = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const thisMonth = new Date(Date.UTC(y, m, Math.min(anchorDay, lastThis)));
+  if (thisMonth.getTime() <= d.getTime()) return thisMonth;
+  const lastPrev = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1, Math.min(anchorDay, lastPrev)));
+}
+
 /** Add `k` months to a date, clamping the day to the target month's length. */
 export function addMonths(d: Date, k: number): Date {
   const y = d.getUTCFullYear();

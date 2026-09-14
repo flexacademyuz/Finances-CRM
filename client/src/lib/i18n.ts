@@ -167,6 +167,22 @@ const dict = {
   coversMonth: { en: "Covers", uz: "Qamrab oladi" },
   advancePayment: { en: "Advance payment", uz: "Oldindan to'lov" },
   alreadyPaidMonth: { en: "Already paid this month", uz: "Bu oy to'langan" },
+  balanceDue: { en: "Balance due", uz: "Qoldiq to'lov" },
+  remainingToComplete: {
+    en: "Remaining to complete this month's payment",
+    uz: "Bu oylik to'lovni yakunlash uchun qoldiq",
+  },
+  partiallyPaid: { en: "Partially paid", uz: "Qisman to'langan" },
+  ofDue: { en: "of", uz: "/" },
+  alreadyPaidPartial: {
+    en: "Already paid this month",
+    uz: "Bu oy uchun to'langan",
+  },
+  balanceRemaining: { en: "balance remaining", uz: "qoldiq" },
+  completesMonth: {
+    en: "This settles the month in full.",
+    uz: "Bu oylik to'lovni to'liq yakunlaydi.",
+  },
   frozenThisMonth: { en: "This month is frozen (excused)", uz: "Bu oy muzlatilgan" },
   expenses: { en: "Expenses", uz: "Xarajatlar" },
   finances: { en: "Finances", uz: "Moliya" },

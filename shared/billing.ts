@@ -4,7 +4,7 @@
  * long does a payment cover the student for".
  */
 
-import { parseDate, addMonths, addDays, atMidnight, daysBetween } from "./date";
+import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore } from "./date";
 import type { StudentStatus } from "./schema";
 
 /**
@@ -40,6 +40,18 @@ function round2(n: number): number {
 }
 
 /**
+ * A billing month counts as *paid* only once the amount collected for it reaches
+ * the amount due. A partial payment leaves it unsettled — it neither advances
+ * coverage nor clears the student's balance. Legacy rows without a recorded due
+ * (`amountDue == null`) are treated as settled so historical coverage is
+ * unchanged. A tiny epsilon absorbs floating-point rounding on the totals.
+ */
+export function isMonthSettled(amount: number, amountDue: number | null | undefined): boolean {
+  if (amountDue == null) return true;
+  return amount + 1e-6 >= amountDue;
+}
+
+/**
  * The calendar window a payment covers: one month starting on the student's
  * billing anniversary day within the payment's billing month. E.g. anchor day
  * 23 + billingMonth 2026-08 → 23 Aug 2026 to 23 Sep 2026.
@@ -56,18 +68,28 @@ export function paymentCoverWindow(billingMonth: string, anchorDay: number): { s
 /**
  * How far forward a student is paid up, as a calendar date.
  *
- * Each payment buys exactly one month of coverage, counted forward from the
- * later of (a) the day it was paid and (b) the coverage they already had:
+ * The billing day is fixed on the student's **start day-of-month**: each
+ * (fully-paid) month buys coverage to the next anniversary of that day, so the
+ * next-due date never drifts to whatever day they happened to pay on. Each
+ * payment counts forward from the later of (a) the billing anchor on or before
+ * the day it was paid and (b) the coverage they already had:
  *
- *   paidThrough = addMonths(max(paidThrough, paymentDate), 1)
+ *   paidThrough = addMonths(max(paidThrough, anchorOnOrBefore(paymentDate)), 1)
  *
- * That single `max` gives us both behaviours the academy asked for:
+ * That gives us the three behaviours the academy asked for:
  *
+ *  - **The due day stays put.** Start on the 4th, pay late on the 15th →
+ *    coverage still runs to the 4th of next month, not the 15th.
  *  - **Paying ahead stacks.** Coverage runs to 23 Aug and they pay again on
  *    20 Aug → the existing coverage wins, so they're paid to 23 Sep, not 20 Sep.
  *  - **Missed months are not back-billed.** A student who enrolled in March and
- *    pays today is paid for a month from *today*; the unpaid gap between their
- *    last coverage and this payment is written off rather than carried as debt.
+ *    pays today is paid for a month from *this* billing window; the unpaid gap
+ *    between their last coverage and this payment is written off, not carried as
+ *    debt — but the billing day is still their original start day.
+ *
+ * `paymentDates` should contain only *fully-paid* months: a partial payment
+ * does not complete a month, so it must not advance coverage (callers filter
+ * unsettled months out — see `server/services/billing`).
  *
  * With no payments at all, coverage ends on the start date — the first month is
  * paid up front, so a payment is due the day they begin.
@@ -77,13 +99,15 @@ export function paymentCoverWindow(billingMonth: string, anchorDay: number): { s
  */
 export function computePaidThrough(args: {
   startDate: string; // YYYY-MM-DD
-  paymentDates: string[]; // YYYY-MM-DD, any order
+  paymentDates: string[]; // YYYY-MM-DD, any order — fully-paid months only
   frozenDays?: number;
 }): Date {
-  let paidThrough = atMidnight(parseDate(args.startDate));
+  const start = atMidnight(parseDate(args.startDate));
+  const anchorDay = start.getUTCDate();
+  let paidThrough = start;
   for (const iso of [...args.paymentDates].sort()) {
-    const paidOn = atMidnight(parseDate(iso));
-    const base = paidOn.getTime() > paidThrough.getTime() ? paidOn : paidThrough;
+    const paidAnchor = anchorOnOrBefore(atMidnight(parseDate(iso)), anchorDay);
+    const base = paidAnchor.getTime() > paidThrough.getTime() ? paidAnchor : paidThrough;
     paidThrough = addMonths(base, 1);
   }
   return args.frozenDays ? addDays(paidThrough, args.frozenDays) : paidThrough;

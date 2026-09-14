@@ -21,7 +21,7 @@ import {
   type StudentFilter,
 } from "../storage";
 import { parseDate, fullMonthsBetween, atMidnight, toIso } from "@shared/date";
-import { computePaidThrough, decideStudentStatus, elapsedFrozenDays } from "@shared/billing";
+import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { recomputeStatuses } from "../services/billing";
 import { env } from "../env";
 
@@ -68,9 +68,19 @@ router.get(
       (f) => todayIso >= f.freezeFrom && (f.freezeTo == null || todayIso <= f.freezeTo),
     );
 
+    // Only fully-settled months advance coverage; a partial payment leaves a
+    // balance and does not move the next-due date.
+    const settled = active.filter((p) =>
+      isMonthSettled(Number(p.amount), p.amountDue == null ? null : Number(p.amountDue)),
+    );
+    // Outstanding balance = everything still owed across partially-paid months.
+    const balance = +active
+      .reduce((sum, p) => sum + (p.amountDue == null ? 0 : Math.max(Number(p.amountDue) - Number(p.amount), 0)), 0)
+      .toFixed(2);
+
     const args = {
       startDate: anchor,
-      paymentDates: active.map((p) => toIso(new Date(p.createdAt))),
+      paymentDates: settled.map((p) => toIso(new Date(p.createdAt))),
       frozenDays: elapsedFrozenDays(
         activeFreezes.map((f) => ({ from: f.freezeFrom, to: f.freezeTo })),
         start,
@@ -99,6 +109,9 @@ router.get(
         // the day the next payment falls due.
         paidThrough: toIso(paidThrough),
         nextDueDate: toIso(paidThrough),
+        // Money still owed for months that were only partially paid. > 0 means
+        // "some charges remain to complete the payment".
+        balance,
         status,
       },
       payments,

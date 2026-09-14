@@ -102,6 +102,23 @@ export function StudentDetail() {
         )}
       </Card>
 
+      {/* Outstanding balance — a partial payment leaves charges to complete. */}
+      {billing.balance > 0 && (
+        <Card className="border-status-overdue/30 bg-status-overdue/10">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-status-overdue">
+                {t("balanceDue")}
+              </div>
+              <div className="text-xs text-tg-hint">{t("remainingToComplete")}</div>
+            </div>
+            <div className="text-lg font-bold text-status-overdue">
+              {money(billing.balance, billing.currency)}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Key billing facts */}
       <div className="grid grid-cols-2 gap-3">
         <Info icon={<CalendarCheck size={15} />} label={t("startDate")} value={formatDate(billing.startDate, locale)} />
@@ -121,16 +138,29 @@ export function StudentDetail() {
           <div className="space-y-2">
             {payments.map((p) => {
               const refunded = Number(p.refundedAmount ?? 0);
+              const due = p.amountDue == null ? null : Number(p.amountDue);
+              const partial = due != null && Number(p.amount) + 1e-6 < due;
               return (
                 <Card key={p.id} className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-semibold">
                       {money(p.amount, billing.currency)}
+                      {partial && (
+                        <span className="text-tg-hint"> {t("ofDue")} {money(due!, billing.currency)}</span>
+                      )}
                       {refunded > 0 && (
                         <span className="text-status-discount"> · −{money(refunded, billing.currency)} {t("refunded")}</span>
                       )}
                     </div>
-                    <div className="text-xs text-tg-hint">{formatDate(p.createdAt, locale)}</div>
+                    <div className="text-xs text-tg-hint">
+                      {formatDate(p.createdAt, locale)}
+                      {partial && (
+                        <span className="text-status-overdue">
+                          {" · "}
+                          {t("partiallyPaid")} · {money(due! - Number(p.amount), billing.currency)} {t("balanceRemaining")}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <MethodTag method={p.method} />

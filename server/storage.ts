@@ -25,8 +25,8 @@ import {
   type PayoutStudent,
   type SalaryAllocation,
 } from "@shared/schema";
-import { monthKey, shiftMonth, parseDate, addMonths, atMidnight, toIso } from "@shared/date";
-import { computePaidThrough, decideStudentStatus } from "@shared/billing";
+import { monthKey, shiftMonth, atMidnight, toIso } from "@shared/date";
+import { computePaidThrough, decideStudentStatus, isMonthSettled } from "@shared/billing";
 import { env } from "./env";
 
 /* ─────────────────────────────── Users ─────────────────────────────── */
@@ -467,23 +467,46 @@ export async function deleteStudent(id: string): Promise<void> {
 }
 
 /**
- * The first billing month (YYYY-MM-01) from `now` forward that the student has
- * no active payment for. Lets an accountant record advance payments: each click
- * lands on the next uncovered month instead of colliding on the current one.
+ * The first billing month (YYYY-MM-01) from `now` forward that the student still
+ * owes money for — a month with a *partial* (unsettled) payment, or one with no
+ * payment at all. A month whose non-voided payment is fully settled is skipped,
+ * so each click either tops up the current partial month or moves on to the next
+ * uncovered one (advance payments).
  */
 export async function nextUnpaidBillingMonth(studentId: string, now: Date = new Date()): Promise<string> {
-  // Consider EVERY existing row, voided ones included: the unique index
-  // (student_id, billing_month) counts them, so a month that holds only a
-  // voided/refunded payment is still taken. Skipping it here is what prevents
-  // the "duplicate key … payments_student_month_uniq" crash on re-record.
   const rows = await db
-    .select({ month: payments.billingMonth })
+    .select({
+      month: payments.billingMonth,
+      voided: payments.voided,
+      amount: payments.amount,
+      amountDue: payments.amountDue,
+    })
     .from(payments)
     .where(eq(payments.studentId, studentId));
-  const taken = new Set(rows.map((r) => r.month));
+
+  // Group each month's state: is there a live (non-voided) row, is it settled,
+  // and is the slot otherwise blocked by a voided row (the unique index counts
+  // voided rows, so re-inserting there would crash on the unique constraint).
+  const byMonth = new Map<string, { hasLive: boolean; settled: boolean; hasVoided: boolean }>();
+  for (const r of rows) {
+    const s = byMonth.get(r.month) ?? { hasLive: false, settled: false, hasVoided: false };
+    if (r.voided) {
+      s.hasVoided = true;
+    } else {
+      s.hasLive = true;
+      s.settled = isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue));
+    }
+    byMonth.set(r.month, s);
+  }
+
   let m = monthKey(now);
-  while (taken.has(m)) m = shiftMonth(m, 1);
-  return m;
+  for (;;) {
+    const s = byMonth.get(m);
+    // Free month, or a partially-paid month to top up → this is the target.
+    if (!s || (s.hasLive && !s.settled)) return m;
+    // Settled, or blocked by a voided-only row → move to the next month.
+    m = shiftMonth(m, 1);
+  }
 }
 
 /** Effective monthly fee for a student = override ?? class default. */
@@ -784,6 +807,7 @@ export async function listPayments(filter: PaymentFilter = {}) {
       className: classes.name,
       teacherId: payments.teacherId,
       amount: payments.amount,
+      amountDue: payments.amountDue,
       method: payments.method,
       billingMonth: payments.billingMonth,
       recordedBy: payments.recordedBy,
@@ -822,7 +846,11 @@ export async function getActivePaymentForMonth(studentId: string, billingMonth: 
 }
 
 /**
- * Record a payment atomically and flip the student to "paid" for the month.
+ * Record a payment atomically. A month is only "paid" once the money collected
+ * for it reaches `amountDue`: a partial payment is stored but leaves the month
+ * unsettled (the student keeps a balance and does not advance their coverage).
+ * Paying again for a still-unsettled month **tops up** the existing record
+ * rather than creating a second row (the audit trail keeps every top-up).
  * Denormalizes class/teacher from the student's current class.
  */
 export async function recordPayment(input: {
@@ -832,6 +860,7 @@ export async function recordPayment(input: {
   billingMonth: string;
   recordedBy: string;
   fullTuitionAmount?: number;
+  amountDue?: number;
   discountId?: string | null;
   teacherCreditAmount?: number;
 }) {
@@ -841,35 +870,90 @@ export async function recordPayment(input: {
     const [cls] = await tx.select().from(classes).where(eq(classes.id, student.classId));
     if (!cls) throw new Error("Class not found");
 
-    const [payment] = await tx
-      .insert(payments)
-      .values({
-        studentId: student.id,
-        classId: cls.id,
-        teacherId: cls.teacherId,
-        amount: String(input.amount),
-        fullTuitionAmount:
-          input.fullTuitionAmount != null ? String(input.fullTuitionAmount) : null,
-        discountId: input.discountId ?? null,
-        teacherCreditAmount:
-          input.teacherCreditAmount != null ? String(input.teacherCreditAmount) : null,
-        method: input.method,
-        billingMonth: input.billingMonth,
-        recordedBy: input.recordedBy,
-      })
-      .returning();
+    // Top up an existing, still-unsettled payment for this month instead of
+    // inserting a colliding row (unique student+month). Settled months never
+    // reach here — the route rejects a re-record on a fully-paid month.
+    const [existing] = await tx
+      .select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.studentId, student.id),
+          eq(payments.billingMonth, input.billingMonth),
+          eq(payments.voided, false),
+        ),
+      );
 
-    // This payment buys one month of coverage from today, or from the end of
-    // the coverage they already have if they're paying ahead. Mirrors
-    // services/billing.computePaidThrough so the badge is right immediately,
-    // before the hourly recompute runs.
-    const today = atMidnight(new Date());
-    const existing = student.paidThroughDate ? parseDate(student.paidThroughDate) : today;
-    const base = existing.getTime() > today.getTime() ? existing : today;
-    await tx
-      .update(students)
-      .set({ status: "paid", paidThroughDate: toIso(addMonths(base, 1)) })
-      .where(eq(students.id, student.id));
+    let payment;
+    if (existing) {
+      const newAmount = +(Number(existing.amount) + input.amount).toFixed(2);
+      const topUp: PaymentEdit = {
+        at: new Date().toISOString(),
+        byUserId: input.recordedBy,
+        action: "edit",
+        reason: "Top-up toward month balance",
+        before: { amount: existing.amount },
+        after: { amount: String(newAmount) },
+      };
+      [payment] = await tx
+        .update(payments)
+        .set({
+          amount: String(newAmount),
+          // Newer payment method wins for the "how they last paid" tag.
+          method: input.method,
+          editHistory: [...existing.editHistory, topUp],
+        })
+        .where(eq(payments.id, existing.id))
+        .returning();
+    } else {
+      [payment] = await tx
+        .insert(payments)
+        .values({
+          studentId: student.id,
+          classId: cls.id,
+          teacherId: cls.teacherId,
+          amount: String(input.amount),
+          fullTuitionAmount:
+            input.fullTuitionAmount != null ? String(input.fullTuitionAmount) : null,
+          amountDue: input.amountDue != null ? String(input.amountDue) : null,
+          discountId: input.discountId ?? null,
+          teacherCreditAmount:
+            input.teacherCreditAmount != null ? String(input.teacherCreditAmount) : null,
+          method: input.method,
+          billingMonth: input.billingMonth,
+          recordedBy: input.recordedBy,
+        })
+        .returning();
+    }
+
+    // Recompute coverage from every fully-settled month this student has, so a
+    // partial payment does not flip them to "paid" and the next-due date stays
+    // anchored to their start day. Mirrors services/billing so the badge is
+    // right immediately, before the hourly recompute runs.
+    const anchor = student.billingStartDate ?? student.enrolledAt;
+    const rows = await tx
+      .select({
+        createdAt: payments.createdAt,
+        amount: payments.amount,
+        amountDue: payments.amountDue,
+      })
+      .from(payments)
+      .where(and(eq(payments.studentId, student.id), eq(payments.voided, false)));
+    const settledDates = rows
+      .filter((r) => isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue)))
+      .map((r) => toIso(r.createdAt));
+
+    if (anchor) {
+      const paidThrough = computePaidThrough({ startDate: anchor, paymentDates: settledDates });
+      const today = atMidnight(new Date());
+      await tx
+        .update(students)
+        .set({
+          paidThroughDate: toIso(paidThrough),
+          status: today.getTime() < paidThrough.getTime() ? "paid" : student.status,
+        })
+        .where(eq(students.id, student.id));
+    }
 
     return payment;
   });

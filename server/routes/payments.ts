@@ -23,9 +23,10 @@ import {
   type PaymentFilter,
 } from "../storage";
 import { monthKey, normalizeMonth, monthLabel, parseDate, toIso } from "@shared/date";
-import { refundSuggestion, paymentCoverWindow } from "@shared/billing";
+import { refundSuggestion, paymentCoverWindow, isMonthSettled } from "@shared/billing";
 import { notifyPaymentRecorded } from "../bot/notifications";
 import { buildPaymentContext } from "../services/payment-context";
+import { recomputeStatuses } from "../services/billing";
 
 const router = Router();
 
@@ -94,9 +95,13 @@ router.get(
       billingMonth: month,
       billingMonthLabel: monthLabel(month),
       isAdvance: month > monthKey(),
-      // Pre-fill with the discounted amount the student should pay.
+      // Pre-fill with what's still owed this month (full amount, or the
+      // remaining balance if a partial payment has already been made).
       defaultAmount: ctx.amountToPay,
       fullTuition: ctx.fullTuition,
+      monthDue: ctx.monthDue,
+      paidSoFar: ctx.paidSoFar,
+      remaining: ctx.amountToPay,
       discount: ctx.discount,
       teacherCredit: ctx.teacherCredit,
       alreadyPaid: ctx.alreadyPaid,
@@ -122,17 +127,21 @@ router.post(
       return res.status(403).json({ error: "forbidden", message: "You can only record payments for your own students." });
     }
 
-    // No month given → land on the student's next uncovered month, so recording
-    // again simply pays the next month forward (advance payments). An explicit
-    // month is a CEO correction and must not collide with an existing record.
+    // No month given → land on the student's next month that still owes money
+    // (a partially-paid month to top up, else the next uncovered one). An
+    // explicit month is a CEO correction: it may top up a partial month, but a
+    // month that is already fully settled must be voided first, not double-paid.
     let billingMonth: string;
     if (input.billingMonth) {
       billingMonth = normalizeMonth(input.billingMonth);
       const existing = await getActivePaymentForMonth(student.id, billingMonth);
-      if (existing) {
+      if (
+        existing &&
+        isMonthSettled(Number(existing.amount), existing.amountDue == null ? null : Number(existing.amountDue))
+      ) {
         return res.status(409).json({
           error: "already_paid",
-          message: "This student already has a payment for that month. Void it first to re-enter.",
+          message: "This student has already paid that month in full. Void it first to re-enter.",
         });
       }
     } else {
@@ -150,9 +159,14 @@ router.post(
       billingMonth,
       recordedBy: req.authUser!.id,
       fullTuitionAmount: ctx.fullTuition,
+      amountDue: ctx.monthDue,
       discountId: ctx.discount?.id ?? null,
       teacherCreditAmount: ctx.teacherCredit,
     });
+
+    // A partial payment must not read as "paid": refresh status/coverage so the
+    // student stays awaiting/overdue with a balance until the month is settled.
+    await recomputeStatuses();
 
     // Fire-and-forget notification via the companion bot.
     void notifyPaymentRecorded(payment.id).catch(() => undefined);

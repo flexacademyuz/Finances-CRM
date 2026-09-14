@@ -1,0 +1,1 @@
+ALTER TABLE "payments" ADD COLUMN "amount_due" numeric(14, 2);

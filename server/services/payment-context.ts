@@ -9,6 +9,7 @@ import {
 } from "../storage";
 import { getClassById } from "../storage";
 import { discountedAmount, monthInRange } from "./pricing";
+import { isMonthSettled } from "@shared/billing";
 import type { Discount } from "@shared/schema";
 
 export type PaymentContext = {
@@ -16,7 +17,11 @@ export type PaymentContext = {
   groupId: string;
   billingMonth: string;
   fullTuition: number;
-  /** What the student should pay after any active discount. */
+  /** The month's cost after any active discount — the full amount due. */
+  monthDue: number;
+  /** How much has already been paid toward this month (partial payments). */
+  paidSoFar: number;
+  /** What still needs to be collected to settle the month (monthDue − paidSoFar). */
   amountToPay: number;
   discount: {
     id: string;
@@ -26,6 +31,7 @@ export type PaymentContext = {
   } | null;
   /** Amount the teacher is credited for this student (discount-independent). */
   teacherCredit: number;
+  /** True once the month is fully settled (not merely partially paid). */
   alreadyPaid: boolean;
   frozen: boolean;
 };
@@ -51,11 +57,11 @@ export async function buildPaymentContext(
   const discounts = await activeDiscountsFor(studentId, groupId);
   const active = discounts.find((d) => monthInRange(billingMonth, d.validFrom, d.validTo));
 
-  let amountToPay = fullTuition;
+  let monthDue = fullTuition;
   let discount: PaymentContext["discount"] = null;
   if (active) {
     const value = Number(active.discountValue);
-    amountToPay = discountedAmount(fullTuition, active.discountType, value);
+    monthDue = discountedAmount(fullTuition, active.discountType, value);
     discount = {
       id: active.id,
       type: active.discountType,
@@ -87,15 +93,25 @@ export async function buildPaymentContext(
     (f) => f.status === "active" && monthInRange(billingMonth, f.freezeFrom, f.freezeTo),
   );
 
+  // Money already collected for this month (0 when nothing has been paid yet).
+  // A month with an existing row carries its own recorded due; fall back to the
+  // freshly-computed one for a month not yet touched.
+  const paidSoFar = existing ? Number(existing.amount) : 0;
+  const dueForMonth = existing && existing.amountDue != null ? Number(existing.amountDue) : monthDue;
+  const remaining = +Math.max(dueForMonth - paidSoFar, 0).toFixed(2);
+  const settled = !!existing && isMonthSettled(paidSoFar, existing.amountDue == null ? null : Number(existing.amountDue));
+
   return {
     studentId,
     groupId,
     billingMonth,
     fullTuition,
-    amountToPay,
+    monthDue: dueForMonth,
+    paidSoFar,
+    amountToPay: remaining,
     discount,
     teacherCredit,
-    alreadyPaid: !!existing,
+    alreadyPaid: settled,
     frozen,
   };
 }

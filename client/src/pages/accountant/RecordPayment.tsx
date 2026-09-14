@@ -206,6 +206,18 @@ export function RecordPayment() {
               🔵 {t("frozenThisMonth")}.
             </div>
           )}
+          {preview.data && preview.data.paidSoFar > 0 && preview.data.remaining > 0 && (
+            <div className="space-y-1 rounded-lg bg-status-overdue/10 px-3 py-2 text-xs">
+              <div className="font-semibold text-status-overdue">
+                {t("partiallyPaid")}: {money(preview.data.paidSoFar)} {t("ofDue")} {money(preview.data.monthDue)}
+              </div>
+              <div className="text-tg-hint">
+                {t("balanceDue")}:{" "}
+                <span className="font-medium text-tg-text">{money(preview.data.remaining)}</span>{" "}
+                {t("balanceRemaining")}
+              </div>
+            </div>
+          )}
           {preview.data?.discount && (
             <div className="space-y-1 rounded-lg bg-status-discount/10 px-3 py-2 text-xs">
               <div className="font-semibold text-status-discount">
@@ -213,7 +225,7 @@ export function RecordPayment() {
               </div>
               <div className="text-tg-hint">
                 {t("fullTuition")}: {money(preview.data.fullTuition)} → {t("afterDiscount")}:{" "}
-                <span className="font-medium text-tg-text">{money(preview.data.defaultAmount)}</span>
+                <span className="font-medium text-tg-text">{money(preview.data.monthDue)}</span>
               </div>
               <div className="text-tg-hint">
                 {t("teacherCredit")}: {money(preview.data.teacherCredit)} (unaffected)

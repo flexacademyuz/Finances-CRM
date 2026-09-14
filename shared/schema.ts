@@ -167,10 +167,16 @@ export const payments = pgTable(
     teacherId: uuid("teacher_id")
       .notNull()
       .references(() => teachers.id, { onDelete: "restrict" }),
-    // `amount` is what the student actually paid (amount_paid).
+    // `amount` is the running total the student has paid toward this month.
+    // Partial payments top this up (see storage.recordPayment) until it reaches
+    // `amountDue`, at which point the month is settled and advances coverage.
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
     // Original tuition before any discount (V2 Change 1C). Null for legacy rows.
     fullTuitionAmount: numeric("full_tuition_amount", { precision: 14, scale: 2 }),
+    // What this month costs the student after any discount — the target `amount`
+    // must reach for the month to count as paid. Null for legacy rows (treated
+    // as already settled so historical coverage is unchanged).
+    amountDue: numeric("amount_due", { precision: 14, scale: 2 }),
     // The discount applied at record time, if any.
     discountId: uuid("discount_id"),
     // What the teacher is credited for salary — independent of student discount.

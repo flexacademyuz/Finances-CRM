@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { decideStatus } from "../server/services/billing";
-import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, refundSuggestion, paymentCoverWindow } from "@shared/billing";
-import { monthKey, shiftMonth, normalizeMonth, recentMonths, addMonths, fullMonthsBetween, parseDate, atMidnight } from "@shared/date";
+import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, refundSuggestion, paymentCoverWindow, isMonthSettled } from "@shared/billing";
+import { monthKey, shiftMonth, normalizeMonth, recentMonths, addMonths, fullMonthsBetween, parseDate, atMidnight, anchorOnOrBefore } from "@shared/date";
 
 /**
  * Monthly status-transition logic (spec §3.3). `decideStatus` is the pure
@@ -73,15 +73,17 @@ describe("computePaidThrough — one month of coverage per payment", () => {
     expect(through("2026-07-23", ["2026-07-23", "2026-08-20"])).toBe("2026-09-23");
   });
 
-  it("counts a late payment forward from the day it was actually paid", () => {
-    // Due 23 Aug, paid 30 Aug → a full month from the 30th; the billing day moves.
-    expect(through("2026-07-23", ["2026-07-23", "2026-08-30"])).toBe("2026-09-30");
+  it("keeps the billing day fixed when a payment is made late", () => {
+    // Due 23 Aug, paid late on 30 Aug → coverage still runs to 23 Sep (the
+    // billing day stays on the 23rd, it does not drift to the 30th).
+    expect(through("2026-07-23", ["2026-07-23", "2026-08-30"])).toBe("2026-09-23");
   });
 
-  it("does not back-bill the months a lapsed student missed", () => {
-    // Enrolled in March, paid once in March, then nothing until 23 Jul. The
-    // Apr–Jul gap is written off: the July payment covers July→August.
-    expect(through("2026-03-15", ["2026-03-15", "2026-07-23"])).toBe("2026-08-23");
+  it("does not back-bill missed months but keeps the start billing day", () => {
+    // Enrolled on the 15th in March, paid once, then nothing until 23 Jul. The
+    // Apr–Jul gap is written off, and the July payment covers to 15 Aug — the
+    // billing day stays the 15th (the start day), not the 23rd they paid on.
+    expect(through("2026-03-15", ["2026-03-15", "2026-07-23"])).toBe("2026-08-15");
   });
 
   it("is order-independent", () => {
@@ -94,6 +96,60 @@ describe("computePaidThrough — one month of coverage per payment", () => {
 
   it("clamps to the end of short months", () => {
     expect(through("2026-01-31", ["2026-01-31"])).toBe("2026-02-28");
+  });
+
+  it("next-due is one month from the start day even when paid mid-month", () => {
+    // The reported case: start 4 Sep, paid 15 Sep → next due 4 Oct, not 15 Oct.
+    expect(through("2026-09-04", ["2026-09-15"])).toBe("2026-10-04");
+    // And the following month's late payment keeps the 4th, not the 20th.
+    expect(through("2026-09-04", ["2026-09-15", "2026-10-20"])).toBe("2026-11-04");
+  });
+});
+
+describe("anchorOnOrBefore — fixing the billing day within a window", () => {
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  it("returns this month's anchor once it has passed", () => {
+    expect(iso(anchorOnOrBefore(parseDate("2026-09-15"), 4))).toBe("2026-09-04");
+    expect(iso(anchorOnOrBefore(parseDate("2026-09-04"), 4))).toBe("2026-09-04"); // inclusive
+  });
+
+  it("falls back to last month's anchor before it arrives", () => {
+    expect(iso(anchorOnOrBefore(parseDate("2026-09-02"), 4))).toBe("2026-08-04");
+  });
+
+  it("clamps the anchor day to short months", () => {
+    expect(iso(anchorOnOrBefore(parseDate("2026-02-15"), 31))).toBe("2026-01-31");
+    expect(iso(anchorOnOrBefore(parseDate("2026-03-01"), 31))).toBe("2026-02-28");
+  });
+});
+
+describe("isMonthSettled — a month is paid only when the balance is cleared", () => {
+  it("is unsettled while the amount paid is below the amount due", () => {
+    expect(isMonthSettled(100, 300)).toBe(false);
+  });
+  it("is settled once the amount paid reaches (or exceeds) the due", () => {
+    expect(isMonthSettled(300, 300)).toBe(true);
+    expect(isMonthSettled(350, 300)).toBe(true);
+  });
+  it("treats legacy rows with no recorded due as settled", () => {
+    expect(isMonthSettled(1, null)).toBe(true);
+    expect(isMonthSettled(0, undefined)).toBe(true);
+  });
+});
+
+describe("partial payments do not advance coverage", () => {
+  const through = (startDate: string, paymentDates: string[]) =>
+    computePaidThrough({ startDate, paymentDates }).toISOString().slice(0, 10);
+
+  it("a month with no settled payment gives no coverage past the start", () => {
+    // The partial month's date is filtered out by the caller (unsettled), so
+    // coverage stays at the start date.
+    expect(through("2026-09-04", [])).toBe("2026-09-04");
+  });
+
+  it("coverage advances only once the top-up settles the month", () => {
+    expect(through("2026-09-04", ["2026-09-15"])).toBe("2026-10-04");
   });
 });
 

@@ -36,6 +36,7 @@ export type PaymentRow = {
   className: string;
   teacherId: string;
   amount: string;
+  amountDue: string | null;
   method: PaymentMethod;
   billingMonth: string;
   recordedBy: string;
@@ -264,8 +265,15 @@ export type PaymentPreview = {
   isAdvance: boolean;
   defaultAmount: number;
   fullTuition: number;
+  /** The month's total cost after discount. */
+  monthDue: number;
+  /** How much has already been paid toward this month. */
+  paidSoFar: number;
+  /** What still needs collecting to settle the month. */
+  remaining: number;
   discount: { id: string; type: "percentage" | "fixed"; value: number; label: string } | null;
   teacherCredit: number;
+  /** True once the month is fully settled (not just partially paid). */
   alreadyPaid: boolean;
   frozen: boolean;
 };
@@ -342,6 +350,8 @@ export type StudentDetail = {
     currency: string;
     paidThrough: string;
     nextDueDate: string;
+    /** Money still owed across partially-paid months (0 when fully paid up). */
+    balance: number;
     status: StudentStatus;
   };
   payments: PaymentRow[];

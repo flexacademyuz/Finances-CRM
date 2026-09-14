@@ -2,7 +2,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../db";
 import { students, payments, paymentFreezes } from "@shared/schema";
 import { monthKey, parseDate, atMidnight, toIso } from "@shared/date";
-import { computePaidThrough, decideStudentStatus, elapsedFrozenDays } from "@shared/billing";
+import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { getSettings, setStudentsStatus, setStudentsPaidThrough } from "../storage";
 import { env } from "../env";
 
@@ -53,15 +53,22 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     .from(students)
     .where(eq(students.active, true));
 
-  // Every non-voided payment date, grouped by student. Coverage is built from
-  // *when* each payment was taken, not from how many there are, so a student
-  // who missed months isn't billed for them retroactively.
+  // Every non-voided, fully-settled payment date, grouped by student. Coverage
+  // is built from *when* each month was fully paid, not from how many payments
+  // there are: a student who missed months isn't billed for them retroactively,
+  // and a month that's only partially paid doesn't advance coverage at all.
   const paymentRows = await db
-    .select({ studentId: payments.studentId, paidAt: payments.createdAt })
+    .select({
+      studentId: payments.studentId,
+      paidAt: payments.createdAt,
+      amount: payments.amount,
+      amountDue: payments.amountDue,
+    })
     .from(payments)
     .where(eq(payments.voided, false));
   const paymentsByStudent = new Map<string, string[]>();
   for (const p of paymentRows) {
+    if (!isMonthSettled(Number(p.amount), p.amountDue == null ? null : Number(p.amountDue))) continue;
     const list = paymentsByStudent.get(p.studentId) ?? [];
     list.push(toIso(p.paidAt));
     paymentsByStudent.set(p.studentId, list);
