@@ -160,7 +160,7 @@ export function ClassDetail() {
                       </div>
                     )}
                   </div>
-                  <StatusBadge status={s.status} />
+                  <StatusBadge status={s.status} balance={s.balance} />
                   <ChevronRight size={18} className="shrink-0 text-tg-hint" />
                 </Link>
               </Card>

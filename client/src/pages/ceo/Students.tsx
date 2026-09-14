@@ -203,7 +203,7 @@ export function StudentsPage() {
                     </div>
                   )}
                 </div>
-                {view !== "archived" && <StatusBadge status={s.status} />}
+                {view !== "archived" && <StatusBadge status={s.status} balance={s.balance} />}
                 <ChevronRight size={18} className="shrink-0 text-tg-hint" />
               </Link>
               {view === "archived" && (

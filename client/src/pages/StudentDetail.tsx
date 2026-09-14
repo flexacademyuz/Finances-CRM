@@ -70,7 +70,7 @@ export function StudentDetail() {
             )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <StatusBadge status={billing.status} />
+            <StatusBadge status={billing.status} balance={billing.balance} />
             {canManage && (
               <StudentActions
                 student={{

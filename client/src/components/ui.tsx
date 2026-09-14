@@ -93,19 +93,31 @@ export function Segmented<T extends string>({
   );
 }
 
-export function StatusBadge({ status }: { status: StudentStatus }) {
+export function StatusBadge({
+  status,
+  balance,
+}: {
+  status: StudentStatus;
+  /** Outstanding balance; when > 0 the badge reads "Partially paid" instead. */
+  balance?: number | string;
+}) {
   const { t } = useI18n();
-  // Awaiting & overdue gently pulse to draw attention (Change 3).
-  const pulse = status === "awaiting_payment" || status === "overdue" ? "animate-pulse-soft" : "";
+  // A student who has paid part of a month reads as "Partially paid" (amber),
+  // taking precedence over the coverage status so a partial isn't mistaken for
+  // an untouched awaiting/overdue month.
+  const partial = balance != null && Number(balance) > 0;
+  // Awaiting, overdue & partial gently pulse to draw attention (Change 3).
+  const pulse =
+    partial || status === "awaiting_payment" || status === "overdue" ? "animate-pulse-soft" : "";
   return (
     <span
       className={twMerge(
         "inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold",
-        statusColor[status],
+        partial ? "bg-warning/15 text-warning" : statusColor[status],
         pulse,
       )}
     >
-      {t(status)}
+      {partial ? t("partiallyPaid") : t(status)}
     </span>
   );
 }

@@ -75,7 +75,8 @@ export function RecordPayment() {
     setStudentSearch(false);
   }
 
-  // Pre-fill amount from the student's effective fee when it loads.
+  // Pre-fill with what's still owed: the full fee for a fresh month, or the
+  // remaining balance if the student already paid part of this month.
   useEffect(() => {
     if (preview.data && amount === "") setAmount(String(preview.data.defaultAmount));
   }, [preview.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -366,7 +367,7 @@ function StudentSearchModal({
                     {s.phone ? ` · ${s.phone}` : ""}
                   </div>
                 </div>
-                <StatusBadge status={s.status} />
+                <StatusBadge status={s.status} balance={s.balance} />
               </button>
             ))}
             {filtered.length === 0 && (
