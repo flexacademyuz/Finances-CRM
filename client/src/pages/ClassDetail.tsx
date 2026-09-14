@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { ArrowLeft, Plus, Check, Minus, ChevronRight } from "lucide-react";
@@ -19,7 +19,7 @@ type CellTarget = {
   effectiveFee: string;
   month: string;
   label: string;
-  state: "paid" | "unpaid" | "frozen";
+  state: "paid" | "partial" | "unpaid" | "frozen";
 };
 
 /**
@@ -185,11 +185,20 @@ export function ClassDetail() {
   );
 }
 
-function PaidCell({ state }: { state: "paid" | "unpaid" | "frozen" }) {
+function PaidCell({ state }: { state: "paid" | "partial" | "unpaid" | "frozen" }) {
   if (state === "paid")
     return (
       <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-paid/15 text-status-paid">
         <Check size={14} />
+      </span>
+    );
+  if (state === "partial")
+    return (
+      <span
+        title="Partially paid"
+        className="inline-grid h-6 w-6 place-items-center rounded-full bg-warning/15 text-[11px] font-bold text-warning"
+      >
+        ½
       </span>
     );
   if (state === "frozen")
@@ -220,7 +229,7 @@ function CellModal({
   onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const [amount, setAmount] = useState(String(Number(target.effectiveFee) || ""));
+  const [amount, setAmount] = useState(target.state === "partial" ? "" : String(Number(target.effectiveFee) || ""));
   const [method, setMethod] = useState<PaymentMethod>("cash");
 
   const record = useMutation({
@@ -233,16 +242,28 @@ function CellModal({
     onError: () => haptic("error"),
   });
 
-  // For a paid cell we need the payment id to void it.
+  // For a paid or partially-paid cell we need the row (to void it, and to show
+  // how much is still owed on a partial).
   const paidQ = useQuery({
     queryKey: ["cell-payment", target.studentId, target.month],
     queryFn: () =>
       api<PaymentRow[]>("/api/payments", {
         query: { studentId: target.studentId, billingMonth: target.month, scope: "all" },
       }),
-    enabled: target.state === "paid",
+    enabled: target.state === "paid" || target.state === "partial",
   });
   const active = paidQ.data?.find((p) => !p.voided);
+  const due = active && active.amountDue != null ? Number(active.amountDue) : Number(target.effectiveFee) || 0;
+  const paidSoFar = active ? Number(active.amount) : 0;
+  const remaining = Math.max(due - paidSoFar, 0);
+
+  // Pre-fill a partial cell's amount with the outstanding balance once loaded.
+  useEffect(() => {
+    if (target.state === "partial" && active && amount === "") {
+      setAmount(String(remaining || ""));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   const unmark = useMutation({
     mutationFn: () =>
@@ -275,7 +296,18 @@ function CellModal({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("markPaidNote")}</div>
+          {target.state === "partial" ? (
+            <div className="rounded-lg bg-warning/10 px-3 py-2 text-sm">
+              <div className="font-semibold text-warning">
+                {t("partiallyPaid")}: {money(paidSoFar)} {t("ofDue")} {money(due)}
+              </div>
+              <div className="text-tg-hint">
+                {t("balanceDue")}: <span className="font-medium text-tg-text">{money(remaining)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("markPaidNote")}</div>
+          )}
           <Field label={t("amount")}>
             <Input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>

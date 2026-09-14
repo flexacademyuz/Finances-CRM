@@ -379,7 +379,7 @@ export type ClassLedger = {
     phone: string | null;
     status: StudentStatus;
     effectiveFee: string;
-    monthly: Record<string, "paid" | "unpaid" | "frozen">;
+    monthly: Record<string, "paid" | "partial" | "unpaid" | "frozen">;
   }[];
 };
 

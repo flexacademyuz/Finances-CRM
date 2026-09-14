@@ -1384,10 +1384,16 @@ export async function classLedger(classId: string, months: string[]) {
 
   const studentIds = roster.map((s) => s.id);
 
-  // Which (student, month) pairs have a non-voided payment.
+  // Non-voided payments per (student, month), with how much was paid vs owed so
+  // a partial payment shows as "partial", not fully "paid".
   const paidRows = studentIds.length
     ? await db
-        .select({ studentId: payments.studentId, month: payments.billingMonth })
+        .select({
+          studentId: payments.studentId,
+          month: payments.billingMonth,
+          amount: payments.amount,
+          amountDue: payments.amountDue,
+        })
         .from(payments)
         .where(
           and(
@@ -1397,7 +1403,16 @@ export async function classLedger(classId: string, months: string[]) {
           ),
         )
     : [];
-  const paidSet = new Set(paidRows.map((r) => `${r.studentId}|${r.month}`));
+  const settledSet = new Set<string>();
+  const partialSet = new Set<string>();
+  for (const r of paidRows) {
+    const key = `${r.studentId}|${r.month}`;
+    if (isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue))) {
+      settledSet.add(key);
+    } else {
+      partialSet.add(key);
+    }
+  }
 
   // Active freezes for these students, to mark frozen months.
   const freezeRows = studentIds.length
@@ -1414,9 +1429,11 @@ export async function classLedger(classId: string, months: string[]) {
     : [];
 
   const students_ = roster.map((s) => {
-    const monthly: Record<string, "paid" | "unpaid" | "frozen"> = {};
+    const monthly: Record<string, "paid" | "partial" | "unpaid" | "frozen"> = {};
     for (const m of months) {
-      if (paidSet.has(`${s.id}|${m}`)) monthly[m] = "paid";
+      const key = `${s.id}|${m}`;
+      if (settledSet.has(key)) monthly[m] = "paid";
+      else if (partialSet.has(key)) monthly[m] = "partial";
       else if (
         freezeRows.some(
           (f) =>
