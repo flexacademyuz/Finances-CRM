@@ -15,6 +15,8 @@ export type StudentRow = {
   paidThroughDate: string | null;
   enrolledAt: string;
   active: boolean;
+  /** Money still owed across partially-paid months ("0" when fully paid up). */
+  balance: string;
 };
 
 export type TeacherRow = {
@@ -380,6 +382,8 @@ export type ClassLedger = {
     status: StudentStatus;
     effectiveFee: string;
     monthly: Record<string, "paid" | "partial" | "unpaid" | "frozen">;
+    /** Money still owed across partially-paid months in the shown window. */
+    balance: number;
   }[];
 };
 

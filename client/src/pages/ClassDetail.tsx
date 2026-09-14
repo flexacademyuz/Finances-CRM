@@ -154,6 +154,11 @@ export function ClassDetail() {
                       {money(s.effectiveFee)}
                       {s.phone ? ` · ${s.phone}` : ""}
                     </div>
+                    {s.balance > 0 && (
+                      <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                        {t("owes")} {money(s.balance)}
+                      </div>
+                    )}
                   </div>
                   <StatusBadge status={s.status} />
                   <ChevronRight size={18} className="shrink-0 text-tg-hint" />

@@ -168,6 +168,7 @@ const dict = {
   advancePayment: { en: "Advance payment", uz: "Oldindan to'lov" },
   alreadyPaidMonth: { en: "Already paid this month", uz: "Bu oy to'langan" },
   balanceDue: { en: "Balance due", uz: "Qoldiq to'lov" },
+  owes: { en: "Owes", uz: "Qarzi" },
   remainingToComplete: {
     en: "Remaining to complete this month's payment",
     uz: "Bu oylik to'lovni yakunlash uchun qoldiq",

@@ -361,6 +361,15 @@ export async function listStudents(filter: StudentFilter = {}) {
       paidThroughDate: students.paidThroughDate,
       enrolledAt: students.enrolledAt,
       active: students.active,
+      // Money still owed across partially-paid months (0 when fully paid up).
+      // Legacy rows without a recorded due contribute nothing.
+      balance: sql<string>`coalesce((
+        select sum(greatest(${payments.amountDue} - ${payments.amount}, 0))
+        from ${payments}
+        where ${payments.studentId} = ${students.id}
+          and ${payments.voided} = false
+          and ${payments.amountDue} is not null
+      ), 0)`,
     })
     .from(students)
     .innerJoin(classes, eq(students.classId, classes.id))
@@ -1405,12 +1414,17 @@ export async function classLedger(classId: string, months: string[]) {
     : [];
   const settledSet = new Set<string>();
   const partialSet = new Set<string>();
+  const balanceByStudent = new Map<string, number>();
   for (const r of paidRows) {
     const key = `${r.studentId}|${r.month}`;
-    if (isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue))) {
+    const due = r.amountDue == null ? null : Number(r.amountDue);
+    if (isMonthSettled(Number(r.amount), due)) {
       settledSet.add(key);
     } else {
       partialSet.add(key);
+      // due is non-null here (a null due is always "settled").
+      const owed = Math.max(due! - Number(r.amount), 0);
+      balanceByStudent.set(r.studentId, (balanceByStudent.get(r.studentId) ?? 0) + owed);
     }
   }
 
@@ -1445,7 +1459,7 @@ export async function classLedger(classId: string, months: string[]) {
         monthly[m] = "frozen";
       else monthly[m] = "unpaid";
     }
-    return { ...s, monthly };
+    return { ...s, monthly, balance: +(balanceByStudent.get(s.id) ?? 0).toFixed(2) };
   });
 
   return students_;
