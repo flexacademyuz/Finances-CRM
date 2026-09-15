@@ -8,12 +8,16 @@ import { env } from "../env";
  */
 export const bot: Bot | null = env.botToken ? new Bot(env.botToken) : null;
 
-/** Best-effort DM to a Telegram user id; never throws. */
-export async function sendMessage(telegramId: number, text: string): Promise<void> {
+/**
+ * Best-effort message to a Telegram chat — a user id (DM) or a group/supergroup
+ * chat id. Never throws: a user may not have started the bot, the bot may have
+ * been removed from the group, etc.
+ */
+export async function sendMessage(chatId: number | string, text: string): Promise<void> {
   if (!bot) return;
   try {
-    await bot.api.sendMessage(telegramId, text, { parse_mode: "HTML" });
-  } catch {
-    // Swallow: a user may not have started the bot, etc.
+    await bot.api.sendMessage(chatId, text, { parse_mode: "HTML" });
+  } catch (err) {
+    console.error(`[bot] sendMessage to ${chatId} failed:`, (err as Error).message);
   }
 }

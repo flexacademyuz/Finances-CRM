@@ -1344,13 +1344,31 @@ export async function ensureSettings(defaults: { gracePeriodDays: number; curren
   return s ?? (await getSettings());
 }
 
-export async function updateSettings(patch: { gracePeriodDays?: number; currency?: string }) {
+export async function updateSettings(patch: {
+  gracePeriodDays?: number;
+  currency?: string;
+  paymentGroupChatId?: string | null;
+}) {
   const [s] = await db
     .update(settings)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(settings.id, "global"))
     .returning();
   return s;
+}
+
+/**
+ * Point payment notifications at a Telegram group (or clear it with null).
+ * Upserts the global settings row so it works even before settings are seeded.
+ */
+export async function setPaymentGroupChatId(chatId: string | null) {
+  await db
+    .insert(settings)
+    .values({ id: "global", paymentGroupChatId: chatId })
+    .onConflictDoUpdate({
+      target: settings.id,
+      set: { paymentGroupChatId: chatId, updatedAt: new Date() },
+    });
 }
 
 /* ─────────────────────── Bulk status helpers ───────────────────────── */

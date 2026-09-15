@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "payment_group_chat_id" text;

@@ -355,6 +355,10 @@ export const settings = pgTable("settings", {
     .notNull()
     .default(5),
   currency: text("currency").notNull().default("UZS"),
+  // Telegram chat id of the group where payment notifications are posted. Set
+  // by a CEO running /here in the group (see server/bot/bot.ts). Stored as text
+  // because supergroup ids are large negatives. Null = no group configured.
+  paymentGroupChatId: text("payment_group_chat_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

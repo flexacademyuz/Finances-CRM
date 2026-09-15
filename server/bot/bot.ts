@@ -1,7 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import { bot } from "./client";
 import { env } from "../env";
-import { getUserByTelegramId } from "../storage";
+import { getUserByTelegramId, getSettings, setPaymentGroupChatId } from "../storage";
 
 /**
  * Configure the companion bot: /start launches the Mini App via an inline
@@ -40,6 +40,55 @@ export function configureBot(): void {
     await ctx.reply(`Your Telegram ID is <code>${ctx.from?.id}</code>.`, {
       parse_mode: "HTML",
     });
+  });
+
+  // /here — register THIS group to receive payment notifications. CEO-only, so a
+  // random group can't hijack finance alerts. Run it inside the group after
+  // adding the bot (as admin, so it can read the command and post).
+  bot.command("here", async (ctx) => {
+    const chat = ctx.chat;
+    if (!chat || (chat.type !== "group" && chat.type !== "supergroup")) {
+      await ctx.reply("Run /here inside the Telegram group that should receive payment notifications.");
+      return;
+    }
+    const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
+    if (!user || user.role !== "ceo") {
+      await ctx.reply("Only the CEO can link this group to payment notifications.");
+      return;
+    }
+    await setPaymentGroupChatId(String(chat.id));
+    await ctx.reply(
+      "✅ Done. Every recorded payment will now be posted in this group.\n" +
+        "Run /unlink here to stop.",
+    );
+  });
+
+  // /unlink — stop posting payment notifications to whichever group is linked.
+  bot.command("unlink", async (ctx) => {
+    const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
+    if (!user || user.role !== "ceo") {
+      await ctx.reply("Only the CEO can change payment-notification settings.");
+      return;
+    }
+    const settings = await getSettings();
+    const linked = settings?.paymentGroupChatId;
+    if (!linked || (ctx.chat && String(ctx.chat.id) !== linked)) {
+      await ctx.reply("This group isn't linked to payment notifications.");
+      return;
+    }
+    await setPaymentGroupChatId(null);
+    await ctx.reply("🛑 Payment notifications for this group are turned off.");
+  });
+
+  // When the bot is added to a group, nudge the CEO to link it.
+  bot.on("my_chat_member", async (ctx) => {
+    const status = ctx.myChatMember.new_chat_member.status;
+    const chatType = ctx.chat?.type;
+    if ((chatType === "group" || chatType === "supergroup") && (status === "member" || status === "administrator")) {
+      await ctx.reply(
+        "👋 Thanks for adding me. A CEO can run /here in this group to start posting recorded payments.",
+      ).catch(() => undefined);
+    }
   });
 
   bot.catch((err) => {
