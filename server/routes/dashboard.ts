@@ -7,8 +7,9 @@ import { payments, students, classes, users, teachers } from "@shared/schema";
 import { monthKey, normalizeMonth, recentMonths, monthLabel } from "@shared/date";
 import { payrollMonthView } from "../services/salary";
 import { recomputeStatuses } from "../services/billing";
-import { getSettings, updateSettings, listStudents } from "../storage";
+import { getSettings, updateSettings, setPaymentGroupChatId, listStudents } from "../storage";
 import { settingsSchema } from "@shared/schema";
+import { getChatTitle } from "../bot/client";
 
 const router = Router();
 
@@ -238,6 +239,31 @@ router.patch(
   asyncHandler(async (req, res) => {
     const patch = settingsSchema.parse(req.body);
     res.json(await updateSettings(patch));
+  }),
+);
+
+/**
+ * GET /api/settings/payment-group — whether a Telegram group is linked for
+ * payment notifications, and its title if the bot can still see it (CEO-only).
+ */
+router.get(
+  "/settings/payment-group",
+  requireRole("ceo"),
+  asyncHandler(async (_req, res) => {
+    const settings = await getSettings();
+    const chatId = settings?.paymentGroupChatId ?? null;
+    const title = chatId ? await getChatTitle(chatId) : null;
+    res.json({ linked: !!chatId, chatId, title });
+  }),
+);
+
+/** POST /api/settings/payment-group/unlink — stop posting to the group (CEO-only). */
+router.post(
+  "/settings/payment-group/unlink",
+  requireRole("ceo"),
+  asyncHandler(async (_req, res) => {
+    await setPaymentGroupChatId(null);
+    res.json({ linked: false, chatId: null, title: null });
   }),
 );
 

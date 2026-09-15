@@ -21,3 +21,19 @@ export async function sendMessage(chatId: number | string, text: string): Promis
     console.error(`[bot] sendMessage to ${chatId} failed:`, (err as Error).message);
   }
 }
+
+/** Resolve a chat's display title (group name), or null if unreachable. */
+export async function getChatTitle(chatId: number | string): Promise<string | null> {
+  if (!bot) return null;
+  try {
+    const chat = await bot.api.getChat(chatId);
+    // Groups/supergroups have `title`; fall back to a private chat's name.
+    return "title" in chat && chat.title
+      ? chat.title
+      : [("first_name" in chat && chat.first_name) || "", ("last_name" in chat && chat.last_name) || ""]
+          .join(" ")
+          .trim() || null;
+  } catch {
+    return null;
+  }
+}

@@ -280,6 +280,12 @@ export type PaymentPreview = {
   frozen: boolean;
 };
 
+export type PaymentGroupStatus = {
+  linked: boolean;
+  chatId: string | null;
+  title: string | null;
+};
+
 export type DiscountRow = {
   id: string;
   studentId: string;

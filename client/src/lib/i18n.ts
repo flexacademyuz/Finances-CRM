@@ -169,6 +169,18 @@ const dict = {
   alreadyPaidMonth: { en: "Already paid this month", uz: "Bu oy to'langan" },
   balanceDue: { en: "Balance due", uz: "Qoldiq to'lov" },
   owes: { en: "Owes", uz: "Qarzi" },
+  paymentNotifications: { en: "Payment notifications", uz: "To'lov bildirishnomalari" },
+  groupLinked: { en: "Posting payments to", uz: "To'lovlar yuboriladi" },
+  groupNotLinked: { en: "No Telegram group linked", uz: "Telegram guruh ulanmagan" },
+  linkGroupHint: {
+    en: "Add the bot to a Telegram group as admin, then send /here in that group to start posting every recorded payment there.",
+    uz: "Botni Telegram guruhga admin qilib qo'shing, so'ng o'sha guruhda /here yuboring — har bir to'lov o'sha yerga yuboriladi.",
+  },
+  unlinkGroup: { en: "Unlink group", uz: "Guruhni uzish" },
+  linkedGroupHint: {
+    en: "Every recorded payment is posted here and sent to CEO/Accountant chats.",
+    uz: "Har bir to'lov shu yerga va CEO/Buxgalter chatlariga yuboriladi.",
+  },
   remainingToComplete: {
     en: "Remaining to complete this month's payment",
     uz: "Bu oylik to'lovni yakunlash uchun qoldiq",
