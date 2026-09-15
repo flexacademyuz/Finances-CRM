@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   users,
@@ -238,6 +238,37 @@ export async function getTeacherByUserId(userId: string) {
 export async function getTeacherById(id: string) {
   const [t] = await db.select().from(teachers).where(eq(teachers.id, id));
   return t;
+}
+
+/**
+ * Non-voided payments recorded in [fromUtc, toUtc), grouped by teacher, with a
+ * count and net total (amount − refunds). Used for the "Today so far" summary.
+ * Ordered by total desc so the biggest earners lead.
+ */
+export async function paymentTotalsByTeacher(fromUtc: Date, toUtc: Date) {
+  return db
+    .select({
+      teacherId: payments.teacherId,
+      teacherName: users.fullName,
+      count: sql<number>`count(*)`,
+      total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
+      // Min/max of the per-payment net, so the summary can show "N × price" when
+      // every payment for the teacher today is the same amount.
+      minAmount: sql<string>`coalesce(min(${payments.amount} - ${payments.refundedAmount}), 0)`,
+      maxAmount: sql<string>`coalesce(max(${payments.amount} - ${payments.refundedAmount}), 0)`,
+    })
+    .from(payments)
+    .innerJoin(teachers, eq(payments.teacherId, teachers.id))
+    .innerJoin(users, eq(teachers.userId, users.id))
+    .where(
+      and(
+        eq(payments.voided, false),
+        gte(payments.createdAt, fromUtc),
+        lt(payments.createdAt, toUtc),
+      ),
+    )
+    .groupBy(payments.teacherId, users.fullName)
+    .orderBy(desc(sql`sum(${payments.amount} - ${payments.refundedAmount})`));
 }
 
 /** Teachers joined with their user record (name, telegram id, active). */

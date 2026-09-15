@@ -1,5 +1,5 @@
 import { recomputeStatuses } from "./services/billing";
-import { sendAwaitingDigest } from "./bot/notifications";
+import { sendAwaitingDigest, sendTodaySummary } from "./bot/notifications";
 
 /**
  * Lightweight in-process scheduler. Recomputes student statuses hourly (cheap,
@@ -35,6 +35,30 @@ export function startJobs(): void {
       } catch (err) {
         console.error("[jobs] sendAwaitingDigest failed:", (err as Error).message);
       }
+    }
+  }, HOUR);
+
+  // "Today so far" summary at Tashkent (UTC+5) 12:00, 15:00, 19:00, and 00:00 —
+  // i.e. UTC 07:00, 10:00, 14:00, 19:00. The midnight run (UTC 19) closes out the
+  // day that just ended. Fires once per checkpoint per day.
+  const SUMMARY_HOURS_UTC = new Map<number, boolean>([
+    [7, false], // 12:00 Tashkent
+    [10, false], // 15:00
+    [14, false], // 19:00
+    [19, true], // 00:00 (end of day)
+  ]);
+  const firedSummary = new Set<string>();
+  setInterval(async () => {
+    const now = new Date();
+    const hour = now.getUTCHours();
+    if (!SUMMARY_HOURS_UTC.has(hour)) return;
+    const key = `${now.toISOString().slice(0, 10)}-${hour}`;
+    if (firedSummary.has(key)) return;
+    firedSummary.add(key);
+    try {
+      await sendTodaySummary(SUMMARY_HOURS_UTC.get(hour));
+    } catch (err) {
+      console.error("[jobs] sendTodaySummary failed:", (err as Error).message);
     }
   }, HOUR);
 }

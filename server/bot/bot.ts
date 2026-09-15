@@ -2,6 +2,7 @@ import { InlineKeyboard } from "grammy";
 import { bot } from "./client";
 import { env } from "../env";
 import { getUserByTelegramId, getSettings, setPaymentGroupChatId } from "../storage";
+import { todaySummaryNow } from "./notifications";
 
 /**
  * Configure the companion bot: /start launches the Mini App via an inline
@@ -40,6 +41,17 @@ export function configureBot(): void {
     await ctx.reply(`Your Telegram ID is <code>${ctx.from?.id}</code>.`, {
       parse_mode: "HTML",
     });
+  });
+
+  // /today — on-demand "Today so far" summary (today's payments by teacher).
+  // Finance-only (CEO/Accountant), since it exposes collection totals.
+  bot.command("today", async (ctx) => {
+    const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
+    if (!user || (user.role !== "ceo" && user.role !== "accountant")) {
+      await ctx.reply("Only the CEO or Accountant can view the daily summary.");
+      return;
+    }
+    await ctx.reply(await todaySummaryNow(), { parse_mode: "HTML" });
   });
 
   // /here — register THIS group to receive payment notifications. CEO-only, so a
