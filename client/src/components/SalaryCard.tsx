@@ -177,6 +177,11 @@ function MonthDetail({
       <div>
         <div className="mb-1 text-sm font-semibold">{t("salaryStudents")}</div>
         <div className="mb-2 text-xs text-tg-hint">{t("justifyNote")}</div>
+        {s.estimatedSalary === 0 && students.length > 0 && (
+          <div className="mb-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+            ⚠️ {t("salaryRateUnset")}
+          </div>
+        )}
         {students.length ? (
           <div className="overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
@@ -292,6 +297,12 @@ function PayMonthModal({
             <Row label={t("netOwed")} value={money(net)} bold />
           </div>
         </div>
+
+        {detail.estimatedSalary === 0 && detail.students.length > 0 && (
+          <div className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
+            ⚠️ {t("salaryRateUnset")}
+          </div>
+        )}
 
         {/* Justification the CEO is paying against. */}
         {detail.students.length > 0 && (

@@ -422,6 +422,10 @@ const dict = {
     uz: "Ushbu filialdagi har bir to'lovni o'quvchilarning HOZIRGI to'lovlariga solishtirib qayta tekshiradi, shunda qoldiq va \"qisman to'langan\" belgilar to'g'ri bo'ladi. Noto'g'ri to'lovlarni tuzatgandan keyin ishlating. O'quvchi to'lagan summa o'zgarmaydi.",
   },
   recalcDone: { en: "Updated {n} payment(s). Balances refreshed.", uz: "{n} ta to'lov yangilandi. Balanslar yangilandi." },
+  salaryRateUnset: {
+    en: "Salary is 0 because this teacher's pay rate isn't set (or was 0 when these payments were recorded). Set it in Users → the teacher → salary model, then run Branches → Recalculate balances to apply it to existing payments.",
+    uz: "Maosh 0, chunki o'qituvchining to'lov stavkasi belgilanmagan (yoki to'lovlar kiritilganda 0 bo'lgan). Uni Foydalanuvchilar → o'qituvchi → maosh modelida belgilang, so'ng Filiallar → Balanslarni qayta hisoblashni ishga tushiring.",
+  },
 } as const;
 
 export type StringKey = keyof typeof dict;
