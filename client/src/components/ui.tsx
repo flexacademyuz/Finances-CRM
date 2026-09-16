@@ -2,7 +2,7 @@ import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, ty
 import { Link } from "wouter";
 import { twMerge } from "tailwind-merge";
 import type { StudentStatus, PaymentMethod } from "@shared/schema";
-import { statusColor } from "../lib/format";
+import { statusColor, money } from "../lib/format";
 import { useI18n } from "../lib/i18n";
 
 export function Button({
@@ -29,6 +29,17 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={twMerge("input", className)} {...props} />;
+}
+
+/**
+ * Live "= 12,345 UZS" preview shown under a money input, so a missing zero on a
+ * large amount (e.g. 225 instead of 225,000) is obvious while typing. Renders
+ * nothing for an empty, zero, or invalid value.
+ */
+export function MoneyHint({ value, currency }: { value: string | number; currency?: string }) {
+  const n = typeof value === "string" ? Number(value) : value;
+  if (value === "" || value == null || !Number.isFinite(n) || n <= 0) return null;
+  return <div className="mt-1 text-xs font-medium text-muted">= {money(n, currency)}</div>;
 }
 
 export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {

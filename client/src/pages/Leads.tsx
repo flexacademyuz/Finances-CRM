@@ -22,7 +22,7 @@ import { can } from "@shared/permissions";
 import { money } from "../lib/format";
 import type { LeadRow, Class, DraftClassRow, TeacherRow } from "../lib/types";
 
-import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../components/ui";
+import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner } from "../components/ui";
 
 type LeadStatus = "pending" | "approved" | "rejected";
 const TABS: LeadStatus[] = ["pending", "approved", "rejected"];
@@ -620,6 +620,7 @@ function NewDraftModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           </Field>
           <Field label={t("fee")}>
             <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} placeholder="0" />
+            <MoneyHint value={defaultFee} />
           </Field>
         </div>
         {create.isError && (
@@ -795,6 +796,7 @@ function AssignDraftModal({
         <div className="grid grid-cols-2 gap-2">
           <Field label={t("fee")}>
             <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} placeholder="0" />
+            <MoneyHint value={defaultFee} />
           </Field>
           <Field label={t("startDate")}>
             <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />

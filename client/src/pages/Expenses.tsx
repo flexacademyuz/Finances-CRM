@@ -12,7 +12,7 @@ import {
   EXPENSE_PAYMENT_METHODS,
 } from "@shared/expense-categories";
 import type { ExpenseRow, ExpenseSummary } from "../lib/types";
-import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../components/ui";
+import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner } from "../components/ui";
 
 /** Expenses list + add, with per-category month summary (V2 Change 5). */
 export function ExpensesPage() {
@@ -187,6 +187,7 @@ function AddExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         <div className="grid grid-cols-2 gap-2">
           <Field label={t("amount")}>
             <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <MoneyHint value={amount} />
           </Field>
           <Field label={t("date")}>
             <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />

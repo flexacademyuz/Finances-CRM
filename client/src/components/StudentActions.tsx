@@ -6,7 +6,7 @@ import { useI18n } from "../lib/i18n";
 import { money } from "../lib/format";
 import { monthKey } from "@shared/date";
 import type { FreezeRow, DiscountRow, Class, StudentRow } from "../lib/types";
-import { Button, Field, Input, Modal, Select } from "./ui";
+import { Button, Field, Input, MoneyHint, Modal, Select } from "./ui";
 
 /** Minimal student shape the freeze/discount actions need. */
 type ActionStudent = { id: string; classId: string; fullName: string; effectiveFee: string };
@@ -180,6 +180,7 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
         </Field>
         <Field label={t("fee")}>
           <Input type="number" inputMode="decimal" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} placeholder={student.effectiveFee} />
+          <MoneyHint value={monthlyFee} />
         </Field>
         <Field label={t("startDate")}>
           <Input type="date" value={enrolledAt} onChange={(e) => setEnrolledAt(e.target.value)} />

@@ -8,7 +8,7 @@ import { useSession } from "../../lib/session";
 import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
-import { Button, Card, Empty, Field, Input, Modal, Select, Spinner } from "../../components/ui";
+import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner } from "../../components/ui";
 
 /**
  * Groups (classes) management. Available to CEO and Accountant: both can create
@@ -155,6 +155,7 @@ function GroupModal({
         <div className="grid grid-cols-2 gap-2">
           <Field label={t("fee")}>
             <Input type="number" value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} />
+            <MoneyHint value={defaultFee} />
           </Field>
           <Field label="Room">
             <Input value={room} onChange={(e) => setRoom(e.target.value)} />
@@ -178,6 +179,7 @@ function GroupModal({
             onChange={(e) => setPerStudentRate(e.target.value)}
             placeholder="leave blank to keep current"
           />
+          <MoneyHint value={perStudentRate} />
         </Field>
         {save.isError && (
           <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>

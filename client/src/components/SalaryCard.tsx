@@ -7,7 +7,7 @@ import { haptic } from "../lib/telegram";
 import { money, formatDate } from "../lib/format";
 import type { MonthlySalary, SalaryMonthRow } from "../lib/types";
 import type { PaymentMethod } from "@shared/schema";
-import { Button, Card, Field, Input, Modal, Segmented, Spinner, Stat } from "./ui";
+import { Button, Card, Field, Input, MoneyHint, Modal, Segmented, Spinner, Stat } from "./ui";
 
 /**
  * A teacher's functional salary card: a monthly table, salary analytics, and the
@@ -309,6 +309,7 @@ function PayMonthModal({
 
         <Field label={t("amountToPay")}>
           <Input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <MoneyHint value={amount} />
         </Field>
         <Field label={t("method")}>
           <MethodPicker value={method} onChange={setMethod} />
@@ -351,6 +352,7 @@ function AdvanceModal({ teacherId, onClose }: { teacherId: string; onClose: () =
       <div className="space-y-3">
         <Field label={t("amount")}>
           <Input type="number" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <MoneyHint value={amount} />
         </Field>
         <Field label={t("method")}>
           <MethodPicker value={method} onChange={setMethod} />

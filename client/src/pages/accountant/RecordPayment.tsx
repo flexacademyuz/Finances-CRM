@@ -8,7 +8,7 @@ import { haptic } from "../../lib/telegram";
 import { money } from "../../lib/format";
 import type { TeacherRow, Class, StudentRow, PaymentPreview } from "../../lib/types";
 import type { PaymentMethod } from "@shared/schema";
-import { Button, Card, Field, Input, Modal, Spinner, StatusBadge } from "../../components/ui";
+import { Button, Card, Field, Input, MoneyHint, Modal, Spinner, StatusBadge } from "../../components/ui";
 
 /**
  * Accountant "Record Payment" flow (spec §3.2):
@@ -240,6 +240,7 @@ export function RecordPayment() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
+            <MoneyHint value={amount} />
           </Field>
           <div>
             <span className="label">{`${stepNo(5)}. ${t("method")}`}</span>
