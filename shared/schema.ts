@@ -11,8 +11,9 @@ import {
   jsonb,
   index,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -264,11 +265,12 @@ export const payments = pgTable(
     byBillingMonth: index("payments_billing_month_idx").on(t.billingMonth),
     byTeacher: index("payments_teacher_idx").on(t.teacherId),
     byBranch: index("payments_branch_idx").on(t.branchId),
-    // One active payment per student per billing month.
-    uniqStudentMonth: unique("payments_student_month_uniq").on(
-      t.studentId,
-      t.billingMonth,
-    ),
+    // At most one ACTIVE payment per student per billing month. Voided rows are
+    // exempt (partial index), so a mistaken payment can be voided and the month
+    // re-recorded without colliding — the void stays as audit history.
+    uniqActiveStudentMonth: uniqueIndex("payments_active_student_month_uniq")
+      .on(t.studentId, t.billingMonth)
+      .where(sql`${t.voided} = false`),
   }),
 );
 

@@ -640,10 +640,11 @@ export async function nextUnpaidBillingMonth(studentId: string, now: Date = new 
   let m = monthKey(now);
   for (;;) {
     const s = byMonth.get(m);
-    // Free month, or a partially-paid month to top up → this is the target.
-    if (!s || (s.hasLive && !s.settled)) return m;
-    // Settled, or blocked by a voided-only row → move to the next month.
-    m = shiftMonth(m, 1);
+    // Target this month unless it already has a fully-settled ACTIVE payment. A
+    // free month, a voided-only month (re-billable — the active slot is free
+    // again after a void), or a partially-paid month to top up all land here.
+    if (!(s && s.hasLive && s.settled)) return m;
+    m = shiftMonth(m, 1); // fully settled → look at the next month
   }
 }
 
