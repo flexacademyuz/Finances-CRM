@@ -68,7 +68,8 @@ export type UserRow = {
   username: string | null;
   fullName: string;
   role: Role;
-  branchId: string | null;
+  /** Branches this user may access; empty = all branches (full access). */
+  branchIds: string[];
   permissions: string[];
   loginUsername: string | null;
   approved: boolean;

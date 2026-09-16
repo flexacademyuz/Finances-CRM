@@ -18,8 +18,10 @@ export function UsersPage() {
   const { t } = useI18n();
   const { branches } = useBranch();
   const qc = useQueryClient();
-  const branchName = (id: string | null) =>
-    id ? branches.find((b) => b.id === id)?.name ?? "—" : t("allBranches");
+  const branchLabel = (ids: string[]) =>
+    ids.length === 0
+      ? t("allBranches")
+      : ids.map((id) => branches.find((b) => b.id === id)?.name ?? "—").join(", ");
   const [inviting, setInviting] = useState(false);
   const [salaryFor, setSalaryFor] = useState<UserRow | null>(null);
   const [editing, setEditing] = useState<UserRow | null>(null);
@@ -63,7 +65,7 @@ export function UsersPage() {
                 <div className="min-w-0">
                   <div className="font-semibold">{u.fullName}</div>
                   <div className="text-xs text-tg-hint">
-                    {t(u.role)} · {branchName(u.branchId)}
+                    {t(u.role)} · {branchLabel(u.branchIds)}
                     {u.username ? ` · @${u.username}` : ""}
                     {!u.active ? " · disabled" : ""}
                   </div>
@@ -165,11 +167,10 @@ function PendingCard({ user, onDone }: { user: UserRow; onDone: () => void }) {
 
 function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
-  const { branches } = useBranch();
   const [telegramId, setTelegramId] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Role>("teacher");
-  const [branchId, setBranchId] = useState<string>("all");
+  const [branchIds, setBranchIds] = useState<string[]>([]);
   const [loginUsername, setLoginUsername] = useState("");
   const [password, setPassword] = useState("");
 
@@ -181,13 +182,13 @@ function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () =>
           telegramId: Number(telegramId),
           fullName,
           role,
-          branchId: branchId === "all" ? null : branchId,
+          branchIds,
           loginUsername: loginUsername.trim() || undefined,
           password: password || undefined,
         },
       }),
     onSuccess: () => {
-      setTelegramId(""); setFullName(""); setRole("teacher"); setBranchId("all"); setLoginUsername(""); setPassword("");
+      setTelegramId(""); setFullName(""); setRole("teacher"); setBranchIds([]); setLoginUsername(""); setPassword("");
       onSaved();
     },
   });
@@ -209,12 +210,7 @@ function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () =>
           </Select>
         </Field>
         <Field label={t("branchAssignment")}>
-          <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="all">{t("allBranches")}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </Select>
+          <BranchMultiSelect value={branchIds} onChange={setBranchIds} />
         </Field>
         {/* Optional login credentials for recovery (can also be set later). */}
         <Field label={`${t("loginUsernameLabel")} (${t("optional")})`}>
@@ -249,11 +245,10 @@ function EditUserModal({
   onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const { branches } = useBranch();
   const [fullName, setFullName] = useState(user.fullName);
   const [username, setUsername] = useState(user.username ?? "");
   const [role, setRole] = useState<Role>(user.role);
-  const [branchId, setBranchId] = useState<string>(user.branchId ?? "all");
+  const [branchIds, setBranchIds] = useState<string[]>(user.branchIds ?? []);
   const [loginUsername, setLoginUsername] = useState(user.loginUsername ?? "");
   const [password, setPassword] = useState("");
 
@@ -264,9 +259,10 @@ function EditUserModal({
         body: { fullName, username: username.trim() || null, role },
       });
       // Update the branch assignment when it changed.
-      const nextBranch = branchId === "all" ? null : branchId;
-      if (nextBranch !== (user.branchId ?? null)) {
-        await api(`/api/users/${user.id}/branch`, { method: "PATCH", body: { branchId: nextBranch } });
+      const before = [...(user.branchIds ?? [])].sort().join(",");
+      const after = [...branchIds].sort().join(",");
+      if (before !== after) {
+        await api(`/api/users/${user.id}/branch`, { method: "PATCH", body: { branchIds } });
       }
       // Only touch credentials when the CEO set both a username and a password.
       if (loginUsername.trim() && password) {
@@ -296,12 +292,7 @@ function EditUserModal({
           </Select>
         </Field>
         <Field label={t("branchAssignment")}>
-          <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="all">{t("allBranches")}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </Select>
+          <BranchMultiSelect value={branchIds} onChange={setBranchIds} />
           <span className="mt-1 block text-xs text-tg-hint">{t("branchAssignmentNote")}</span>
         </Field>
         {/* Set / reset login credentials to help a locked-out user recover. */}
@@ -394,6 +385,44 @@ function PermissionsModal({
         </Button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Choose which branches a user may access. "All branches" (an empty set) grants
+ * full access — including branches added later. Otherwise pick a specific set.
+ */
+function BranchMultiSelect({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const { t } = useI18n();
+  const { branches } = useBranch();
+  const all = value.length === 0;
+
+  const toggle = (id: string) => {
+    const next = value.includes(id) ? value.filter((x) => x !== id) : [...value, id];
+    onChange(next); // empty set = all branches
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+        <input
+          type="checkbox"
+          checked={all}
+          onChange={(e) => onChange(e.target.checked ? [] : branches.slice(0, 1).map((b) => b.id))}
+        />
+        <span className="flex-1 font-medium">{t("allBranches")}</span>
+      </label>
+      {!all &&
+        branches.map((b) => (
+          <label
+            key={b.id}
+            className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm"
+          >
+            <input type="checkbox" checked={value.includes(b.id)} onChange={() => toggle(b.id)} />
+            <span className="flex-1">{b.name}</span>
+          </label>
+        ))}
+    </div>
   );
 }
 

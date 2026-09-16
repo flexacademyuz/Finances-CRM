@@ -93,11 +93,12 @@ export const users = pgTable("users", {
   username: text("username"),
   fullName: text("full_name").notNull(),
   role: roleEnum("role").notNull(),
-  // Which branch this user is pinned to. When set, the user only ever sees and
-  // writes that branch's data. Null = "all branches" (cross-branch access): the
-  // CEO, and any teacher/staff who genuinely works across every branch. They get
-  // a branch switcher and can act in any branch.
-  branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  // The set of branches this user may access, as branch-id strings. An EMPTY
+  // array means "all branches" (full access): the CEO, and anyone granted every
+  // branch. One id pins them to a single branch; several ids grant exactly those
+  // branches. Restricted users switch between their branches and view one at a
+  // time (no cross-company aggregate). See shared: DEFAULT_BRANCH_ID.
+  branchIds: jsonb("branch_ids").$type<string[]>().notNull().default([]),
   // Extra abilities the CEO grants this user on top of their role defaults.
   // See shared/permissions.ts.
   permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
@@ -613,7 +614,6 @@ export const branchesRelations = relations(branches, ({ many }) => ({
 
 export const usersRelations = relations(users, ({ one }) => ({
   teacher: one(teachers, { fields: [users.id], references: [teachers.userId] }),
-  branch: one(branches, { fields: [users.branchId], references: [branches.id] }),
 }));
 
 export const teachersRelations = relations(teachers, ({ one, many }) => ({
@@ -690,9 +690,12 @@ export const updateBranchSchema = z.object({
   active: z.boolean().optional(),
 });
 
-/** CEO assigns a user to a branch, or to "all branches" (branchId = null). */
+/**
+ * CEO sets which branches a user may access. An empty array = "all branches"
+ * (full access). One or more ids grant exactly those branches.
+ */
 export const assignUserBranchSchema = z.object({
-  branchId: z.string().uuid().nullable(),
+  branchIds: z.array(z.string().uuid()),
 });
 
 /* ─── Credential auth: re-link a new Telegram account & self sign-up ─── */

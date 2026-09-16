@@ -404,8 +404,8 @@ const dict = {
   },
   branchAssignment: { en: "Branch access", uz: "Filial ruxsati" },
   branchAssignmentNote: {
-    en: "Pin this user to one branch, or give them access to all branches.",
-    uz: "Bu foydalanuvchini bitta filialga biriktiring yoki barcha filiallarga ruxsat bering.",
+    en: "Choose one branch, several, or all branches. \"All branches\" also covers any branch added later.",
+    uz: "Bitta, bir nechta yoki barcha filiallarni tanlang. \"Barcha filiallar\" keyin qo'shilganlarini ham qamrab oladi.",
   },
   noBranchGroupLinked: { en: "No Telegram group linked", uz: "Telegram guruh ulanmagan" },
   linkBranchGroupHint: {

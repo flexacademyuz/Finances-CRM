@@ -17,15 +17,17 @@ export function useSession(): Me {
 /* ─────────────────────────── Branch selection ──────────────────────── */
 
 type BranchState = {
-  /** Every branch (for the switcher and labels). */
+  /** Every branch (for labels). */
   branches: Branch[];
-  /** The branch this user is pinned to, or null for all-branches access. */
-  pinnedBranchId: string | null;
-  /** True when the user may switch branches (all-branches access). */
+  /** Only the branches this user may access (empty = all branches). */
+  allowedBranches: Branch[];
+  /** True when the user has full (all-branches) access. */
+  fullAccess: boolean;
+  /** True when there's more than one branch to switch between. */
   canSwitch: boolean;
-  /** The active branch id, or null for the "All branches" view. */
+  /** The active branch id, or null for the "All branches" view (full access). */
   selectedBranchId: string | null;
-  /** Switch the active branch (all-branches users only). */
+  /** Switch the active branch. Null = "All branches" (full-access users only). */
   setBranch: (id: string | null) => void;
 };
 
@@ -46,30 +48,40 @@ export function useBranchName(id: string | null | undefined): string {
 
 export function BranchProvider({ me, children }: { me: Me; children: ReactNode }) {
   const qc = useQueryClient();
-  const pinnedBranchId = me.user.branchId ?? null;
-  const canSwitch = pinnedBranchId == null;
+  const accessIds = me.user.branchIds ?? [];
+  const fullAccess = accessIds.length === 0;
+  const allowedBranches = fullAccess
+    ? me.branches
+    : me.branches.filter((b) => accessIds.includes(b.id));
 
-  // A pinned user is always locked to their branch. An all-branches user keeps
-  // their last choice (persisted), defaulting to the "All branches" view.
-  const initial = canSwitch ? getSelectedBranch() : pinnedBranchId;
-  const [selectedBranchId, setSelected] = useState<string | null>(initial);
+  // Resolve the initial active branch:
+  //  - full access: last persisted choice, else the "All branches" view (null).
+  //  - restricted: last choice if it's still one of theirs, else their first.
+  const resolveAllowed = (id: string | null): string | null => {
+    if (fullAccess) return id; // null = all, or any specific branch
+    if (id && accessIds.includes(id)) return id;
+    return allowedBranches[0]?.id ?? null;
+  };
+  const [selectedBranchId, setSelected] = useState<string | null>(() =>
+    resolveAllowed(getSelectedBranch()),
+  );
 
-  // Keep the header in sync from the first render (a pinned user never wrote it).
-  if (getSelectedBranch() !== (canSwitch ? selectedBranchId : pinnedBranchId)) {
-    setSelectedBranch(canSwitch ? selectedBranchId : pinnedBranchId);
-  }
+  // Keep the header (sent on every request) in sync from the first render.
+  if (getSelectedBranch() !== selectedBranchId) setSelectedBranch(selectedBranchId);
+
+  const canSwitch = allowedBranches.length > 1;
 
   const setBranch = (id: string | null) => {
-    if (!canSwitch) return;
-    setSelectedBranch(id);
-    setSelected(id);
+    const next = resolveAllowed(id);
+    setSelectedBranch(next);
+    setSelected(next);
     // Every list/report is branch-scoped, so refetch everything on a switch.
     qc.invalidateQueries();
   };
 
   return (
     <BranchContext.Provider
-      value={{ branches: me.branches, pinnedBranchId, canSwitch, selectedBranchId, setBranch }}
+      value={{ branches: me.branches, allowedBranches, fullAccess, canSwitch, selectedBranchId, setBranch }}
     >
       {children}
     </BranchContext.Provider>

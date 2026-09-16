@@ -12,8 +12,9 @@ declare global {
     interface Request {
       authUser?: User;
       teacherId?: string;
-      // The branch this user is pinned to, or null for "all branches" access.
-      userBranchId?: string | null;
+      // The set of branches this user may access. An empty array = "all
+      // branches" (full access). One or more ids = exactly those branches.
+      userBranches?: string[];
     }
   }
 }
@@ -80,7 +81,7 @@ async function finishAuth(
     return res.status(403).json({ error: "inactive", message: "Account disabled." });
   }
   req.authUser = user;
-  req.userBranchId = user.branchId ?? null;
+  req.userBranches = user.branchIds ?? [];
   if (user.role === "teacher") {
     const t = await getTeacherByUserId(user.id);
     req.teacherId = t?.id;
@@ -88,15 +89,19 @@ async function finishAuth(
   next();
 }
 
-/**
- * The branch a list/report request should be scoped to, or `undefined` for "all
- * branches" (no filter). A pinned user is always locked to their own branch —
- * any client-supplied branch is ignored. An all-branches user (CEO, or a
- * teacher/staffer set to all branches) may narrow to one branch via the
- * `X-Branch-Id` header (or `?branch=` query); with none, they see everything.
- */
-export function branchFilter(req: Request): string | undefined {
-  if (req.userBranchId) return req.userBranchId;
+/** The branches the caller may access (empty = all branches / full access). */
+function allowedBranches(req: Request): string[] {
+  return req.userBranches ?? [];
+}
+
+/** True if the caller may access `branchId` (full-access users may access any). */
+function canAccessBranch(req: Request, branchId: string): boolean {
+  const allowed = allowedBranches(req);
+  return allowed.length === 0 || allowed.includes(branchId);
+}
+
+/** The branch the client asked to view via header / query, if any. */
+function requestedBranch(req: Request): string | undefined {
   const raw =
     req.header("x-branch-id") ??
     (typeof req.query.branch === "string" ? req.query.branch : "");
@@ -104,21 +109,46 @@ export function branchFilter(req: Request): string | undefined {
 }
 
 /**
+ * The single branch a list/report request should be scoped to, or `undefined`
+ * for "all branches" (no filter — full-access users only).
+ *
+ * - Full-access users (empty set) may narrow to one branch via the `X-Branch-Id`
+ *   header (or `?branch=`); with none, they see everything (undefined).
+ * - Restricted users always see exactly one of their branches: the requested one
+ *   if it's allowed, otherwise their first branch. They never get an unfiltered
+ *   cross-company view.
+ */
+export function branchFilter(req: Request): string | undefined {
+  const allowed = allowedBranches(req);
+  const requested = requestedBranch(req);
+  if (allowed.length === 0) return requested; // full access: header or all
+  if (requested && allowed.includes(requested)) return requested;
+  return allowed[0]; // default to their first branch
+}
+
+/**
  * The branch a NEW top-level entity (group, lead, draft, expense) should be
- * created in. Pinned users always create in their own branch (a mismatched body
- * value is rejected). All-branches users use the body branch or the selected
- * header branch; if they've picked neither, the caller must choose one.
+ * created in. Restricted users create in the requested branch (must be one of
+ * theirs) or, if they have exactly one, that one. Full-access users use the body
+ * branch or the selected header branch; if they've picked neither, they must
+ * choose one.
  */
 export function writeBranch(req: Request, bodyBranchId?: string | null): string {
-  if (req.userBranchId) {
-    if (bodyBranchId && bodyBranchId !== req.userBranchId) {
-      throw Object.assign(new Error("You can only create records in your own branch."), {
-        status: 403,
-      });
+  const allowed = allowedBranches(req);
+  const chosen = bodyBranchId || requestedBranch(req);
+
+  if (allowed.length > 0) {
+    if (chosen) {
+      if (!allowed.includes(chosen)) {
+        throw Object.assign(new Error("You don't have access to that branch."), { status: 403 });
+      }
+      return chosen;
     }
-    return req.userBranchId;
+    if (allowed.length === 1) return allowed[0];
+    throw Object.assign(new Error("Select a branch first."), { status: 400 });
   }
-  const chosen = bodyBranchId || branchFilter(req);
+
+  // Full access.
   if (!chosen) {
     throw Object.assign(
       new Error("Select a branch first (you have access to all branches)."),
@@ -129,11 +159,11 @@ export function writeBranch(req: Request, bodyBranchId?: string | null): string 
 }
 
 /**
- * Guard access to an entity that already carries a branch: a pinned user may
- * only touch their own branch's rows; all-branches users may touch any.
+ * Guard access to an entity that already carries a branch: a restricted user may
+ * only touch branches in their set; full-access users may touch any.
  */
 export function assertBranchAccess(req: Request, branchId: string): void {
-  if (req.userBranchId && req.userBranchId !== branchId) {
+  if (!canAccessBranch(req, branchId)) {
     throw Object.assign(new Error("forbidden"), { status: 403 });
   }
 }

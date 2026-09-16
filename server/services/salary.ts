@@ -503,17 +503,17 @@ export async function recordMonthlyPayout(
 
 /** CEO payroll for one month: each teacher's salary and whether it's paid. */
 export async function payrollMonthView(month: string = monthKey(), branchId?: string) {
-  // Scope to a branch's teachers when asked: those pinned to the branch plus the
-  // "all branches" teachers (user.branchId is null). Salary itself stays
-  // teacher-centric — one person, one salary across whatever they teach.
+  // Scope to a branch's teachers when asked: those who can work in the branch —
+  // full-access teachers (empty set) or whose set includes it. Salary itself
+  // stays teacher-centric — one person, one salary across whatever they teach.
   const allTeachers = branchId
     ? (
         await db
-          .select({ t: teachers, branchId: users.branchId })
+          .select({ t: teachers, branchIds: users.branchIds })
           .from(teachers)
           .innerJoin(users, eq(teachers.userId, users.id))
       )
-        .filter((r) => r.branchId == null || r.branchId === branchId)
+        .filter((r) => (r.branchIds ?? []).length === 0 || (r.branchIds ?? []).includes(branchId))
         .map((r) => r.t)
     : await db.select().from(teachers);
   const perTeacher = await Promise.all(

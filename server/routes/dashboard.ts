@@ -119,14 +119,17 @@ router.get(
       .select({
         teacherId: teachers.id,
         name: users.fullName,
-        branchId: users.branchId,
         revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}${branchId ? sql` and ${payments.branchId} = ${branchId}` : sql``}), 0)`,
       })
       .from(teachers)
       .innerJoin(users, eq(teachers.userId, users.id))
       .leftJoin(payments, eq(payments.teacherId, teachers.id))
-      .where(branchId ? sql`(${users.branchId} is null or ${users.branchId} = ${branchId})` : undefined)
-      .groupBy(teachers.id, users.fullName, users.branchId)
+      .where(
+        branchId
+          ? sql`(jsonb_array_length(${users.branchIds}) = 0 or ${users.branchIds} @> ${JSON.stringify([branchId])}::jsonb)`
+          : undefined,
+      )
+      .groupBy(teachers.id, users.fullName)
       .orderBy(users.fullName);
 
     res.json({

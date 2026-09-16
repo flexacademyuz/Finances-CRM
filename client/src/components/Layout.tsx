@@ -188,16 +188,19 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
 }
 
 /**
- * Header branch control. All-branches users (CEO / cross-branch staff) get a
- * dropdown to switch which branch they're viewing (with an "All branches"
- * overview). Pinned users see a static chip naming their branch. Hidden when
- * there's only a single branch and nothing to switch.
+ * Header branch control.
+ *  - Full-access users get a dropdown of every branch plus an "All branches"
+ *    overview.
+ *  - Users granted several branches get a dropdown limited to their branches
+ *    (one at a time — no cross-company overview).
+ *  - Users granted exactly one branch see a static chip naming it.
+ * Hidden when there's nothing to switch and nothing worth labelling.
  */
 function BranchSwitcher() {
   const { t } = useI18n();
-  const { branches, canSwitch, pinnedBranchId, selectedBranchId, setBranch } = useBranch();
+  const { branches, allowedBranches, fullAccess, canSwitch, selectedBranchId, setBranch } = useBranch();
 
-  if (canSwitch) {
+  if (fullAccess) {
     if (branches.length <= 1) return null; // nothing to switch between
     return (
       <select
@@ -216,7 +219,26 @@ function BranchSwitcher() {
     );
   }
 
-  const name = branches.find((b) => b.id === pinnedBranchId)?.name;
+  // Restricted to a set of branches.
+  if (canSwitch) {
+    return (
+      <select
+        aria-label={t("branch")}
+        className="max-w-[9rem] truncate rounded-btn bg-bg px-2 py-1 text-xs font-semibold ring-1 ring-border"
+        value={selectedBranchId ?? allowedBranches[0]?.id}
+        onChange={(e) => setBranch(e.target.value)}
+      >
+        {allowedBranches.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  // Exactly one branch → static chip.
+  const name = allowedBranches[0]?.name;
   if (!name) return null;
   return (
     <span className="inline-flex items-center gap-1 rounded-btn bg-primary-soft px-2 py-1 text-xs font-semibold text-primary">

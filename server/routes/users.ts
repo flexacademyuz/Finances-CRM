@@ -19,7 +19,7 @@ import {
   updateUserProfile,
   setUserPermissions,
   setUserActive,
-  setUserBranch,
+  setUserBranches,
   getUserById,
   getBranchById,
   getUserByLoginUsername,
@@ -39,6 +39,12 @@ const router = Router();
 function sanitize<T extends { passwordHash?: string | null }>(user: T): Omit<T, "passwordHash"> {
   const { passwordHash: _omit, ...rest } = user;
   return rest;
+}
+
+/** True when every id refers to an existing branch (empty set is trivially ok). */
+async function allBranchesExist(ids: string[]): Promise<boolean> {
+  const results = await Promise.all(ids.map((id) => getBranchById(id)));
+  return results.every(Boolean);
 }
 
 /**
@@ -100,23 +106,23 @@ router.post(
       .object({
         loginUsername: z.string().min(3).max(64).optional(),
         password: z.string().min(6).max(128).optional(),
-        // Branch to pin the new user to; null / omitted = all branches.
-        branchId: z.string().uuid().nullable().optional(),
+        // Branches the new user may access; [] / omitted = all branches.
+        branchIds: z.array(z.string().uuid()).optional(),
       })
       .parse(req.body);
     if (creds.loginUsername) {
       const taken = await getUserByLoginUsername(creds.loginUsername);
       if (taken) return res.status(409).json({ error: "username_taken", message: "That username is taken." });
     }
-    if (creds.branchId && !(await getBranchById(creds.branchId))) {
-      return res.status(404).json({ error: "not_found", message: "Branch not found." });
+    if (creds.branchIds && !(await allBranchesExist(creds.branchIds))) {
+      return res.status(404).json({ error: "not_found", message: "One or more branches not found." });
     }
     const user = await createUser({
       telegramId: input.telegramId,
       username: input.username ?? null,
       fullName: input.fullName,
       role: input.role,
-      branchId: creds.branchId ?? null,
+      branchIds: creds.branchIds ?? [],
       // Only accept known permission keys; unknown strings are dropped so a
       // stale client can't grant a permission the server doesn't understand.
       permissions: input.permissions?.filter(isPermission),
@@ -192,15 +198,15 @@ router.patch(
 );
 
 /** Set the per-user permission grants (CEO controls who can do what). */
-/** Pin a user to a branch, or set them to "all branches" (branchId = null). */
+/** Set which branches a user may access (empty array = all branches). */
 router.patch(
   "/users/:id/branch",
   asyncHandler(async (req, res) => {
-    const { branchId } = assignUserBranchSchema.parse(req.body);
-    if (branchId && !(await getBranchById(branchId))) {
-      return res.status(404).json({ error: "not_found", message: "Branch not found." });
+    const { branchIds } = assignUserBranchSchema.parse(req.body);
+    if (!(await allBranchesExist(branchIds))) {
+      return res.status(404).json({ error: "not_found", message: "One or more branches not found." });
     }
-    const user = await setUserBranch(req.params.id, branchId);
+    const user = await setUserBranches(req.params.id, branchIds);
     if (!user) return res.status(404).json({ error: "not_found" });
     res.json(sanitize(user));
   }),

@@ -92,11 +92,11 @@ export async function getBranchByPaymentGroupChatId(chatId: string) {
   return b;
 }
 
-/** Pin a user to one branch, or to "all branches" (branchId = null). */
-export async function setUserBranch(userId: string, branchId: string | null) {
+/** Set the branches a user may access (empty array = all branches). */
+export async function setUserBranches(userId: string, branchIds: string[]) {
   const [u] = await db
     .update(users)
-    .set({ branchId })
+    .set({ branchIds })
     .where(eq(users.id, userId))
     .returning();
   return u;
@@ -127,7 +127,7 @@ export async function createUser(input: {
   username?: string | null;
   fullName: string;
   role: Role;
-  branchId?: string | null;
+  branchIds?: string[];
   permissions?: string[];
   loginUsername?: string | null;
   passwordHash?: string | null;
@@ -142,7 +142,7 @@ export async function createUser(input: {
         username: input.username ?? null,
         fullName: input.fullName,
         role: input.role,
-        branchId: input.branchId ?? null,
+        branchIds: input.branchIds ?? [],
         permissions: input.permissions ?? [],
         loginUsername: input.loginUsername ?? null,
         passwordHash: input.passwordHash ?? null,
@@ -347,9 +347,9 @@ export async function paymentTotalsByTeacher(fromUtc: Date, toUtc: Date, branchI
 }
 
 /**
- * Teachers joined with their user record (name, telegram id, active, branch).
- * When `branchId` is given, restrict to teachers assigned to that branch or to
- * "all branches" (user.branchId is null) — the ones who can work in it.
+ * Teachers joined with their user record (name, telegram id, active, branches).
+ * When `branchId` is given, restrict to teachers who can work in that branch —
+ * those with full access (empty set) or whose set includes it.
  */
 export async function listTeachers(onlyActive = false, branchId?: string) {
   const rows = await db
@@ -362,13 +362,14 @@ export async function listTeachers(onlyActive = false, branchId?: string) {
       username: users.username,
       telegramId: users.telegramId,
       active: users.active,
-      branchId: users.branchId,
+      branchIds: users.branchIds,
     })
     .from(teachers)
     .innerJoin(users, eq(teachers.userId, users.id))
     .orderBy(users.fullName);
   let out = onlyActive ? rows.filter((r) => r.active) : rows;
-  if (branchId) out = out.filter((r) => r.branchId == null || r.branchId === branchId);
+  if (branchId)
+    out = out.filter((r) => (r.branchIds ?? []).length === 0 || (r.branchIds ?? []).includes(branchId));
   return out;
 }
 

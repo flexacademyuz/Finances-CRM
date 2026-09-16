@@ -21,8 +21,8 @@ import { monthKey, monthLabel } from "@shared/date";
 
 /**
  * CEO/Accountant Telegram ids that should receive a branch's finance alerts:
- * everyone pinned to that branch, plus all-branches finance staff (branchId
- * null). With no branchId, every finance staffer (company-wide).
+ * everyone whose branch set includes it, plus full-access finance staff (empty
+ * set). With no branchId, every finance staffer (company-wide).
  */
 async function financeStaff(branchId?: string | null): Promise<{ telegramId: number; role: string }[]> {
   const all = await listUsers();
@@ -32,7 +32,7 @@ async function financeStaff(branchId?: string | null): Promise<{ telegramId: num
         u.active &&
         u.telegramId != null &&
         (u.role === "ceo" || u.role === "accountant") &&
-        (!branchId || u.branchId == null || u.branchId === branchId),
+        (!branchId || (u.branchIds ?? []).length === 0 || (u.branchIds ?? []).includes(branchId)),
     )
     .map((u) => ({ telegramId: u.telegramId as number, role: u.role }));
 }
@@ -225,19 +225,22 @@ export async function sendTodaySummary(endOfDay = false): Promise<void> {
     await sendMessage(target, text);
   }
 
-  // DM finance staff: pinned staff get their branch's summary; all-branches
-  // staff get the company-wide one.
+  // DM finance staff: full-access staff (empty set) get the company-wide
+  // summary; restricted staff get a summary for each of their branches.
   const staff = await listUsers();
   const companyWide = await buildTodaySummary(dateStr);
   await Promise.all(
     staff
       .filter((u) => u.active && u.telegramId != null && (u.role === "ceo" || u.role === "accountant"))
       .map(async (u) => {
-        if (u.branchId == null) {
+        const set = u.branchIds ?? [];
+        if (set.length === 0) {
           await sendMessage(u.telegramId as number, companyWide);
         } else {
-          const b = branches.find((br) => br.id === u.branchId);
-          await sendMessage(u.telegramId as number, await buildTodaySummary(dateStr, u.branchId, b?.name));
+          for (const bid of set) {
+            const b = branches.find((br) => br.id === bid);
+            await sendMessage(u.telegramId as number, await buildTodaySummary(dateStr, bid, b?.name));
+          }
         }
       }),
   );

@@ -267,10 +267,10 @@ router.get(
     const bid = branchFilter(req);
     const teacherRows = (
       await db
-        .select({ id: teachers.id, name: users.fullName, branchId: users.branchId })
+        .select({ id: teachers.id, name: users.fullName, branchIds: users.branchIds })
         .from(teachers)
         .innerJoin(users, eq(teachers.userId, users.id))
-    ).filter((t) => !bid || t.branchId == null || t.branchId === bid);
+    ).filter((t) => !bid || (t.branchIds ?? []).length === 0 || (t.branchIds ?? []).includes(bid));
 
     const out = [];
     for (const tRow of teacherRows) {
