@@ -54,7 +54,35 @@ export type SalaryModel = (typeof salaryModelEnum.enumValues)[number];
 export type StudentStatus = (typeof studentStatusEnum.enumValues)[number];
 export type PaymentMethod = (typeof paymentMethodEnum.enumValues)[number];
 
+/**
+ * Fixed id of the seed "Branch 1" that owns every pre-branches row (backfilled
+ * in migration 0019). It is also the DEFAULT for `branch_id` columns, so any
+ * insert path that forgets to set a branch lands here rather than crashing.
+ * The empty seed "Branch 2" is created alongside it.
+ */
+export const DEFAULT_BRANCH_ID = "00000000-0000-0000-0000-000000000001";
+export const SECOND_BRANCH_ID = "00000000-0000-0000-0000-000000000002";
+
 /* ────────────────────────────── Tables ───────────────────────────── */
+
+/**
+ * A physical location / branch of the academy. Students, groups, leads,
+ * payments and expenses each belong to exactly one branch, so every list and
+ * report can be scoped to a single branch. Users are either pinned to one
+ * branch (they only ever see that branch) or assigned to "all branches"
+ * (branchId = null on the user) — the CEO and any teacher who works everywhere.
+ * Each branch links its own Telegram group for payment notifications.
+ */
+export const branches = pgTable("branches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  active: boolean("active").notNull().default(true),
+  // Telegram chat id of this branch's payment-notification group. Set by a CEO
+  // running /here in the group and picking this branch (see server/bot/bot.ts).
+  // Stored as text because supergroup ids are large negatives. Null = none.
+  paymentGroupChatId: text("payment_group_chat_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** Every Mini App user is a Telegram account mapped to exactly one role. */
 export const users = pgTable("users", {
@@ -65,6 +93,11 @@ export const users = pgTable("users", {
   username: text("username"),
   fullName: text("full_name").notNull(),
   role: roleEnum("role").notNull(),
+  // Which branch this user is pinned to. When set, the user only ever sees and
+  // writes that branch's data. Null = "all branches" (cross-branch access): the
+  // CEO, and any teacher/staff who genuinely works across every branch. They get
+  // a branch switcher and can act in any branch.
+  branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
   // Extra abilities the CEO grants this user on top of their role defaults.
   // See shared/permissions.ts.
   permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
@@ -102,6 +135,12 @@ export const classes = pgTable("classes", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   subject: text("subject"),
+  // The branch this group physically belongs to. All its students, payments and
+  // leads inherit this branch (denormalized onto those rows for fast scoping).
+  branchId: uuid("branch_id")
+    .notNull()
+    .default(DEFAULT_BRANCH_ID)
+    .references(() => branches.id, { onDelete: "restrict" }),
   teacherId: uuid("teacher_id")
     .notNull()
     .references(() => teachers.id, { onDelete: "restrict" }),
@@ -124,6 +163,12 @@ export const students = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
+    // Branch this student belongs to (denormalized from their class for scoping;
+    // kept in sync when the student moves class). See storage.moveStudentBranch.
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
     classId: uuid("class_id")
       .notNull()
       .references(() => classes.id, { onDelete: "restrict" }),
@@ -146,6 +191,7 @@ export const students = pgTable(
   (t) => ({
     byClass: index("students_class_idx").on(t.classId),
     byStatus: index("students_status_idx").on(t.status),
+    byBranch: index("students_branch_idx").on(t.branchId),
   }),
 );
 
@@ -164,6 +210,12 @@ export const payments = pgTable(
     classId: uuid("class_id")
       .notNull()
       .references(() => classes.id, { onDelete: "restrict" }),
+    // Branch this payment belongs to (denormalized from the class at record time)
+    // so every finance report can be scoped to one branch without a join.
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
     teacherId: uuid("teacher_id")
       .notNull()
       .references(() => teachers.id, { onDelete: "restrict" }),
@@ -210,6 +262,7 @@ export const payments = pgTable(
     byStudent: index("payments_student_idx").on(t.studentId),
     byBillingMonth: index("payments_billing_month_idx").on(t.billingMonth),
     byTeacher: index("payments_teacher_idx").on(t.teacherId),
+    byBranch: index("payments_branch_idx").on(t.branchId),
     // One active payment per student per billing month.
     uniqStudentMonth: unique("payments_student_month_uniq").on(
       t.studentId,
@@ -446,6 +499,11 @@ export const expenses = pgTable(
   "expenses",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Branch this expense is booked against, so per-branch finances are separate.
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
     category: text("category").notNull(),
     subCategory: text("sub_category"),
     vendor: text("vendor"),
@@ -466,6 +524,7 @@ export const expenses = pgTable(
   (t) => ({
     byMonth: index("expenses_month_idx").on(t.month),
     byCategory: index("expenses_category_idx").on(t.category),
+    byBranch: index("expenses_branch_idx").on(t.branchId),
   }),
 );
 
@@ -478,6 +537,11 @@ export const expenses = pgTable(
  */
 export const draftClasses = pgTable("draft_classes", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Branch this draft (and the class it materialises into) belongs to.
+  branchId: uuid("branch_id")
+    .notNull()
+    .default(DEFAULT_BRANCH_ID)
+    .references(() => branches.id, { onDelete: "restrict" }),
   name: text("name").notNull(),
   subject: text("subject"),
   defaultFee: numeric("default_fee", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -500,6 +564,11 @@ export const leads = pgTable(
   "leads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Branch this prospective student is being registered into.
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
     // The subject the student wants to study, e.g. "English", "Math".
@@ -531,13 +600,20 @@ export const leads = pgTable(
     byStatus: index("leads_status_idx").on(t.status),
     byClass: index("leads_class_idx").on(t.classId),
     byDraft: index("leads_draft_idx").on(t.draftClassId),
+    byBranch: index("leads_branch_idx").on(t.branchId),
   }),
 );
 
 /* ──────────────────────────── Relations ──────────────────────────── */
 
+export const branchesRelations = relations(branches, ({ many }) => ({
+  classes: many(classes),
+  students: many(students),
+}));
+
 export const usersRelations = relations(users, ({ one }) => ({
   teacher: one(teachers, { fields: [users.id], references: [teachers.userId] }),
+  branch: one(branches, { fields: [users.branchId], references: [branches.id] }),
 }));
 
 export const teachersRelations = relations(teachers, ({ one, many }) => ({
@@ -564,6 +640,7 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 
 /* ──────────────────────── Inferred model types ───────────────────── */
 
+export type Branch = typeof branches.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Teacher = typeof teachers.$inferSelect;
@@ -602,6 +679,22 @@ export const permissionsSchema = z.object({
   permissions: z.array(z.string()),
 });
 
+/* ─────────────────────────────── Branches ─────────────────────────── */
+
+export const insertBranchSchema = z.object({
+  name: z.string().min(1).max(80),
+});
+
+export const updateBranchSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  active: z.boolean().optional(),
+});
+
+/** CEO assigns a user to a branch, or to "all branches" (branchId = null). */
+export const assignUserBranchSchema = z.object({
+  branchId: z.string().uuid().nullable(),
+});
+
 /* ─── Credential auth: re-link a new Telegram account & self sign-up ─── */
 
 export const loginSchema = z.object({
@@ -626,16 +719,21 @@ export const insertClassSchema = createInsertSchema(classes, {
   name: z.string().min(1),
   defaultFee: z.coerce.number().nonnegative(),
   maxStudents: z.coerce.number().int().positive().optional(),
-}).pick({
-  name: true,
-  subject: true,
-  teacherId: true,
-  defaultFee: true,
-  schedule: true,
-  room: true,
-  maxStudents: true,
-  startDate: true,
-});
+})
+  .pick({
+    name: true,
+    subject: true,
+    teacherId: true,
+    defaultFee: true,
+    schedule: true,
+    room: true,
+    maxStudents: true,
+    startDate: true,
+  })
+  // Branch the group is created in. Optional in the body: a pinned user's branch
+  // (or the CEO's selected branch) is used when omitted. Required only when an
+  // all-branches user hasn't selected a single branch.
+  .extend({ branchId: z.string().uuid().optional() });
 
 export const insertStudentSchema = createInsertSchema(students, {
   fullName: z.string().min(1),
@@ -662,6 +760,8 @@ export const insertLeadSchema = z.object({
   // student is placed later, at approval or when a teacher is assigned).
   classId: z.string().uuid().nullable().optional(),
   draftClassId: z.string().uuid().nullable().optional(),
+  // Branch to register the lead into (defaults to the caller's branch).
+  branchId: z.string().uuid().optional(),
 });
 
 /** Edit a pending lead's intake details or reassign (swap) its placement. */
@@ -681,6 +781,7 @@ export const insertDraftClassSchema = z.object({
   name: z.string().min(1),
   subject: z.string().optional(),
   defaultFee: z.coerce.number().nonnegative().optional(),
+  branchId: z.string().uuid().optional(),
 });
 
 /** Assign a teacher to a draft class → materialise it into a real class. */
@@ -785,6 +886,8 @@ export const createExpenseSchema = z.object({
   paymentMethod: z.enum(expensePaymentMethodEnum.enumValues),
   receiptUrl: z.string().url().optional().or(z.literal("")),
   description: z.string().optional(),
+  // Branch to book the expense against (defaults to the caller's branch).
+  branchId: z.string().uuid().optional(),
 });
 
 export const updateExpenseSchema = createExpenseSchema.partial();

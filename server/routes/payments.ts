@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "./helpers";
-import { requireRole, requirePermission } from "../auth/middleware";
+import { requireRole, requirePermission, branchFilter, assertBranchAccess } from "../auth/middleware";
 import {
   recordPaymentSchema,
   editPaymentSchema,
@@ -65,6 +65,7 @@ router.get(
     } else if (role === "accountant" && scope !== "all") {
       filter.recordedBy = req.authUser!.id;
     }
+    filter.branchId = branchFilter(req);
     res.json(await listPayments(filter));
   }),
 );
@@ -82,6 +83,7 @@ router.get(
     if (!(await teacherOwnsStudentClass(req, student.classId))) {
       return res.status(403).json({ error: "forbidden", message: "This student is not in your class." });
     }
+    assertBranchAccess(req, student.branchId);
     // Default to the month a new payment would actually land on (the next
     // uncovered one), so the form shows "Covers <that month>" and paying ahead
     // is a normal action rather than an "already paid" error.
@@ -126,6 +128,7 @@ router.post(
     if (!(await teacherOwnsStudentClass(req, student.classId))) {
       return res.status(403).json({ error: "forbidden", message: "You can only record payments for your own students." });
     }
+    assertBranchAccess(req, student.branchId);
 
     // No month given → land on the student's next month that still owes money
     // (a partially-paid month to top up, else the next uncovered one). An
@@ -184,6 +187,7 @@ router.patch(
     const { amount, method, reason } = editPaymentSchema.parse(req.body);
     const existing = await getPaymentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     const updated = await editPayment(req.params.id, req.authUser!.id, { amount, method }, reason);
     res.json(updated);
   }),
@@ -196,6 +200,7 @@ router.post(
     const { reason } = voidPaymentSchema.parse(req.body);
     const existing = await getPaymentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     // Teachers may only void payments belonging to their own classes.
     if (req.authUser!.role === "teacher" && existing.teacherId !== req.teacherId) {
       return res.status(403).json({ error: "forbidden", message: "This payment is not for your class." });
@@ -216,6 +221,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const payment = await getPaymentById(req.params.id);
     if (!payment) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, payment.branchId);
     const student = await getStudentById(payment.studentId);
     if (!student) return res.status(404).json({ error: "not_found" });
 
@@ -255,6 +261,7 @@ router.post(
     const { amount, reason } = refundPaymentSchema.parse(req.body);
     const existing = await getPaymentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     try {
       const updated = await refundPayment(req.params.id, req.authUser!.id, { amount, reason });
       res.json(updated);
@@ -272,6 +279,7 @@ router.get(
     if (req.authUser!.role === "teacher" && p.teacherId !== req.teacherId) {
       return res.status(403).json({ error: "forbidden" });
     }
+    assertBranchAccess(req, p.branchId);
     // Include a little context for the detail view.
     const [cls, teacher] = await Promise.all([
       getClassById(p.classId),

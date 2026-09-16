@@ -1,6 +1,11 @@
 import { Router, type Request } from "express";
 import { asyncHandler } from "./helpers";
-import { requirePermission } from "../auth/middleware";
+import {
+  requirePermission,
+  branchFilter,
+  writeBranch,
+  assertBranchAccess,
+} from "../auth/middleware";
 import {
   insertLeadSchema,
   updateLeadSchema,
@@ -37,6 +42,7 @@ async function assertClassWritable(req: Request, classId: string) {
   if (req.authUser!.role === "teacher" && cls.teacherId !== req.teacherId) {
     throw new Error("forbidden");
   }
+  assertBranchAccess(req, cls.branchId);
   return cls;
 }
 
@@ -54,6 +60,7 @@ router.get(
     if (typeof classId === "string") filter.classId = classId;
     if (typeof draftClassId === "string") filter.draftClassId = draftClassId;
     if (req.authUser!.role === "teacher") filter.teacherId = req.teacherId; // hard scope
+    filter.branchId = branchFilter(req);
     res.json(await listLeads(filter));
   }),
 );
@@ -67,9 +74,21 @@ router.post(
   requirePermission("add_student"),
   asyncHandler(async (req, res) => {
     const input = insertLeadSchema.parse(req.body);
-    if (input.classId) await assertClassWritable(req, input.classId);
-    if (input.draftClassId && !(await getDraftClassById(input.draftClassId))) {
-      return res.status(404).json({ error: "not_found", message: "Draft class not found." });
+    // The branch is taken from the placement when there is one (a group or a
+    // draft), otherwise from the caller's branch selection.
+    let branchId: string;
+    if (input.classId) {
+      const cls = await assertClassWritable(req, input.classId);
+      branchId = cls.branchId;
+    } else if (input.draftClassId) {
+      const draft = await getDraftClassById(input.draftClassId);
+      if (!draft) {
+        return res.status(404).json({ error: "not_found", message: "Draft class not found." });
+      }
+      assertBranchAccess(req, draft.branchId);
+      branchId = draft.branchId;
+    } else {
+      branchId = writeBranch(req, input.branchId);
     }
     const created = await createLead({
       fullName: input.fullName,
@@ -80,6 +99,7 @@ router.post(
       shift: input.shift,
       classId: input.classId ?? null,
       draftClassId: input.draftClassId ?? null,
+      branchId,
       createdBy: req.authUser!.id,
     });
     res.status(201).json(created);
@@ -93,6 +113,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const existing = await getLeadById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     if (existing.status !== "pending") {
       return res.status(409).json({ error: "not_pending", message: "Only pending leads can be edited." });
     }
@@ -115,6 +136,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const lead = await getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, lead.branchId);
     if (lead.status !== "pending") {
       return res.status(409).json({ error: "not_pending", message: "This lead has already been decided." });
     }
@@ -146,6 +168,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const lead = await getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, lead.branchId);
     if (lead.status !== "pending") {
       return res.status(409).json({ error: "not_pending", message: "This lead has already been decided." });
     }
@@ -163,6 +186,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     const lead = await getLeadById(req.params.id);
     if (!lead) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, lead.branchId);
     if (lead.classId) await assertClassWritable(req, lead.classId);
     await deleteLead(req.params.id);
     res.json({ ok: true });
@@ -175,8 +199,8 @@ router.delete(
 router.get(
   "/draft-classes",
   requirePermission("add_student"),
-  asyncHandler(async (_req, res) => {
-    res.json(await listDraftClasses());
+  asyncHandler(async (req, res) => {
+    res.json(await listDraftClasses({ branchId: branchFilter(req) }));
   }),
 );
 
@@ -190,6 +214,7 @@ router.post(
       name: input.name,
       subject: input.subject ?? null,
       defaultFee: input.defaultFee ?? null,
+      branchId: writeBranch(req, input.branchId),
       createdBy: req.authUser!.id,
     });
     res.status(201).json(created);
@@ -206,6 +231,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const draft = await getDraftClassById(req.params.id);
     if (!draft) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, draft.branchId);
     const input = assignTeacherSchema.parse(req.body);
     const result = await assignTeacherToDraft(req.params.id, {
       teacherId: input.teacherId,
@@ -226,6 +252,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     const draft = await getDraftClassById(req.params.id);
     if (!draft) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, draft.branchId);
     await deleteDraftClass(req.params.id);
     res.json({ ok: true });
   }),

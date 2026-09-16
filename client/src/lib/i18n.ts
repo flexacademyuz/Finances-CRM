@@ -389,6 +389,33 @@ const dict = {
   setLoginCreds: { en: "Set login", uz: "Kirish o'rnatish" },
   loginUsernameLabel: { en: "Login username", uz: "Kirish nomi" },
   logOut: { en: "Log out", uz: "Chiqish" },
+
+  // Branches (multi-location support).
+  branches: { en: "Branches", uz: "Filiallar" },
+  branch: { en: "Branch", uz: "Filial" },
+  allBranches: { en: "All branches", uz: "Barcha filiallar" },
+  addBranch: { en: "Add branch", uz: "Filial qo'shish" },
+  branchName: { en: "Branch name", uz: "Filial nomi" },
+  renameBranch: { en: "Rename branch", uz: "Filialni qayta nomlash" },
+  newBranch: { en: "New branch", uz: "Yangi filial" },
+  branchesNote: {
+    en: "Each branch keeps its own students, groups, leads, payments and expenses. Assign staff to a branch on the Users screen.",
+    uz: "Har bir filial o'z o'quvchilari, guruhlari, to'lovlari va xarajatlarini alohida yuritadi. Xodimlarni Foydalanuvchilar bo'limida filialga biriktiring.",
+  },
+  branchAssignment: { en: "Branch access", uz: "Filial ruxsati" },
+  branchAssignmentNote: {
+    en: "Pin this user to one branch, or give them access to all branches.",
+    uz: "Bu foydalanuvchini bitta filialga biriktiring yoki barcha filiallarga ruxsat bering.",
+  },
+  noBranchGroupLinked: { en: "No Telegram group linked", uz: "Telegram guruh ulanmagan" },
+  linkBranchGroupHint: {
+    en: "Add the bot to this branch's Telegram group as admin, then send /here there and pick this branch to post its payments.",
+    uz: "Botni ushbu filial Telegram guruhiga admin qilib qo'shing, so'ng u yerda /here yuborib, shu filialni tanlang.",
+  },
+  payrollCompanyWide: {
+    en: "Salaries are paid per teacher (company-wide), so payroll isn't split by branch.",
+    uz: "Maoshlar har bir o'qituvchiga umumiy to'lanadi, shuning uchun maosh filiallar bo'yicha bo'linmaydi.",
+  },
 } as const;
 
 export type StringKey = keyof typeof dict;

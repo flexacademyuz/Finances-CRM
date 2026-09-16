@@ -1,7 +1,13 @@
 import { InlineKeyboard } from "grammy";
 import { bot } from "./client";
 import { env } from "../env";
-import { getUserByTelegramId, getSettings, setPaymentGroupChatId } from "../storage";
+import {
+  getUserByTelegramId,
+  listBranches,
+  getBranchById,
+  setBranchPaymentGroupChatId,
+  getBranchByPaymentGroupChatId,
+} from "../storage";
 import { todaySummaryNow } from "./notifications";
 
 /**
@@ -44,23 +50,26 @@ export function configureBot(): void {
   });
 
   // /today — on-demand "Today so far" summary (today's payments by teacher).
-  // Finance-only (CEO/Accountant), since it exposes collection totals.
+  // Finance-only (CEO/Accountant), since it exposes collection totals. Inside a
+  // branch's linked group it shows that branch only; elsewhere, company-wide.
   bot.command("today", async (ctx) => {
     const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
     if (!user || (user.role !== "ceo" && user.role !== "accountant")) {
       await ctx.reply("Only the CEO or Accountant can view the daily summary.");
       return;
     }
-    await ctx.reply(await todaySummaryNow(), { parse_mode: "HTML" });
+    const branch = ctx.chat ? await getBranchByPaymentGroupChatId(String(ctx.chat.id)) : undefined;
+    await ctx.reply(await todaySummaryNow(branch?.id, branch?.name), { parse_mode: "HTML" });
   });
 
-  // /here — register THIS group to receive payment notifications. CEO-only, so a
-  // random group can't hijack finance alerts. Run it inside the group after
-  // adding the bot (as admin, so it can read the command and post).
+  // /here — register THIS group to receive one branch's payment notifications.
+  // CEO-only, so a random group can't hijack finance alerts. The bot replies
+  // with a branch picker; tapping a branch links this group to it. Run it inside
+  // the group after adding the bot (as admin, so it can read commands and post).
   bot.command("here", async (ctx) => {
     const chat = ctx.chat;
     if (!chat || (chat.type !== "group" && chat.type !== "supergroup")) {
-      await ctx.reply("Run /here inside the Telegram group that should receive payment notifications.");
+      await ctx.reply("Run /here inside the Telegram group that should receive a branch's payment notifications.");
       return;
     }
     const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
@@ -68,28 +77,60 @@ export function configureBot(): void {
       await ctx.reply("Only the CEO can link this group to payment notifications.");
       return;
     }
-    await setPaymentGroupChatId(String(chat.id));
-    await ctx.reply(
-      "✅ Done. Every recorded payment will now be posted in this group.\n" +
+    const branches = await listBranches({ activeOnly: true });
+    if (branches.length === 0) {
+      await ctx.reply("No branches exist yet. Create one in the app first.");
+      return;
+    }
+    const kb = new InlineKeyboard();
+    for (const b of branches) kb.text(b.name, `link_branch:${b.id}`).row();
+    await ctx.reply("🏢 Which branch should post its payments in this group?", { reply_markup: kb });
+  });
+
+  // Branch picker callback from /here: link this chat to the chosen branch.
+  bot.callbackQuery(/^link_branch:(.+)$/, async (ctx) => {
+    const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
+    if (!user || user.role !== "ceo") {
+      await ctx.answerCallbackQuery({ text: "Only the CEO can link a group.", show_alert: true });
+      return;
+    }
+    const chat = ctx.callbackQuery.message?.chat;
+    if (!chat) {
+      await ctx.answerCallbackQuery({ text: "Couldn't resolve this chat.", show_alert: true });
+      return;
+    }
+    const branchId = ctx.match![1];
+    const branch = await getBranchById(branchId);
+    if (!branch) {
+      await ctx.answerCallbackQuery({ text: "That branch no longer exists.", show_alert: true });
+      return;
+    }
+    await setBranchPaymentGroupChatId(branchId, String(chat.id));
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(
+      `✅ Linked. Every payment recorded in <b>${branch.name}</b> will now be posted in this group.\n` +
         "Run /unlink here to stop.",
+      { parse_mode: "HTML" },
     );
   });
 
-  // /unlink — stop posting payment notifications to whichever group is linked.
+  // /unlink — stop posting payment notifications to whichever branch group is
+  // linked to this chat.
   bot.command("unlink", async (ctx) => {
     const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
     if (!user || user.role !== "ceo") {
       await ctx.reply("Only the CEO can change payment-notification settings.");
       return;
     }
-    const settings = await getSettings();
-    const linked = settings?.paymentGroupChatId;
-    if (!linked || (ctx.chat && String(ctx.chat.id) !== linked)) {
-      await ctx.reply("This group isn't linked to payment notifications.");
+    const branch = ctx.chat ? await getBranchByPaymentGroupChatId(String(ctx.chat.id)) : undefined;
+    if (!branch) {
+      await ctx.reply("This group isn't linked to any branch's payment notifications.");
       return;
     }
-    await setPaymentGroupChatId(null);
-    await ctx.reply("🛑 Payment notifications for this group are turned off.");
+    await setBranchPaymentGroupChatId(branch.id, null);
+    await ctx.reply(`🛑 Payment notifications for <b>${branch.name}</b> in this group are turned off.`, {
+      parse_mode: "HTML",
+    });
   });
 
   // When the bot is added to a group, nudge the CEO to link it.

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../auth/middleware";
 import authRouter from "./auth";
+import branchesRouter from "./branches";
 import usersRouter from "./users";
 import classesRouter from "./classes";
 import studentsRouter from "./students";
@@ -25,6 +26,7 @@ api.use(authRouter);
 // Everything else requires a verified Telegram user.
 api.use(authenticate);
 
+api.use(branchesRouter);
 api.use(usersRouter);
 api.use(classesRouter);
 api.use(studentsRouter);

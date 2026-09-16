@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, ShieldCheck } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
+import { useBranch } from "../../lib/session";
 import { money } from "../../lib/format";
 import type { UserRow, TeacherRow } from "../../lib/types";
 import type { Role, SalaryModel } from "@shared/schema";
@@ -15,7 +16,10 @@ const MODELS: SalaryModel[] = ["percentage", "per_student", "fixed"];
 /** CEO-only user & role management + teacher salary rules (spec §2, §3.4). */
 export function UsersPage() {
   const { t } = useI18n();
+  const { branches } = useBranch();
   const qc = useQueryClient();
+  const branchName = (id: string | null) =>
+    id ? branches.find((b) => b.id === id)?.name ?? "—" : t("allBranches");
   const [inviting, setInviting] = useState(false);
   const [salaryFor, setSalaryFor] = useState<UserRow | null>(null);
   const [editing, setEditing] = useState<UserRow | null>(null);
@@ -59,7 +63,7 @@ export function UsersPage() {
                 <div className="min-w-0">
                   <div className="font-semibold">{u.fullName}</div>
                   <div className="text-xs text-tg-hint">
-                    {t(u.role)} · ID {u.telegramId}
+                    {t(u.role)} · {branchName(u.branchId)}
                     {u.username ? ` · @${u.username}` : ""}
                     {!u.active ? " · disabled" : ""}
                   </div>
@@ -161,9 +165,11 @@ function PendingCard({ user, onDone }: { user: UserRow; onDone: () => void }) {
 
 function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n();
+  const { branches } = useBranch();
   const [telegramId, setTelegramId] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<Role>("teacher");
+  const [branchId, setBranchId] = useState<string>("all");
   const [loginUsername, setLoginUsername] = useState("");
   const [password, setPassword] = useState("");
 
@@ -175,12 +181,13 @@ function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () =>
           telegramId: Number(telegramId),
           fullName,
           role,
+          branchId: branchId === "all" ? null : branchId,
           loginUsername: loginUsername.trim() || undefined,
           password: password || undefined,
         },
       }),
     onSuccess: () => {
-      setTelegramId(""); setFullName(""); setRole("teacher"); setLoginUsername(""); setPassword("");
+      setTelegramId(""); setFullName(""); setRole("teacher"); setBranchId("all"); setLoginUsername(""); setPassword("");
       onSaved();
     },
   });
@@ -198,6 +205,14 @@ function InviteModal({ open, onClose, onSaved }: { open: boolean; onClose: () =>
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             {ROLES.map((r) => (
               <option key={r} value={r}>{t(r)}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={t("branchAssignment")}>
+          <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <option value="all">{t("allBranches")}</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </Select>
         </Field>
@@ -234,9 +249,11 @@ function EditUserModal({
   onSaved: () => void;
 }) {
   const { t } = useI18n();
+  const { branches } = useBranch();
   const [fullName, setFullName] = useState(user.fullName);
   const [username, setUsername] = useState(user.username ?? "");
   const [role, setRole] = useState<Role>(user.role);
+  const [branchId, setBranchId] = useState<string>(user.branchId ?? "all");
   const [loginUsername, setLoginUsername] = useState(user.loginUsername ?? "");
   const [password, setPassword] = useState("");
 
@@ -246,6 +263,11 @@ function EditUserModal({
         method: "PATCH",
         body: { fullName, username: username.trim() || null, role },
       });
+      // Update the branch assignment when it changed.
+      const nextBranch = branchId === "all" ? null : branchId;
+      if (nextBranch !== (user.branchId ?? null)) {
+        await api(`/api/users/${user.id}/branch`, { method: "PATCH", body: { branchId: nextBranch } });
+      }
       // Only touch credentials when the CEO set both a username and a password.
       if (loginUsername.trim() && password) {
         await api(`/api/users/${user.id}/credentials`, {
@@ -272,6 +294,15 @@ function EditUserModal({
               <option key={r} value={r}>{t(r)}</option>
             ))}
           </Select>
+        </Field>
+        <Field label={t("branchAssignment")}>
+          <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <option value="all">{t("allBranches")}</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </Select>
+          <span className="mt-1 block text-xs text-tg-hint">{t("branchAssignmentNote")}</span>
         </Field>
         {/* Set / reset login credentials to help a locked-out user recover. */}
         <Field label={`${t("loginUsernameLabel")} (${t("optional")})`}>

@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { requireRole, requirePermission } from "../auth/middleware";
+import {
+  requireRole,
+  requirePermission,
+  branchFilter,
+  writeBranch,
+  assertBranchAccess,
+} from "../auth/middleware";
 import { insertClassSchema } from "@shared/schema";
 import {
   listClasses,
@@ -30,6 +36,7 @@ router.get(
     if (req.authUser!.role === "teacher" && cls.teacherId !== req.teacherId) {
       return res.status(403).json({ error: "forbidden" });
     }
+    assertBranchAccess(req, cls.branchId);
 
     // The payment table runs from the academic year's September up to the
     // selected end month (default: this month) — never pre-term months.
@@ -70,13 +77,14 @@ router.get(
   "/classes",
   asyncHandler(async (req, res) => {
     const { teacherId, activeOnly } = req.query;
-    const filter: { teacherId?: string; activeOnly?: boolean } = {};
+    const filter: { teacherId?: string; activeOnly?: boolean; branchId?: string } = {};
     if (req.authUser!.role === "teacher") {
       filter.teacherId = req.teacherId;
     } else if (typeof teacherId === "string") {
       filter.teacherId = teacherId;
     }
     if (activeOnly === "1" || activeOnly === "true") filter.activeOnly = true;
+    filter.branchId = branchFilter(req);
     res.json(await listClasses(filter));
   }),
 );
@@ -91,6 +99,7 @@ router.post(
       name: input.name,
       subject: input.subject ?? null,
       teacherId: input.teacherId,
+      branchId: writeBranch(req, input.branchId),
       defaultFee: input.defaultFee ?? 0,
       schedule: input.schedule ?? null,
       room: input.room ?? null,
@@ -118,6 +127,9 @@ router.patch(
         active: z.boolean().optional(),
       })
       .parse(req.body);
+    const existing = await getClassById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     const updated = await updateClass(req.params.id, patch);
     if (!updated) return res.status(404).json({ error: "not_found" });
     res.json(updated);
@@ -132,6 +144,7 @@ router.get(
     if (req.authUser!.role === "teacher" && cls.teacherId !== req.teacherId) {
       return res.status(403).json({ error: "forbidden" });
     }
+    assertBranchAccess(req, cls.branchId);
     res.json(cls);
   }),
 );

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, branchFilter } from "../auth/middleware";
 import { can } from "@shared/permissions";
 import {
   listTeachers,
@@ -51,7 +51,7 @@ router.get(
     if (!allowed) {
       return res.status(403).json({ error: "forbidden", message: "Insufficient permission." });
     }
-    const rows = await listTeachers(true);
+    const rows = await listTeachers(true, branchFilter(req));
     // Hide pay details from non-finance callers.
     res.json(
       privileged
@@ -221,8 +221,9 @@ router.get(
   requireRole("ceo"),
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
-    const payroll = await payrollMonthView(month);
-    const teachers = await listTeachers();
+    const branchId = branchFilter(req);
+    const payroll = await payrollMonthView(month, branchId);
+    const teachers = await listTeachers(false, branchId);
     const byId = new Map(teachers.map((t) => [t.id, t]));
     res.json({
       month: payroll.month,

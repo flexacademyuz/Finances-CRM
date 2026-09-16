@@ -1,6 +1,6 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { payments, classes, teachers } from "@shared/schema";
+import { payments, classes, teachers, users } from "@shared/schema";
 import type { SalaryModel, PayoutStudent, SalaryAllocation } from "@shared/schema";
 import { monthKey, academicMonthsSoFar, monthLabel } from "@shared/date";
 import {
@@ -502,8 +502,20 @@ export async function recordMonthlyPayout(
 }
 
 /** CEO payroll for one month: each teacher's salary and whether it's paid. */
-export async function payrollMonthView(month: string = monthKey()) {
-  const allTeachers = await db.select().from(teachers);
+export async function payrollMonthView(month: string = monthKey(), branchId?: string) {
+  // Scope to a branch's teachers when asked: those pinned to the branch plus the
+  // "all branches" teachers (user.branchId is null). Salary itself stays
+  // teacher-centric — one person, one salary across whatever they teach.
+  const allTeachers = branchId
+    ? (
+        await db
+          .select({ t: teachers, branchId: users.branchId })
+          .from(teachers)
+          .innerJoin(users, eq(teachers.userId, users.id))
+      )
+        .filter((r) => r.branchId == null || r.branchId === branchId)
+        .map((r) => r.t)
+    : await db.select().from(teachers);
   const perTeacher = await Promise.all(
     allTeachers.map(async (t) => {
       const [est, paid, open, state] = await Promise.all([

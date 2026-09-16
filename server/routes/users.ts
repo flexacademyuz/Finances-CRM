@@ -13,12 +13,15 @@ import {
 } from "@shared/schema";
 import {
   listUsers,
+  listBranches,
   createUser,
   updateUserRole,
   updateUserProfile,
   setUserPermissions,
   setUserActive,
+  setUserBranch,
   getUserById,
+  getBranchById,
   getUserByLoginUsername,
   getTeacherByUserId,
   updateSalaryRule,
@@ -26,6 +29,7 @@ import {
   rejectPendingUser,
   setLoginCredentials,
 } from "../storage";
+import { assignUserBranchSchema } from "@shared/schema";
 import { isPermission } from "@shared/permissions";
 import { hashPassword } from "../auth/password";
 
@@ -37,11 +41,19 @@ function sanitize<T extends { passwordHash?: string | null }>(user: T): Omit<T, 
   return rest;
 }
 
-/** GET /api/me — the authenticated user + (if teacher) their teacherId. */
+/**
+ * GET /api/me — the authenticated user + (if teacher) their teacherId, plus the
+ * branch list so the client can label a pinned user's branch and render the
+ * branch switcher for all-branches users (CEO / cross-branch staff).
+ */
 router.get(
   "/me",
   asyncHandler(async (req, res) => {
-    res.json({ user: sanitize(req.authUser as User), teacherId: req.teacherId ?? null });
+    res.json({
+      user: sanitize(req.authUser as User),
+      teacherId: req.teacherId ?? null,
+      branches: await listBranches(),
+    });
   }),
 );
 
@@ -85,17 +97,26 @@ router.post(
   asyncHandler(async (req, res) => {
     const input = insertUserSchema.parse(req.body);
     const creds = z
-      .object({ loginUsername: z.string().min(3).max(64).optional(), password: z.string().min(6).max(128).optional() })
+      .object({
+        loginUsername: z.string().min(3).max(64).optional(),
+        password: z.string().min(6).max(128).optional(),
+        // Branch to pin the new user to; null / omitted = all branches.
+        branchId: z.string().uuid().nullable().optional(),
+      })
       .parse(req.body);
     if (creds.loginUsername) {
       const taken = await getUserByLoginUsername(creds.loginUsername);
       if (taken) return res.status(409).json({ error: "username_taken", message: "That username is taken." });
+    }
+    if (creds.branchId && !(await getBranchById(creds.branchId))) {
+      return res.status(404).json({ error: "not_found", message: "Branch not found." });
     }
     const user = await createUser({
       telegramId: input.telegramId,
       username: input.username ?? null,
       fullName: input.fullName,
       role: input.role,
+      branchId: creds.branchId ?? null,
       // Only accept known permission keys; unknown strings are dropped so a
       // stale client can't grant a permission the server doesn't understand.
       permissions: input.permissions?.filter(isPermission),
@@ -171,6 +192,20 @@ router.patch(
 );
 
 /** Set the per-user permission grants (CEO controls who can do what). */
+/** Pin a user to a branch, or set them to "all branches" (branchId = null). */
+router.patch(
+  "/users/:id/branch",
+  asyncHandler(async (req, res) => {
+    const { branchId } = assignUserBranchSchema.parse(req.body);
+    if (branchId && !(await getBranchById(branchId))) {
+      return res.status(404).json({ error: "not_found", message: "Branch not found." });
+    }
+    const user = await setUserBranch(req.params.id, branchId);
+    if (!user) return res.status(404).json({ error: "not_found" });
+    res.json(sanitize(user));
+  }),
+);
+
 router.patch(
   "/users/:id/permissions",
   asyncHandler(async (req, res) => {

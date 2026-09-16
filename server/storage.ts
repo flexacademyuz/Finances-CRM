@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
+  branches,
   users,
   teachers,
   classes,
@@ -16,6 +17,7 @@ import {
   expenses,
   leads,
   draftClasses,
+  DEFAULT_BRANCH_ID,
   type Role,
   type PaymentEdit,
   type StudentStatus,
@@ -28,6 +30,77 @@ import {
 import { monthKey, shiftMonth, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, isMonthSettled } from "@shared/billing";
 import { env } from "./env";
+
+/* ─────────────────────────────── Branches ──────────────────────────── */
+
+export async function listBranches(opts: { activeOnly?: boolean } = {}) {
+  const conds = [];
+  if (opts.activeOnly) conds.push(eq(branches.active, true));
+  return db
+    .select()
+    .from(branches)
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(branches.createdAt);
+}
+
+export async function getBranchById(id: string) {
+  const [b] = await db.select().from(branches).where(eq(branches.id, id));
+  return b;
+}
+
+export async function createBranch(input: { name: string }) {
+  const [b] = await db.insert(branches).values({ name: input.name }).returning();
+  return b;
+}
+
+export async function updateBranch(
+  id: string,
+  patch: Partial<{ name: string; active: boolean }>,
+) {
+  const [b] = await db.update(branches).set(patch).where(eq(branches.id, id)).returning();
+  return b;
+}
+
+/**
+ * Link (or clear) a branch's Telegram payment-notification group. To keep a
+ * chat mapped to at most one branch, first detach it from any other branch that
+ * currently holds it, then set it here.
+ */
+export async function setBranchPaymentGroupChatId(branchId: string, chatId: string | null) {
+  return db.transaction(async (tx) => {
+    if (chatId != null) {
+      await tx
+        .update(branches)
+        .set({ paymentGroupChatId: null })
+        .where(eq(branches.paymentGroupChatId, chatId));
+    }
+    const [b] = await tx
+      .update(branches)
+      .set({ paymentGroupChatId: chatId })
+      .where(eq(branches.id, branchId))
+      .returning();
+    return b;
+  });
+}
+
+/** The branch whose payment group is this Telegram chat (for /unlink). */
+export async function getBranchByPaymentGroupChatId(chatId: string) {
+  const [b] = await db
+    .select()
+    .from(branches)
+    .where(eq(branches.paymentGroupChatId, chatId));
+  return b;
+}
+
+/** Pin a user to one branch, or to "all branches" (branchId = null). */
+export async function setUserBranch(userId: string, branchId: string | null) {
+  const [u] = await db
+    .update(users)
+    .set({ branchId })
+    .where(eq(users.id, userId))
+    .returning();
+  return u;
+}
 
 /* ─────────────────────────────── Users ─────────────────────────────── */
 
@@ -54,6 +127,7 @@ export async function createUser(input: {
   username?: string | null;
   fullName: string;
   role: Role;
+  branchId?: string | null;
   permissions?: string[];
   loginUsername?: string | null;
   passwordHash?: string | null;
@@ -68,6 +142,7 @@ export async function createUser(input: {
         username: input.username ?? null,
         fullName: input.fullName,
         role: input.role,
+        branchId: input.branchId ?? null,
         permissions: input.permissions ?? [],
         loginUsername: input.loginUsername ?? null,
         passwordHash: input.passwordHash ?? null,
@@ -245,7 +320,13 @@ export async function getTeacherById(id: string) {
  * count and net total (amount − refunds). Used for the "Today so far" summary.
  * Ordered by total desc so the biggest earners lead.
  */
-export async function paymentTotalsByTeacher(fromUtc: Date, toUtc: Date) {
+export async function paymentTotalsByTeacher(fromUtc: Date, toUtc: Date, branchId?: string) {
+  const conds = [
+    eq(payments.voided, false),
+    gte(payments.createdAt, fromUtc),
+    lt(payments.createdAt, toUtc),
+  ];
+  if (branchId) conds.push(eq(payments.branchId, branchId));
   return db
     .select({
       teacherId: payments.teacherId,
@@ -260,19 +341,17 @@ export async function paymentTotalsByTeacher(fromUtc: Date, toUtc: Date) {
     .from(payments)
     .innerJoin(teachers, eq(payments.teacherId, teachers.id))
     .innerJoin(users, eq(teachers.userId, users.id))
-    .where(
-      and(
-        eq(payments.voided, false),
-        gte(payments.createdAt, fromUtc),
-        lt(payments.createdAt, toUtc),
-      ),
-    )
+    .where(and(...conds))
     .groupBy(payments.teacherId, users.fullName)
     .orderBy(desc(sql`sum(${payments.amount} - ${payments.refundedAmount})`));
 }
 
-/** Teachers joined with their user record (name, telegram id, active). */
-export async function listTeachers(onlyActive = false) {
+/**
+ * Teachers joined with their user record (name, telegram id, active, branch).
+ * When `branchId` is given, restrict to teachers assigned to that branch or to
+ * "all branches" (user.branchId is null) — the ones who can work in it.
+ */
+export async function listTeachers(onlyActive = false, branchId?: string) {
   const rows = await db
     .select({
       id: teachers.id,
@@ -283,11 +362,14 @@ export async function listTeachers(onlyActive = false) {
       username: users.username,
       telegramId: users.telegramId,
       active: users.active,
+      branchId: users.branchId,
     })
     .from(teachers)
     .innerJoin(users, eq(teachers.userId, users.id))
     .orderBy(users.fullName);
-  return onlyActive ? rows.filter((r) => r.active) : rows;
+  let out = onlyActive ? rows.filter((r) => r.active) : rows;
+  if (branchId) out = out.filter((r) => r.branchId == null || r.branchId === branchId);
+  return out;
 }
 
 export async function updateSalaryRule(
@@ -305,10 +387,13 @@ export async function updateSalaryRule(
 
 /* ─────────────────────────────── Classes ───────────────────────────── */
 
-export async function listClasses(opts: { teacherId?: string; activeOnly?: boolean } = {}) {
+export async function listClasses(
+  opts: { teacherId?: string; activeOnly?: boolean; branchId?: string } = {},
+) {
   const conds = [];
   if (opts.teacherId) conds.push(eq(classes.teacherId, opts.teacherId));
   if (opts.activeOnly) conds.push(eq(classes.active, true));
+  if (opts.branchId) conds.push(eq(classes.branchId, opts.branchId));
   return db
     .select()
     .from(classes)
@@ -325,6 +410,7 @@ export async function createClass(input: {
   name: string;
   subject?: string | null;
   teacherId: string;
+  branchId: string;
   defaultFee: number;
   schedule?: string | null;
   room?: string | null;
@@ -363,6 +449,7 @@ export async function updateClass(
 export type StudentFilter = {
   classId?: string;
   teacherId?: string;
+  branchId?: string;
   status?: StudentStatus;
   activeOnly?: boolean;
   /** Only stopped/archived students (active = false). */
@@ -374,6 +461,7 @@ export async function listStudents(filter: StudentFilter = {}) {
   const conds = [];
   if (filter.classId) conds.push(eq(students.classId, filter.classId));
   if (filter.teacherId) conds.push(eq(classes.teacherId, filter.teacherId));
+  if (filter.branchId) conds.push(eq(students.branchId, filter.branchId));
   if (filter.status) conds.push(eq(students.status, filter.status));
   if (filter.activeOnly) conds.push(eq(students.active, true));
   if (filter.archivedOnly) conds.push(eq(students.active, false));
@@ -386,6 +474,7 @@ export async function listStudents(filter: StudentFilter = {}) {
       classId: students.classId,
       className: classes.name,
       teacherId: classes.teacherId,
+      branchId: students.branchId,
       monthlyFee: students.monthlyFee,
       effectiveFee: sql<string>`coalesce(${students.monthlyFee}, ${classes.defaultFee})`,
       status: students.status,
@@ -417,6 +506,7 @@ export async function createStudent(input: {
   fullName: string;
   phone?: string | null;
   classId: string;
+  branchId: string;
   monthlyFee?: number | null;
   enrolledAt?: string;
 }) {
@@ -426,6 +516,7 @@ export async function createStudent(input: {
       fullName: input.fullName,
       phone: input.phone ?? null,
       classId: input.classId,
+      branchId: input.branchId,
       monthlyFee: input.monthlyFee != null ? String(input.monthlyFee) : null,
       enrolledAt: input.enrolledAt,
       status: "awaiting_payment",
@@ -449,6 +540,12 @@ export async function updateStudent(
   const values: Record<string, unknown> = { ...patch };
   if (patch.monthlyFee !== undefined)
     values.monthlyFee = patch.monthlyFee != null ? String(patch.monthlyFee) : null;
+  // A class move carries the student to the new class's branch, so branch
+  // scoping stays consistent (their denormalized branch follows their group).
+  if (patch.classId !== undefined) {
+    const target = await getClassById(patch.classId);
+    if (target) values.branchId = target.branchId;
+  }
   const [s] = await db.update(students).set(values).where(eq(students.id, id)).returning();
   return s;
 }
@@ -567,6 +664,7 @@ export type LeadFilter = {
   status?: LeadStatus;
   classId?: string;
   draftClassId?: string;
+  branchId?: string;
   // Restrict to leads whose target group belongs to this teacher.
   teacherId?: string;
 };
@@ -577,6 +675,7 @@ export async function listLeads(filter: LeadFilter = {}) {
   if (filter.status) conds.push(eq(leads.status, filter.status));
   if (filter.classId) conds.push(eq(leads.classId, filter.classId));
   if (filter.draftClassId) conds.push(eq(leads.draftClassId, filter.draftClassId));
+  if (filter.branchId) conds.push(eq(leads.branchId, filter.branchId));
   if (filter.teacherId) conds.push(eq(classes.teacherId, filter.teacherId));
 
   return db
@@ -584,6 +683,7 @@ export async function listLeads(filter: LeadFilter = {}) {
       id: leads.id,
       fullName: leads.fullName,
       phone: leads.phone,
+      branchId: leads.branchId,
       subject: leads.subject,
       gradeAtSchool: leads.gradeAtSchool,
       level: leads.level,
@@ -620,6 +720,7 @@ export async function createLead(input: {
   shift: Shift;
   classId?: string | null;
   draftClassId?: string | null;
+  branchId: string;
   createdBy: string;
 }) {
   const [l] = await db
@@ -633,6 +734,7 @@ export async function createLead(input: {
       shift: input.shift,
       classId: input.classId ?? null,
       draftClassId: input.draftClassId ?? null,
+      branchId: input.branchId,
       createdBy: input.createdBy,
     })
     .returning();
@@ -677,12 +779,16 @@ export async function approveLead(
   },
 ) {
   return db.transaction(async (tx) => {
+    // The student inherits the branch of the group they join (the class is the
+    // source of truth for branch, even if the lead was registered elsewhere).
+    const [targetClass] = await tx.select().from(classes).where(eq(classes.id, opts.classId));
     const [student] = await tx
       .insert(students)
       .values({
         fullName: opts.fullName,
         phone: opts.phone ?? null,
         classId: opts.classId,
+        branchId: targetClass?.branchId ?? DEFAULT_BRANCH_ID,
         monthlyFee: opts.monthlyFee != null ? String(opts.monthlyFee) : null,
         enrolledAt: opts.approvalDate,
         billingStartDate: opts.approvalDate,
@@ -707,18 +813,20 @@ export async function approveLead(
 /* ──────────────────────────── Draft classes ────────────────────────── */
 
 /** Draft classes with a count of the pending students sorted into each. */
-export async function listDraftClasses() {
+export async function listDraftClasses(opts: { branchId?: string } = {}) {
   const rows = await db
     .select({
       id: draftClasses.id,
       name: draftClasses.name,
       subject: draftClasses.subject,
+      branchId: draftClasses.branchId,
       defaultFee: draftClasses.defaultFee,
       createdAt: draftClasses.createdAt,
       studentCount: sql<string>`count(${leads.id}) filter (where ${leads.status} = 'pending')`,
     })
     .from(draftClasses)
     .leftJoin(leads, eq(leads.draftClassId, draftClasses.id))
+    .where(opts.branchId ? eq(draftClasses.branchId, opts.branchId) : undefined)
     .groupBy(draftClasses.id)
     .orderBy(desc(draftClasses.createdAt));
   return rows.map((r) => ({ ...r, studentCount: Number(r.studentCount) }));
@@ -733,6 +841,7 @@ export async function createDraftClass(input: {
   name: string;
   subject?: string | null;
   defaultFee?: number | null;
+  branchId: string;
   createdBy: string;
 }) {
   const [d] = await db
@@ -740,6 +849,7 @@ export async function createDraftClass(input: {
     .values({
       name: input.name,
       subject: input.subject ?? null,
+      branchId: input.branchId,
       defaultFee: input.defaultFee != null ? String(input.defaultFee) : "0",
       createdBy: input.createdBy,
     })
@@ -773,6 +883,7 @@ export async function assignTeacherToDraft(
         name: opts.name?.trim() || draft.name,
         subject: draft.subject,
         teacherId: opts.teacherId,
+        branchId: draft.branchId,
         defaultFee: fee,
         startDate: opts.startDate,
       })
@@ -789,6 +900,7 @@ export async function assignTeacherToDraft(
           fullName: lead.fullName,
           phone: lead.phone,
           classId: cls.id,
+          branchId: cls.branchId,
           enrolledAt: opts.startDate,
           billingStartDate: opts.startDate,
           status: "awaiting_payment",
@@ -824,6 +936,7 @@ export type PaymentFilter = {
   teacherId?: string;
   classId?: string;
   studentId?: string;
+  branchId?: string;
   billingMonth?: string;
   recordedBy?: string;
   includeVoided?: boolean;
@@ -834,6 +947,7 @@ export async function listPayments(filter: PaymentFilter = {}) {
   if (filter.teacherId) conds.push(eq(payments.teacherId, filter.teacherId));
   if (filter.classId) conds.push(eq(payments.classId, filter.classId));
   if (filter.studentId) conds.push(eq(payments.studentId, filter.studentId));
+  if (filter.branchId) conds.push(eq(payments.branchId, filter.branchId));
   if (filter.billingMonth) conds.push(eq(payments.billingMonth, filter.billingMonth));
   if (filter.recordedBy) conds.push(eq(payments.recordedBy, filter.recordedBy));
   if (!filter.includeVoided) conds.push(eq(payments.voided, false));
@@ -952,6 +1066,7 @@ export async function recordPayment(input: {
           studentId: student.id,
           classId: cls.id,
           teacherId: cls.teacherId,
+          branchId: cls.branchId,
           amount: String(input.amount),
           fullTuitionAmount:
             input.fullTuitionAmount != null ? String(input.fullTuitionAmount) : null,
@@ -1657,6 +1772,7 @@ export async function createExpense(input: {
   expenseDate: string;
   month: string;
   paymentMethod: ExpMethod;
+  branchId: string;
   receiptUrl?: string | null;
   description?: string | null;
   recordedBy: string;
@@ -1674,6 +1790,7 @@ export type ExpenseFilter = {
   subCategory?: string;
   paymentMethod?: ExpMethod;
   recordedBy?: string;
+  branchId?: string;
   includeDeleted?: boolean;
 };
 
@@ -1685,6 +1802,7 @@ export async function listExpenses(filter: ExpenseFilter = {}) {
   if (filter.subCategory) conds.push(eq(expenses.subCategory, filter.subCategory));
   if (filter.paymentMethod) conds.push(eq(expenses.paymentMethod, filter.paymentMethod));
   if (filter.recordedBy) conds.push(eq(expenses.recordedBy, filter.recordedBy));
+  if (filter.branchId) conds.push(eq(expenses.branchId, filter.branchId));
 
   return db
     .select({
@@ -1696,6 +1814,7 @@ export async function listExpenses(filter: ExpenseFilter = {}) {
       expenseDate: expenses.expenseDate,
       month: expenses.month,
       paymentMethod: expenses.paymentMethod,
+      branchId: expenses.branchId,
       receiptUrl: expenses.receiptUrl,
       description: expenses.description,
       recordedBy: expenses.recordedBy,
@@ -1745,20 +1864,24 @@ export async function softDeleteExpense(id: string) {
 }
 
 /** Current-month category totals for the summary cards. */
-export async function expenseTotalsByCategory(month: string) {
+export async function expenseTotalsByCategory(month: string, branchId?: string) {
+  const conds = [eq(expenses.month, month), eq(expenses.isDeleted, false)];
+  if (branchId) conds.push(eq(expenses.branchId, branchId));
   return db
     .select({
       category: expenses.category,
       total: sql<string>`coalesce(sum(${expenses.amount}), 0)`,
     })
     .from(expenses)
-    .where(and(eq(expenses.month, month), eq(expenses.isDeleted, false)))
+    .where(and(...conds))
     .groupBy(expenses.category);
 }
 
 /** Per-month, per-category expense totals across a set of months (for grids). */
-export async function expenseMatrix(months: string[]) {
+export async function expenseMatrix(months: string[], branchId?: string) {
   if (months.length === 0) return [];
+  const conds = [inArray(expenses.month, months), eq(expenses.isDeleted, false)];
+  if (branchId) conds.push(eq(expenses.branchId, branchId));
   return db
     .select({
       month: expenses.month,
@@ -1766,6 +1889,6 @@ export async function expenseMatrix(months: string[]) {
       total: sql<string>`coalesce(sum(${expenses.amount}), 0)`,
     })
     .from(expenses)
-    .where(and(inArray(expenses.month, months), eq(expenses.isDeleted, false)))
+    .where(and(...conds))
     .groupBy(expenses.month, expenses.category);
 }

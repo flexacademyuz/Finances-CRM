@@ -12,6 +12,8 @@ declare global {
     interface Request {
       authUser?: User;
       teacherId?: string;
+      // The branch this user is pinned to, or null for "all branches" access.
+      userBranchId?: string | null;
     }
   }
 }
@@ -78,11 +80,62 @@ async function finishAuth(
     return res.status(403).json({ error: "inactive", message: "Account disabled." });
   }
   req.authUser = user;
+  req.userBranchId = user.branchId ?? null;
   if (user.role === "teacher") {
     const t = await getTeacherByUserId(user.id);
     req.teacherId = t?.id;
   }
   next();
+}
+
+/**
+ * The branch a list/report request should be scoped to, or `undefined` for "all
+ * branches" (no filter). A pinned user is always locked to their own branch —
+ * any client-supplied branch is ignored. An all-branches user (CEO, or a
+ * teacher/staffer set to all branches) may narrow to one branch via the
+ * `X-Branch-Id` header (or `?branch=` query); with none, they see everything.
+ */
+export function branchFilter(req: Request): string | undefined {
+  if (req.userBranchId) return req.userBranchId;
+  const raw =
+    req.header("x-branch-id") ??
+    (typeof req.query.branch === "string" ? req.query.branch : "");
+  return raw && raw !== "all" ? raw : undefined;
+}
+
+/**
+ * The branch a NEW top-level entity (group, lead, draft, expense) should be
+ * created in. Pinned users always create in their own branch (a mismatched body
+ * value is rejected). All-branches users use the body branch or the selected
+ * header branch; if they've picked neither, the caller must choose one.
+ */
+export function writeBranch(req: Request, bodyBranchId?: string | null): string {
+  if (req.userBranchId) {
+    if (bodyBranchId && bodyBranchId !== req.userBranchId) {
+      throw Object.assign(new Error("You can only create records in your own branch."), {
+        status: 403,
+      });
+    }
+    return req.userBranchId;
+  }
+  const chosen = bodyBranchId || branchFilter(req);
+  if (!chosen) {
+    throw Object.assign(
+      new Error("Select a branch first (you have access to all branches)."),
+      { status: 400 },
+    );
+  }
+  return chosen;
+}
+
+/**
+ * Guard access to an entity that already carries a branch: a pinned user may
+ * only touch their own branch's rows; all-branches users may touch any.
+ */
+export function assertBranchAccess(req: Request, branchId: string): void {
+  if (req.userBranchId && req.userBranchId !== branchId) {
+    throw Object.assign(new Error("forbidden"), { status: 403 });
+  }
 }
 
 /** Restrict a route to one of the given roles. */

@@ -10,6 +10,8 @@ import {
   getClassById,
   getTeacherById,
   getUserById,
+  getBranchById,
+  listBranches,
   paymentTotalsByTeacher,
 } from "../storage";
 import { listAwaitingAndOverdue } from "../services/billing";
@@ -17,11 +19,21 @@ import { snapshotSalary } from "../services/salary";
 import { listTeachers } from "../storage";
 import { monthKey, monthLabel } from "@shared/date";
 
-/** All CEO/Accountant Telegram ids (recipients of finance alerts). */
-async function financeStaff(): Promise<{ telegramId: number; role: string }[]> {
+/**
+ * CEO/Accountant Telegram ids that should receive a branch's finance alerts:
+ * everyone pinned to that branch, plus all-branches finance staff (branchId
+ * null). With no branchId, every finance staffer (company-wide).
+ */
+async function financeStaff(branchId?: string | null): Promise<{ telegramId: number; role: string }[]> {
   const all = await listUsers();
   return all
-    .filter((u) => u.active && u.telegramId != null && (u.role === "ceo" || u.role === "accountant"))
+    .filter(
+      (u) =>
+        u.active &&
+        u.telegramId != null &&
+        (u.role === "ceo" || u.role === "accountant") &&
+        (!branchId || u.branchId == null || u.branchId === branchId),
+    )
     .map((u) => ({ telegramId: u.telegramId as number, role: u.role }));
 }
 
@@ -57,11 +69,12 @@ export async function notifyPaymentRecorded(paymentId: string): Promise<void> {
   const payment = await getPaymentById(paymentId);
   if (!payment) return;
 
-  const [student, settings, cls, teacher] = await Promise.all([
+  const [student, settings, cls, teacher, branch] = await Promise.all([
     getStudentById(payment.studentId),
     getSettings(),
     getClassById(payment.classId),
     getTeacherById(payment.teacherId),
+    getBranchById(payment.branchId),
   ]);
   const teacherUser = teacher ? await getUserById(teacher.userId) : undefined;
 
@@ -75,6 +88,7 @@ export async function notifyPaymentRecorded(paymentId: string): Promise<void> {
     `💵 <b>${money(amount, settings?.currency)}</b> · ${payment.method}`,
     `👤 ${student?.fullName ?? "—"}`,
     `👨‍🏫 ${teacherUser?.fullName ?? "—"} — ${cls?.name ?? "—"}`,
+    `🏢 ${branch?.name ?? "—"}`,
     `🗓 ${formatDateTime(new Date(payment.createdAt))}`,
   ];
   if (remaining > 0) {
@@ -84,23 +98,24 @@ export async function notifyPaymentRecorded(paymentId: string): Promise<void> {
   }
   const text = lines.join("\n");
 
-  // Post to the finance group and DM each CEO/Accountant ("the bot chat as well").
-  await sendToFinanceChannels(text, settings);
+  // Route to THIS branch's group + the branch's finance staff DMs.
+  await sendToFinanceChannels(text, payment.branchId);
 }
 
 /**
- * Post a message to the linked payment group (if any) AND every active
- * CEO/Accountant DM. Best-effort; one failing recipient never blocks the others.
+ * Post a message to a branch's linked payment group (if any) AND to that
+ * branch's active CEO/Accountant DMs. Best-effort; one failing recipient never
+ * blocks the others. With no branchId, DMs every finance staffer (no group).
  */
 export async function sendToFinanceChannels(
   text: string,
-  settings?: Awaited<ReturnType<typeof getSettings>>,
+  branchId?: string | null,
 ): Promise<void> {
-  const s = settings ?? (await getSettings());
-  const chatId = s?.paymentGroupChatId ?? null;
+  const branch = branchId ? await getBranchById(branchId) : undefined;
+  const chatId = branch?.paymentGroupChatId ?? null;
   // Group ids are integers; use the numeric form when it parses cleanly.
   const groupTarget = chatId != null && Number.isFinite(Number(chatId)) ? Number(chatId) : chatId;
-  const staff = await financeStaff();
+  const staff = await financeStaff(branchId ?? undefined);
   await Promise.all([
     ...(groupTarget != null ? [sendMessage(groupTarget, text)] : []),
     ...staff.map((st) => sendMessage(st.telegramId, text)),
@@ -145,14 +160,14 @@ function dayLabel(dateStr: string): string {
  * payments grouped by teacher, each with a count and net total, plus the grand
  * total. Returns a friendly "no payments yet" line when the day is empty.
  */
-export async function buildTodaySummary(dateStr: string): Promise<string> {
+export async function buildTodaySummary(dateStr: string, branchId?: string, branchName?: string): Promise<string> {
   const { start, end } = tashkentDayRange(dateStr);
   const [rows, settings] = await Promise.all([
-    paymentTotalsByTeacher(start, end),
+    paymentTotalsByTeacher(start, end, branchId),
     getSettings(),
   ]);
   const currency = settings?.currency;
-  const header = `📊 <b>Today so far</b> — ${dayLabel(dateStr)}`;
+  const header = `📊 <b>Today so far</b>${branchName ? ` · ${branchName}` : ""} — ${dayLabel(dateStr)}`;
   if (rows.length === 0) {
     return `${header}\n\nNo payments recorded yet.`;
   }
@@ -181,21 +196,51 @@ export async function buildTodaySummary(dateStr: string): Promise<string> {
   ].join("\n");
 }
 
-/** The "Today so far" summary text for the current Tashkent day (for /today). */
-export async function todaySummaryNow(): Promise<string> {
-  return buildTodaySummary(tashkentDate(new Date()));
+/**
+ * The company-wide "Today so far" summary for the current Tashkent day (used by
+ * the /today DM command). `branchId`/`branchName` narrow it to one branch.
+ */
+export async function todaySummaryNow(branchId?: string, branchName?: string): Promise<string> {
+  return buildTodaySummary(tashkentDate(new Date()), branchId, branchName);
 }
 
 /**
- * Send the "Today so far" summary to the finance group + CEO/Accountant DMs.
- * `endOfDay` = the midnight run, which summarises the day that just ended.
+ * Send each branch its own "Today so far" summary to its linked group, and DM
+ * every finance staffer a summary scoped to their branch (all-branches staff get
+ * the company-wide one). `endOfDay` = the midnight run, summarising the day just
+ * ended.
  */
 export async function sendTodaySummary(endOfDay = false): Promise<void> {
   // For the midnight run the clock has just rolled over, so step back 6h to land
   // firmly inside the day that ended; otherwise summarise the current day.
   const ref = endOfDay ? new Date(Date.now() - 6 * 60 * 60 * 1000) : new Date();
-  const text = await buildTodaySummary(tashkentDate(ref));
-  await sendToFinanceChannels(text);
+  const dateStr = tashkentDate(ref);
+  const branches = await listBranches();
+
+  // Post each active branch's summary to its own linked group.
+  for (const b of branches.filter((br) => br.active && br.paymentGroupChatId)) {
+    const text = await buildTodaySummary(dateStr, b.id, b.name);
+    const chatId = b.paymentGroupChatId!;
+    const target = Number.isFinite(Number(chatId)) ? Number(chatId) : chatId;
+    await sendMessage(target, text);
+  }
+
+  // DM finance staff: pinned staff get their branch's summary; all-branches
+  // staff get the company-wide one.
+  const staff = await listUsers();
+  const companyWide = await buildTodaySummary(dateStr);
+  await Promise.all(
+    staff
+      .filter((u) => u.active && u.telegramId != null && (u.role === "ceo" || u.role === "accountant"))
+      .map(async (u) => {
+        if (u.branchId == null) {
+          await sendMessage(u.telegramId as number, companyWide);
+        } else {
+          const b = branches.find((br) => br.id === u.branchId);
+          await sendMessage(u.telegramId as number, await buildTodaySummary(dateStr, u.branchId, b?.name));
+        }
+      }),
+  );
 }
 
 /**

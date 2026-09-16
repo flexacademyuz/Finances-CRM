@@ -1,5 +1,6 @@
 import { getInitData } from "./telegram";
 import { getToken } from "./auth";
+import { getSelectedBranch } from "./branch";
 
 /**
  * Choose the auth header: Telegram initData when running inside Telegram, else a
@@ -38,11 +39,13 @@ export async function api<T = unknown>(
     }
   }
 
+  const branch = getSelectedBranch();
   const res = await fetch(url.toString(), {
     method: opts.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
       Authorization: authHeader(),
+      ...(branch ? { "X-Branch-Id": branch } : {}),
     },
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
   });
@@ -70,8 +73,9 @@ export async function api<T = unknown>(
 export async function downloadCsv(path: string, filename: string, query?: Record<string, string | undefined>) {
   const url = new URL(path, window.location.origin);
   if (query) for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v);
+  const branch = getSelectedBranch();
   const res = await fetch(url.toString(), {
-    headers: { Authorization: authHeader() },
+    headers: { Authorization: authHeader(), ...(branch ? { "X-Branch-Id": branch } : {}) },
   });
   const blob = await res.blob();
   const a = document.createElement("a");

@@ -1,6 +1,6 @@
-import type { StudentStatus, SalaryModel, PaymentMethod, Role, Class } from "@shared/schema";
+import type { StudentStatus, SalaryModel, PaymentMethod, Role, Class, Branch } from "@shared/schema";
 
-export type { Class };
+export type { Class, Branch };
 
 export type StudentRow = {
   id: string;
@@ -9,6 +9,7 @@ export type StudentRow = {
   classId: string;
   className: string;
   teacherId: string;
+  branchId: string;
   monthlyFee: string | null;
   effectiveFee: string;
   status: StudentStatus;
@@ -67,6 +68,7 @@ export type UserRow = {
   username: string | null;
   fullName: string;
   role: Role;
+  branchId: string | null;
   permissions: string[];
   loginUsername: string | null;
   approved: boolean;
@@ -78,6 +80,7 @@ export type LeadRow = {
   id: string;
   fullName: string;
   phone: string | null;
+  branchId: string;
   subject: string | null;
   gradeAtSchool: string | null;
   level: string | null;
@@ -327,6 +330,7 @@ export type ExpenseRow = {
   expenseDate: string;
   month: string;
   paymentMethod: "cash" | "bank_transfer" | "card";
+  branchId: string;
   receiptUrl: string | null;
   description: string | null;
   recordedBy: string;
@@ -396,6 +400,8 @@ export type ClassLedger = {
 export type FinanceOverview = {
   startYear: number;
   label: string;
+  /** False when scoped to one branch — payroll is company-wide, so it's omitted. */
+  payrollScoped: boolean;
   months: { month: string; label: string }[];
   revenue: number[];
   expensesByCategory: Record<string, number[]>;

@@ -18,11 +18,12 @@ import {
   Menu,
   Plus,
   HandCoins,
+  Building2,
   X,
 } from "lucide-react";
 import type { Role, User } from "@shared/schema";
 import { useI18n, type StringKey } from "../lib/i18n";
-import { useSession } from "../lib/session";
+import { useSession, useBranch } from "../lib/session";
 import { accessFor } from "../lib/access";
 import { can } from "@shared/permissions";
 import { haptic } from "../lib/telegram";
@@ -100,6 +101,7 @@ function buildNav(user: User): NavItem[] {
   if (a.finances) items.push({ href: "/finances", label: "finances", icon: <TrendingUp size={18} /> });
   if (a.analytics) items.push({ href: "/analytics", label: "analytics", icon: <BarChart3 size={18} /> });
   if (a.users) items.push({ href: "/users", label: "users", icon: <UserCog size={18} /> });
+  if (a.role === "ceo") items.push({ href: "/branches", label: "branches", icon: <Building2 size={18} /> });
   if (a.salary) items.push({ href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> });
   // Everyone can manage their own recovery credentials.
   items.push({ href: "/account", label: "myAccount", icon: <KeyRound size={18} /> });
@@ -161,6 +163,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
             <Menu size={22} />
           </button>
           <h1 className="flex-1 truncate text-lg font-bold">{title}</h1>
+          <BranchSwitcher />
           <button
             className="rounded-btn bg-bg px-2.5 py-1 text-xs font-semibold uppercase ring-1 ring-border"
             onClick={() => setLocale(locale === "en" ? "uz" : "en")}
@@ -181,6 +184,45 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
       {/* Mobile bottom tab bar — quick access alongside the sidebar drawer. */}
       <BottomNav items={BOTTOM_NAV[role]} location={location} user={user} />
     </div>
+  );
+}
+
+/**
+ * Header branch control. All-branches users (CEO / cross-branch staff) get a
+ * dropdown to switch which branch they're viewing (with an "All branches"
+ * overview). Pinned users see a static chip naming their branch. Hidden when
+ * there's only a single branch and nothing to switch.
+ */
+function BranchSwitcher() {
+  const { t } = useI18n();
+  const { branches, canSwitch, pinnedBranchId, selectedBranchId, setBranch } = useBranch();
+
+  if (canSwitch) {
+    if (branches.length <= 1) return null; // nothing to switch between
+    return (
+      <select
+        aria-label={t("branch")}
+        className="max-w-[9rem] truncate rounded-btn bg-bg px-2 py-1 text-xs font-semibold ring-1 ring-border"
+        value={selectedBranchId ?? "all"}
+        onChange={(e) => setBranch(e.target.value === "all" ? null : e.target.value)}
+      >
+        <option value="all">{t("allBranches")}</option>
+        {branches.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  const name = branches.find((b) => b.id === pinnedBranchId)?.name;
+  if (!name) return null;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-btn bg-primary-soft px-2 py-1 text-xs font-semibold text-primary">
+      <Building2 size={13} />
+      <span className="max-w-[8rem] truncate">{name}</span>
+    </span>
   );
 }
 

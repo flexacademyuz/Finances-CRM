@@ -1,0 +1,165 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Pencil, Building2 } from "lucide-react";
+import { api } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
+import type { Branch } from "../../lib/types";
+import type { PaymentGroupStatus } from "../../lib/types";
+import { Button, Card, Field, Input, Modal, Spinner } from "../../components/ui";
+
+/**
+ * CEO-only branch administration: create branches, rename them, and see which
+ * Telegram group each one posts its payments to. Everything else in the app is
+ * scoped to a branch; users are pinned to a branch on the Users screen.
+ */
+export function BranchesPage() {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Branch | null>(null);
+
+  const branches = useQuery({ queryKey: ["branches"], queryFn: () => api<Branch[]>("/api/branches") });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">{t("branches")}</h1>
+        <Button onClick={() => setCreating(true)}>
+          <Plus size={18} /> {t("addBranch")}
+        </Button>
+      </div>
+
+      <p className="text-sm text-tg-hint">{t("branchesNote")}</p>
+
+      {branches.isLoading ? (
+        <Spinner />
+      ) : (
+        <div className="space-y-2">
+          {(branches.data ?? []).map((b) => (
+            <BranchCard key={b.id} branch={b} onEdit={() => setEditing(b)} />
+          ))}
+        </div>
+      )}
+
+      {creating && (
+        <BranchModal
+          onClose={() => setCreating(false)}
+          onSaved={() => { setCreating(false); qc.invalidateQueries(); }}
+        />
+      )}
+      {editing && (
+        <BranchModal
+          branch={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); qc.invalidateQueries(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** One branch: name, active state, and its Telegram payment-group link status. */
+function BranchCard({ branch, onEdit }: { branch: Branch; onEdit: () => void }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const group = useQuery({
+    queryKey: ["branch-group", branch.id],
+    queryFn: () => api<PaymentGroupStatus>(`/api/branches/${branch.id}/payment-group`),
+  });
+
+  const unlink = useMutation({
+    mutationFn: () => api(`/api/branches/${branch.id}/payment-group/unlink`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["branch-group", branch.id] }),
+  });
+
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+            <Building2 size={18} />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate font-semibold">{branch.name}</div>
+            {!branch.active && <div className="text-xs text-status-overdue">Inactive</div>}
+          </div>
+        </div>
+        <button className="rounded-lg bg-tg-bg p-1.5 text-tg-link" title={t("renameBranch")} onClick={onEdit}>
+          <Pencil size={16} />
+        </button>
+      </div>
+
+      {/* Telegram payment-notification group for this branch. */}
+      <div className="rounded-lg border border-border px-3 py-2">
+        <div className="text-xs font-semibold text-muted">📣 {t("paymentNotifications")}</div>
+        {group.isLoading ? (
+          <div className="py-1"><Spinner /></div>
+        ) : group.data?.linked ? (
+          <div className="mt-1 space-y-2">
+            <div className="text-sm font-semibold">{group.data.title ?? `chat ${group.data.chatId}`}</div>
+            {unlink.isError && (
+              <div className="text-sm text-status-overdue">{(unlink.error as Error).message}</div>
+            )}
+            <Button
+              variant="ghost"
+              className="w-full text-status-overdue"
+              disabled={unlink.isPending}
+              onClick={() => unlink.mutate()}
+            >
+              {t("unlinkGroup")}
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-1 space-y-1">
+            <div className="text-sm text-tg-hint">{t("noBranchGroupLinked")}</div>
+            <p className="rounded-lg bg-primary-soft px-3 py-2 text-xs text-tg-text">{t("linkBranchGroupHint")}</p>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Create a new branch, or rename / (de)activate an existing one. */
+function BranchModal({
+  branch,
+  onClose,
+  onSaved,
+}: {
+  branch?: Branch;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const editing = !!branch;
+  const [name, setName] = useState(branch?.name ?? "");
+  const [active, setActive] = useState(branch?.active ?? true);
+
+  const save = useMutation({
+    mutationFn: () =>
+      editing
+        ? api(`/api/branches/${branch!.id}`, { method: "PATCH", body: { name, active } })
+        : api("/api/branches", { method: "POST", body: { name } }),
+    onSuccess: onSaved,
+  });
+
+  return (
+    <Modal open onClose={onClose} title={editing ? t("renameBranch") : t("newBranch")}>
+      <div className="space-y-3">
+        <Field label={t("branchName")}>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Branch 1" />
+        </Field>
+        {editing && (
+          <label className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            <span>{t("active")}</span>
+          </label>
+        )}
+        {save.isError && <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>}
+        <Button className="w-full" disabled={!name.trim() || save.isPending} onClick={() => save.mutate()}>
+          {t("save")}
+        </Button>
+      </div>
+    </Modal>
+  );
+}

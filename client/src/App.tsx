@@ -3,7 +3,7 @@ import { Route, Switch, Redirect } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LocaleContext, type Locale, useI18n } from "./lib/i18n";
 import { detectLocale } from "./lib/telegram";
-import { SessionProvider, type Me } from "./lib/session";
+import { SessionProvider, BranchProvider, type Me } from "./lib/session";
 import { accessFor } from "./lib/access";
 import { Layout } from "./components/Layout";
 import { Button, Card, Field, Input, Spinner } from "./components/ui";
@@ -16,6 +16,7 @@ import { StudentsPage } from "./pages/ceo/Students";
 import { ClassesPage } from "./pages/ceo/Classes";
 import { PayrollPage } from "./pages/ceo/Payroll";
 import { UsersPage } from "./pages/ceo/Users";
+import { BranchesPage } from "./pages/ceo/Branches";
 import { FinancesPage } from "./pages/ceo/Finances";
 import { AnalyticsPage } from "./pages/ceo/Analytics";
 // Shared / accountant
@@ -147,6 +148,7 @@ function Routes({ me }: { me: Me }) {
         {a.finances && <Route path="/finances" component={FinancesPage} />}
         {a.analytics && <Route path="/analytics" component={AnalyticsPage} />}
         {a.users && <Route path="/users" component={UsersPage} />}
+        {role === "ceo" && <Route path="/branches" component={BranchesPage} />}
         {a.salary && <Route path="/salary" component={MySalary} />}
         <Route path="/account" component={AccountPage} />
         <Route><Redirect to="/" /></Route>
@@ -163,7 +165,11 @@ export function App() {
         renderLoading={() => <Spinner />}
         renderGate={(err) => <Gate err={err} />}
       >
-        {(me) => <Routes me={me} />}
+        {(me) => (
+          <BranchProvider me={me}>
+            <Routes me={me} />
+          </BranchProvider>
+        )}
       </SessionProvider>
     </LocaleContext.Provider>
   );

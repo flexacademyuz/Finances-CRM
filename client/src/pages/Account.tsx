@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { clearToken } from "../lib/auth";
 import { isTelegram } from "../lib/telegram";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
-import type { PaymentGroupStatus } from "../lib/types";
-import { Button, Card, Field, Input, Spinner } from "../components/ui";
+import { Button, Card, Field, Input } from "../components/ui";
 
 /**
  * Self-service account recovery: set a login username + password so you can
@@ -55,7 +54,7 @@ export function AccountPage() {
         </Button>
       </Card>
 
-      {user.role === "ceo" && <PaymentGroupCard />}
+      {/* Payment-notification groups are managed per branch on the Branches page. */}
 
       {/* Log out only applies to a browser session (Telegram uses initData). */}
       {!isTelegram() && (
@@ -68,57 +67,5 @@ export function AccountPage() {
         </Button>
       )}
     </div>
-  );
-}
-
-/** CEO-only: shows which Telegram group receives payment notifications. */
-function PaymentGroupCard() {
-  const { t } = useI18n();
-  const qc = useQueryClient();
-  const status = useQuery({
-    queryKey: ["payment-group"],
-    queryFn: () => api<PaymentGroupStatus>("/api/settings/payment-group"),
-  });
-
-  const unlink = useMutation({
-    mutationFn: () => api("/api/settings/payment-group/unlink", { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-group"] }),
-  });
-
-  return (
-    <Card className="space-y-3">
-      <div className="text-sm font-semibold">📣 {t("paymentNotifications")}</div>
-      {status.isLoading ? (
-        <Spinner />
-      ) : status.data?.linked ? (
-        <>
-          <div className="rounded-lg bg-status-paid/10 px-3 py-2 text-sm">
-            <div className="text-xs text-tg-hint">{t("groupLinked")}</div>
-            <div className="font-semibold">
-              {status.data.title ?? `chat ${status.data.chatId}`}
-            </div>
-          </div>
-          <p className="text-xs text-tg-hint">{t("linkedGroupHint")}</p>
-          {unlink.isError && (
-            <div className="text-sm text-status-overdue">{(unlink.error as Error).message}</div>
-          )}
-          <Button
-            variant="ghost"
-            className="w-full text-status-overdue"
-            disabled={unlink.isPending}
-            onClick={() => unlink.mutate()}
-          >
-            {t("unlinkGroup")}
-          </Button>
-        </>
-      ) : (
-        <>
-          <div className="text-sm text-tg-hint">{t("groupNotLinked")}</div>
-          <p className="rounded-lg bg-primary-soft px-3 py-2 text-xs text-tg-text">
-            {t("linkGroupHint")}
-          </p>
-        </>
-      )}
-    </Card>
   );
 }

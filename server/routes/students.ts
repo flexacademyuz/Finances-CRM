@@ -1,7 +1,7 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { requireRole, requirePermission } from "../auth/middleware";
+import { requireRole, requirePermission, branchFilter, assertBranchAccess } from "../auth/middleware";
 import { insertStudentSchema, type StudentStatus } from "@shared/schema";
 import {
   listStudents,
@@ -41,6 +41,7 @@ router.get(
     if (req.authUser!.role === "teacher" && cls?.teacherId !== req.teacherId) {
       return res.status(403).json({ error: "forbidden" });
     }
+    assertBranchAccess(req, student.branchId);
 
     const [feeVal, payments, discounts, freezes, settings] = await Promise.all([
       effectiveFee(student.id),
@@ -147,17 +148,22 @@ router.get(
     } else if (typeof teacherId === "string") {
       filter.teacherId = teacherId;
     }
+    // Branch scope: pinned users see only their branch; all-branches users see
+    // the branch they've selected (or everything).
+    filter.branchId = branchFilter(req);
     res.json(await listStudents(filter));
   }),
 );
 
-/** Assert the caller may write to the given class (teachers: own classes). */
+/** Assert the caller may write to the given class (teachers: own classes; and
+ * pinned users: only classes in their branch). */
 async function assertClassWritable(req: Request, classId: string) {
   const cls = await getClassById(classId);
   if (!cls) throw new Error("Class not found");
   if (req.authUser!.role === "teacher" && cls.teacherId !== req.teacherId) {
     throw new Error("forbidden");
   }
+  assertBranchAccess(req, cls.branchId);
   return cls;
 }
 
@@ -170,11 +176,12 @@ router.post(
   requirePermission("add_student"),
   asyncHandler(async (req, res) => {
     const input = insertStudentSchema.parse(req.body);
-    await assertClassWritable(req, input.classId);
+    const cls = await assertClassWritable(req, input.classId);
     const created = await createStudent({
       fullName: input.fullName,
       phone: input.phone ?? null,
       classId: input.classId,
+      branchId: cls.branchId,
       monthlyFee: input.monthlyFee ?? null,
       enrolledAt: input.enrolledAt,
     });
@@ -253,6 +260,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     const existing = await getStudentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     const payCount = await countStudentPayments(req.params.id);
     if (payCount > 0) {
       return res.status(409).json({
@@ -276,6 +284,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const existing = await getStudentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
 
     const { classId, resumeDate } = z
       .object({
@@ -305,6 +314,7 @@ router.get(
       const cls = await getClassById(s.classId);
       if (cls?.teacherId !== req.teacherId) return res.status(403).json({ error: "forbidden" });
     }
+    assertBranchAccess(req, s.branchId);
     res.json(s);
   }),
 );

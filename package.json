@@ -8,10 +8,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch server/index.ts",
+    "dev": "cross-env NODE_ENV=development tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outfile=dist/server/index.js",
-    "start": "NODE_ENV=production node dist/server/index.js",
+    "start": "cross-env NODE_ENV=production node dist/server/index.js",
     "bot": "tsx server/bot/run.ts",
     "seed": "tsx server/seed.ts",
     "db:push": "drizzle-kit push",
@@ -47,6 +47,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^10.1.0",
     "drizzle-kit": "^0.28.1",
     "esbuild": "^0.24.0",
     "postcss": "^8.4.49",

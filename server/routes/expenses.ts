@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { asyncHandler } from "./helpers";
-import { requireRole, requirePermission } from "../auth/middleware";
+import { requireRole, requirePermission, branchFilter, writeBranch, assertBranchAccess } from "../auth/middleware";
 import { db } from "../db";
 import { payments } from "@shared/schema";
 import { createExpenseSchema, updateExpenseSchema } from "@shared/schema";
@@ -41,6 +41,7 @@ router.get(
     // Only the CEO may view soft-deleted rows.
     if ((includeDeleted === "1" || includeDeleted === "true") && req.authUser!.role === "ceo")
       filter.includeDeleted = true;
+    filter.branchId = branchFilter(req);
     res.json(await listExpenses(filter));
   }),
 );
@@ -50,7 +51,7 @@ router.get(
   "/expenses/summary",
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
-    const rows = await expenseTotalsByCategory(month);
+    const rows = await expenseTotalsByCategory(month, branchFilter(req));
     const byCategory: Record<string, number> = {};
     let total = 0;
     for (const r of rows) {
@@ -76,6 +77,7 @@ router.post(
       expenseDate: input.expenseDate,
       month: normalizeMonth(input.expenseDate),
       paymentMethod: input.paymentMethod,
+      branchId: writeBranch(req, input.branchId),
       receiptUrl: input.receiptUrl || null,
       description: input.description ?? null,
       recordedBy: req.authUser!.id,
@@ -90,6 +92,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const existing = await getExpenseById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     if (req.authUser!.role === "accountant" && existing.recordedBy !== req.authUser!.id) {
       return res.status(403).json({ error: "forbidden", message: "You can only edit your own entries." });
     }
@@ -111,6 +114,7 @@ router.delete(
   asyncHandler(async (req, res) => {
     const existing = await getExpenseById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, existing.branchId);
     res.json(await softDeleteExpense(req.params.id));
   }),
 );
@@ -120,29 +124,33 @@ router.delete(
  * grid for an academic year (Sep → Aug), matching the original spreadsheet
  * (V2 Change 5). All values computed from the DB.
  */
-async function financeOverview(startYear: number) {
+async function financeOverview(startYear: number, branchId?: string) {
   const months = Array.from({ length: 12 }, (_, i) => shiftMonth(`${startYear}-09-01`, i));
 
-  // Revenue = student payments (non-voided) per billing month.
+  // Revenue = student payments (non-voided) per billing month, branch-scoped.
+  const revConds = [inArray(payments.billingMonth, months), eq(payments.voided, false)];
+  if (branchId) revConds.push(eq(payments.branchId, branchId));
   const revRows = await db
     .select({
       month: payments.billingMonth,
       total: sql<string>`coalesce(sum(${payments.amount}), 0)`,
     })
     .from(payments)
-    .where(and(inArray(payments.billingMonth, months), eq(payments.voided, false)))
+    .where(and(...revConds))
     .groupBy(payments.billingMonth);
   const revByMonth = new Map(revRows.map((r) => [r.month, Number(r.total)]));
 
-  const expRows = await expenseMatrix(months);
+  const expRows = await expenseMatrix(months, branchId);
   const expByMonthCat = new Map<string, Map<string, number>>();
   for (const r of expRows) {
     if (!expByMonthCat.has(r.month)) expByMonthCat.set(r.month, new Map());
     expByMonthCat.get(r.month)!.set(r.category, Number(r.total));
   }
 
-  // Payroll cash-out (teacher advances + net salary payouts) per month.
-  const payrollMap = await payrollByMonth(months);
+  // Payroll cash-out (teacher advances + net salary payouts) per month. Salaries
+  // are paid per-teacher, not per-branch, so payroll is a company-wide figure —
+  // shown only in the all-branches view; a single-branch view omits it (0).
+  const payrollMap = branchId ? new Map<string, number>() : await payrollByMonth(months);
 
   const revenue = months.map((m) => revByMonth.get(m) ?? 0);
   const expensesByCategory: Record<string, number[]> = {};
@@ -158,6 +166,9 @@ async function financeOverview(startYear: number) {
   return {
     startYear,
     label: `${startYear}–${startYear + 1}`,
+    // False when scoped to a single branch: payroll is company-wide, so it's
+    // excluded from a per-branch view (the client shows a note).
+    payrollScoped: !branchId,
     months: months.map((m) => ({ month: m, label: monthLabel(m) })),
     revenue,
     expensesByCategory,
@@ -180,7 +191,7 @@ router.get(
     // Default academic year: if before September, the year started last calendar year.
     const defaultStart = now.getUTCMonth() >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
     const startYear = req.query.year ? Number(req.query.year) : defaultStart;
-    res.json(await financeOverview(startYear));
+    res.json(await financeOverview(startYear, branchFilter(req)));
   }),
 );
 

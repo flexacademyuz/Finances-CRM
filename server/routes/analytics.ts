@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, branchFilter } from "../auth/middleware";
 import { db } from "../db";
 import { payments, students, classes, teachers, users, discounts, paymentFreezes } from "@shared/schema";
 import { monthKey, normalizeMonth, monthLabel, shiftMonth, recentMonths } from "@shared/date";
@@ -17,6 +17,12 @@ router.use("/analytics", requireRole("ceo"));
 const TZ = "Asia/Tashkent";
 const localDay = sql`(${payments.createdAt} AT TIME ZONE ${TZ})::date`;
 
+// SQL fragment that ANDs a branch filter onto a payments query (empty for the
+// all-branches view). Prefixed with " and " so it can be appended inside an
+// existing WHERE / filter clause.
+const pmtBranch = (bid?: string) => (bid ? sql` and ${payments.branchId} = ${bid}` : sql``);
+const stuBranch = (bid?: string) => (bid ? sql` and ${students.branchId} = ${bid}` : sql``);
+
 function parseRange(from: unknown, to: unknown) {
   const today = new Date().toISOString().slice(0, 10);
   const toDate = typeof to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : today;
@@ -30,13 +36,14 @@ router.get(
   "/analytics/revenue/daily",
   asyncHandler(async (req, res) => {
     const { fromDate, toDate } = parseRange(req.query.from, req.query.to);
+    const bid = branchFilter(req);
     const rows = await db
       .select({
         day: sql<string>`gs::date`,
-        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false), 0)`,
-        cash: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.method} = 'cash'), 0)`,
-        online: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.method} = 'online'), 0)`,
-        count: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false)`,
+        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false${pmtBranch(bid)}), 0)`,
+        cash: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.method} = 'cash'${pmtBranch(bid)}), 0)`,
+        online: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.method} = 'online'${pmtBranch(bid)}), 0)`,
+        count: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false${pmtBranch(bid)})`,
       })
       .from(sql`generate_series(${fromDate}::date, ${toDate}::date, '1 day') as gs`)
       .leftJoin(payments, sql`${localDay} = gs::date`)
@@ -62,14 +69,17 @@ router.get(
     const defStart = now.getUTCMonth() >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
     const startYear = req.query.year ? Number(req.query.year) : defStart;
     const months = Array.from({ length: 12 }, (_, i) => shiftMonth(`${startYear}-09-01`, i));
+    const bid = branchFilter(req);
 
+    const monthlyConds = [eq(payments.voided, false)];
+    if (bid) monthlyConds.push(eq(payments.branchId, bid));
     const rows = await db
       .select({
         month: payments.billingMonth,
         total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
       })
       .from(payments)
-      .where(and(eq(payments.voided, false)))
+      .where(and(...monthlyConds))
       .groupBy(payments.billingMonth);
     const map = new Map(rows.map((r) => [r.month, Number(r.total)]));
 
@@ -87,17 +97,20 @@ router.get(
 /** Revenue per academic year, most recent years compared. */
 router.get(
   "/analytics/revenue/yearly",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const now = new Date();
     const curStart = now.getUTCMonth() >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
     const years = [curStart - 2, curStart - 1, curStart];
+    const bid = branchFilter(req);
     const out = [];
     for (const y of years) {
       const months = Array.from({ length: 12 }, (_, i) => shiftMonth(`${y}-09-01`, i));
+      const yConds = [eq(payments.voided, false), sql`${payments.billingMonth} = any(${months})`];
+      if (bid) yConds.push(eq(payments.branchId, bid));
       const [row] = await db
         .select({ total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)` })
         .from(payments)
-        .where(and(eq(payments.voided, false), sql`${payments.billingMonth} = any(${months})`));
+        .where(and(...yConds));
       out.push({ startYear: y, label: `${y}–${y + 1}`, total: Number(row?.total ?? 0) });
     }
     const prev = out[out.length - 2]?.total ?? 0;
@@ -112,13 +125,14 @@ router.get(
   "/analytics/payments/daily",
   asyncHandler(async (req, res) => {
     const { fromDate, toDate } = parseRange(req.query.from, req.query.to);
+    const bid = branchFilter(req);
     const rows = await db
       .select({
         day: sql<string>`gs::date`,
-        count: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false)`,
-        cashCount: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false and ${payments.method} = 'cash')`,
-        onlineCount: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false and ${payments.method} = 'online')`,
-        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false), 0)`,
+        count: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false${pmtBranch(bid)})`,
+        cashCount: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false and ${payments.method} = 'cash'${pmtBranch(bid)})`,
+        onlineCount: sql<number>`count(${payments.id}) filter (where ${payments.voided} = false and ${payments.method} = 'online'${pmtBranch(bid)})`,
+        total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false${pmtBranch(bid)}), 0)`,
       })
       .from(sql`generate_series(${fromDate}::date, ${toDate}::date, '1 day') as gs`)
       .leftJoin(payments, sql`${localDay} = gs::date`)
@@ -139,14 +153,16 @@ router.get(
 /** Students overview: enrollments trend, status snapshot, discounts, freezes. */
 router.get(
   "/analytics/students/overview",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const months = recentMonths(12);
+    const bid = branchFilter(req);
     const enrollRows = await db
       .select({
         month: sql<string>`to_char(date_trunc('month', ${students.enrolledAt}), 'YYYY-MM-01')`,
         n: sql<number>`count(*)`,
       })
       .from(students)
+      .where(bid ? eq(students.branchId, bid) : undefined)
       .groupBy(sql`date_trunc('month', ${students.enrolledAt})`);
     const enrollMap = new Map(enrollRows.map((r) => [r.month, Number(r.n)]));
     const enrollments = months.map((m) => ({ month: m, label: monthLabel(m), count: enrollMap.get(m) ?? 0 }));
@@ -154,7 +170,7 @@ router.get(
     const statusRows = await db
       .select({ status: students.status, n: sql<number>`count(*)` })
       .from(students)
-      .where(eq(students.active, true))
+      .where(bid ? and(eq(students.active, true), eq(students.branchId, bid)) : eq(students.active, true))
       .groupBy(students.status);
     const statusCounts: Record<string, number> = { paid: 0, awaiting_payment: 0, overdue: 0, frozen: 0 };
     for (const r of statusRows) statusCounts[r.status] = Number(r.n);
@@ -169,7 +185,7 @@ router.get(
       })
       .from(discounts)
       .innerJoin(students, eq(discounts.studentId, students.id))
-      .where(eq(discounts.isActive, true));
+      .where(bid ? and(eq(discounts.isActive, true), eq(students.branchId, bid)) : eq(discounts.isActive, true));
 
     const activeFreezes = await db
       .select({
@@ -181,7 +197,7 @@ router.get(
       })
       .from(paymentFreezes)
       .innerJoin(students, eq(paymentFreezes.studentId, students.id))
-      .where(eq(paymentFreezes.status, "active"));
+      .where(bid ? and(eq(paymentFreezes.status, "active"), eq(students.branchId, bid)) : eq(paymentFreezes.status, "active"));
 
     res.json({
       enrollments,
@@ -197,6 +213,7 @@ router.get(
   "/analytics/groups/revenue",
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
+    const bid = branchFilter(req);
     const rows = await db
       .select({
         groupId: classes.id,
@@ -220,6 +237,7 @@ router.get(
       })
       .from(classes)
       .leftJoin(payments, eq(payments.classId, classes.id))
+      .where(bid ? eq(classes.branchId, bid) : undefined)
       .groupBy(classes.id, classes.name)
       .orderBy(sql`2`);
     res.json(
@@ -246,29 +264,32 @@ router.get(
   "/analytics/teachers/revenue",
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
-    const teacherRows = await db
-      .select({ id: teachers.id, name: users.fullName })
-      .from(teachers)
-      .innerJoin(users, eq(teachers.userId, users.id));
+    const bid = branchFilter(req);
+    const teacherRows = (
+      await db
+        .select({ id: teachers.id, name: users.fullName, branchId: users.branchId })
+        .from(teachers)
+        .innerJoin(users, eq(teachers.userId, users.id))
+    ).filter((t) => !bid || t.branchId == null || t.branchId === bid);
 
     const out = [];
     for (const tRow of teacherRows) {
+      const revConds = [
+        eq(payments.teacherId, tRow.id),
+        eq(payments.voided, false),
+        eq(payments.billingMonth, month),
+      ];
+      if (bid) revConds.push(eq(payments.branchId, bid));
       const [rev] = await db
         .select({
           revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
         })
         .from(payments)
-        .where(
-          and(
-            eq(payments.teacherId, tRow.id),
-            eq(payments.voided, false),
-            eq(payments.billingMonth, month),
-          ),
-        );
+        .where(and(...revConds));
       const [grp] = await db
         .select({ n: sql<number>`count(*)` })
         .from(classes)
-        .where(eq(classes.teacherId, tRow.id));
+        .where(bid ? and(eq(classes.teacherId, tRow.id), eq(classes.branchId, bid)) : eq(classes.teacherId, tRow.id));
       const est = await estimateSalary(tRow.id, month);
       const revenue = Number(rev?.revenue ?? 0);
       out.push({
@@ -292,16 +313,17 @@ router.get(
     const defStart = now.getUTCMonth() >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
     const startYear = req.query.year ? Number(req.query.year) : defStart;
     const months = Array.from({ length: 12 }, (_, i) => shiftMonth(`${startYear}-09-01`, i));
+    const bid = branchFilter(req);
 
     const revRows = await db
       .select({ month: payments.billingMonth, total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)` })
       .from(payments)
-      .where(eq(payments.voided, false))
+      .where(bid ? and(eq(payments.voided, false), eq(payments.branchId, bid)) : eq(payments.voided, false))
       .groupBy(payments.billingMonth);
     const revMap = new Map(revRows.map((r) => [r.month, Number(r.total)]));
 
     // Expenses summed per month (all categories) for the profit overlay.
-    const expRows = await expenseMatrix(months);
+    const expRows = await expenseMatrix(months, bid);
     const expMap = new Map<string, number>();
     for (const r of expRows) expMap.set(r.month, (expMap.get(r.month) ?? 0) + Number(r.total));
 

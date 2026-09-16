@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { asyncHandler } from "./helpers";
-import { requireRole } from "../auth/middleware";
+import { requireRole, branchFilter } from "../auth/middleware";
 import { db } from "../db";
 import { payments, students, classes, users, teachers } from "@shared/schema";
 import { monthKey, normalizeMonth, recentMonths, monthLabel } from "@shared/date";
@@ -14,7 +14,9 @@ import { getChatTitle } from "../bot/client";
 const router = Router();
 
 /** Revenue (cash/online) for a month — net of refunds, over non-voided payments. */
-async function revenueForMonth(month: string) {
+async function revenueForMonth(month: string, branchId?: string) {
+  const conds = [eq(payments.billingMonth, month), eq(payments.voided, false)];
+  if (branchId) conds.push(eq(payments.branchId, branchId));
   const [row] = await db
     .select({
       total: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}), 0)`,
@@ -23,7 +25,7 @@ async function revenueForMonth(month: string) {
       count: sql<number>`count(*)`,
     })
     .from(payments)
-    .where(and(eq(payments.billingMonth, month), eq(payments.voided, false)));
+    .where(and(...conds));
   return {
     total: Number(row?.total ?? 0),
     cash: Number(row?.cash ?? 0),
@@ -42,20 +44,29 @@ router.get(
   requireRole("ceo"),
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
+    const branchId = branchFilter(req);
+
+    const activeConds = branchId
+      ? and(eq(students.active, true), eq(students.branchId, branchId))
+      : eq(students.active, true);
+    const totalConds = branchId
+      ? and(eq(students.active, true), eq(students.branchId, branchId))
+      : eq(students.active, true);
 
     const [revenue, statusRows, totalsRow, payroll] = await Promise.all([
-      revenueForMonth(month),
+      revenueForMonth(month, branchId),
       db
         .select({ status: students.status, n: sql<number>`count(*)` })
         .from(students)
-        .where(eq(students.active, true))
+        .where(activeConds)
         .groupBy(students.status),
       db
         .select({
-          students: sql<number>`count(*) filter (where ${students.active})`,
+          students: sql<number>`count(*)`,
         })
-        .from(students),
-      payrollMonthView(month),
+        .from(students)
+        .where(totalConds),
+      payrollMonthView(month, branchId),
     ]);
 
     const statusCounts = { paid: 0, awaiting_payment: 0, overdue: 0, frozen: 0, not_due: 0 };
@@ -65,7 +76,7 @@ router.get(
       recentMonths(6, month).map(async (m) => ({
         month: m,
         label: monthLabel(m),
-        ...(await revenueForMonth(m)),
+        ...(await revenueForMonth(m, branchId)),
       })),
     );
 
@@ -88,6 +99,7 @@ router.get(
   requireRole("ceo"),
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : monthKey();
+    const branchId = branchFilter(req);
 
     const perClass = await db
       .select({
@@ -99,6 +111,7 @@ router.get(
       })
       .from(classes)
       .leftJoin(payments, eq(payments.classId, classes.id))
+      .where(branchId ? eq(classes.branchId, branchId) : undefined)
       .groupBy(classes.id, classes.name, classes.teacherId)
       .orderBy(classes.name);
 
@@ -106,12 +119,14 @@ router.get(
       .select({
         teacherId: teachers.id,
         name: users.fullName,
-        revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}), 0)`,
+        branchId: users.branchId,
+        revenue: sql<string>`coalesce(sum(${payments.amount} - ${payments.refundedAmount}) filter (where ${payments.voided} = false and ${payments.billingMonth} = ${month}${branchId ? sql` and ${payments.branchId} = ${branchId}` : sql``}), 0)`,
       })
       .from(teachers)
       .innerJoin(users, eq(teachers.userId, users.id))
       .leftJoin(payments, eq(payments.teacherId, teachers.id))
-      .groupBy(teachers.id, users.fullName)
+      .where(branchId ? sql`(${users.branchId} is null or ${users.branchId} = ${branchId})` : undefined)
+      .groupBy(teachers.id, users.fullName, users.branchId)
       .orderBy(users.fullName);
 
     res.json({
@@ -132,7 +147,7 @@ router.get(
   requireRole("ceo", "accountant"),
   asyncHandler(async (req, res) => {
     await recomputeStatuses();
-    const all = await listStudents({ activeOnly: true });
+    const all = await listStudents({ activeOnly: true, branchId: branchFilter(req) });
     // Frozen (excused) and not-due (not yet a month in) students don't belong
     // in the awaiting/overdue list.
     const filtered = all.filter(
@@ -156,6 +171,10 @@ router.get(
   requireRole("ceo"),
   asyncHandler(async (req, res) => {
     const month = typeof req.query.month === "string" ? normalizeMonth(req.query.month) : undefined;
+    const branchId = branchFilter(req);
+    const csvConds = [];
+    if (month) csvConds.push(eq(payments.billingMonth, month));
+    if (branchId) csvConds.push(eq(payments.branchId, branchId));
     const rows = await db
       .select({
         createdAt: payments.createdAt,
@@ -175,7 +194,7 @@ router.get(
       .innerJoin(classes, eq(payments.classId, classes.id))
       .innerJoin(teachers, eq(payments.teacherId, teachers.id))
       .innerJoin(users, eq(teachers.userId, users.id))
-      .where(month ? eq(payments.billingMonth, month) : undefined)
+      .where(csvConds.length ? and(...csvConds) : undefined)
       .orderBy(payments.createdAt);
 
     const header = [
