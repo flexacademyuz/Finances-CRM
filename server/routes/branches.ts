@@ -10,6 +10,7 @@ import {
   setBranchPaymentGroupChatId,
 } from "../storage";
 import { getChatTitle } from "../bot/client";
+import { recalculateBranchDues } from "../services/billing";
 
 const router = Router();
 
@@ -59,6 +60,21 @@ router.get(
     const chatId = branch.paymentGroupChatId ?? null;
     const title = chatId ? await getChatTitle(chatId) : null;
     res.json({ linked: !!chatId, chatId, title });
+  }),
+);
+
+/**
+ * POST /api/branches/:id/recalculate-balances — re-snapshot every non-voided
+ * payment in the branch to the students' current fees, so outstanding balances
+ * and "partially paid" labels become correct after fixing mis-entered fees.
+ */
+router.post(
+  "/branches/:id/recalculate-balances",
+  asyncHandler(async (req, res) => {
+    const branch = await getBranchById(req.params.id);
+    if (!branch) return res.status(404).json({ error: "not_found" });
+    const result = await recalculateBranchDues(req.params.id, req.authUser!.id);
+    res.json(result);
   }),
 );
 

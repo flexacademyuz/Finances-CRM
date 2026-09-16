@@ -37,6 +37,51 @@ export type PaymentContext = {
 };
 
 /**
+ * The *fresh* pricing for a student in a billing month, computed from their
+ * CURRENT effective fee and any active discount — independent of what a past
+ * payment may have snapshotted. Full tuition, the discounted month due, the
+ * teacher's credit (per-group rule, else salary model, else full tuition), and
+ * the applied discount id. Used to re-snapshot mis-priced payments (see
+ * services/billing.recalculateBranchDues) and by buildPaymentContext below.
+ */
+export async function freshMonthPricing(
+  studentId: string,
+  billingMonth: string,
+): Promise<{ fullTuition: number; monthDue: number; teacherCredit: number; discountId: string | null }> {
+  const student = await getStudentById(studentId);
+  if (!student) throw new Error("Student not found");
+  const groupId = student.classId;
+
+  const fullTuition = await effectiveFee(studentId);
+
+  const discounts = await activeDiscountsFor(studentId, groupId);
+  const active = discounts.find((d) => monthInRange(billingMonth, d.validFrom, d.validTo));
+  let monthDue = fullTuition;
+  let discountId: string | null = null;
+  if (active) {
+    monthDue = discountedAmount(fullTuition, active.discountType, Number(active.discountValue));
+    discountId = active.id;
+  }
+
+  const cls = await getClassById(groupId);
+  let teacherCredit = fullTuition;
+  const rule = await getSalaryRuleForGroup(groupId);
+  if (rule) {
+    teacherCredit = Number(rule.fixedSalaryPerStudent);
+  } else if (cls) {
+    const teacher = await getTeacherById(cls.teacherId);
+    if (teacher) {
+      const v = Number(teacher.salaryValue);
+      if (teacher.salaryModel === "per_student") teacherCredit = v;
+      else if (teacher.salaryModel === "percentage") teacherCredit = +(fullTuition * (v / 100)).toFixed(2);
+      else if (teacher.salaryModel === "fixed") teacherCredit = 0;
+    }
+  }
+
+  return { fullTuition, monthDue, teacherCredit, discountId };
+}
+
+/**
  * Resolve everything the payment form and the record endpoint need for a
  * student in a given billing month: full tuition, the active discount (if any)
  * and the discounted amount, the teacher's credit (per-group rate, else the

@@ -1,9 +1,10 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { students, payments, paymentFreezes } from "@shared/schema";
+import { students, payments, paymentFreezes, type PaymentEdit } from "@shared/schema";
 import { monthKey, parseDate, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { getSettings, setStudentsStatus, setStudentsPaidThrough } from "../storage";
+import { freshMonthPricing } from "./payment-context";
 import { env } from "../env";
 
 export type StatusBucket = {
@@ -130,6 +131,73 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
   ]);
 
   return bucket;
+}
+
+/**
+ * Re-snapshot every non-voided payment in a branch to the students' CURRENT
+ * fees. A payment stores the amount that was *due* at record time; if fees were
+ * entered wrong (e.g. 225 instead of 225,000) or the due was never captured, the
+ * month reads as fully settled and no "partially paid / owes X" balance shows.
+ *
+ * For each payment this recomputes the expected due, full tuition and teacher
+ * credit from the student's current effective fee + active discount (leaving the
+ * amount actually PAID untouched), records the change in the audit trail, then
+ * refreshes statuses. After correcting a branch's fees, running this makes the
+ * outstanding balances and partial labels correct without deleting/re-recording.
+ *
+ * CEO-triggered and branch-scoped. Only use it to correct setup mistakes: it
+ * reprices past payments to today's fee, which is not what you want if a fee
+ * legitimately changed over time.
+ */
+export async function recalculateBranchDues(
+  branchId: string,
+  byUserId: string,
+): Promise<{ updated: number; total: number }> {
+  const rows = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.branchId, branchId), eq(payments.voided, false)));
+
+  let updated = 0;
+  for (const p of rows) {
+    const price = await freshMonthPricing(p.studentId, p.billingMonth);
+    const near = (a: number | null, b: number) => a != null && Math.abs(a - b) <= 0.005;
+    const dueOk = near(p.amountDue == null ? null : Number(p.amountDue), price.monthDue);
+    const fullOk = near(p.fullTuitionAmount == null ? null : Number(p.fullTuitionAmount), price.fullTuition);
+    const creditOk = near(p.teacherCreditAmount == null ? null : Number(p.teacherCreditAmount), price.teacherCredit);
+    if (dueOk && fullOk && creditOk) continue;
+
+    const entry: PaymentEdit = {
+      at: new Date().toISOString(),
+      byUserId,
+      action: "edit",
+      reason: "Recalculated due from current fee",
+      before: {
+        amountDue: p.amountDue,
+        fullTuitionAmount: p.fullTuitionAmount,
+        teacherCreditAmount: p.teacherCreditAmount,
+      },
+      after: {
+        amountDue: String(price.monthDue),
+        fullTuitionAmount: String(price.fullTuition),
+        teacherCreditAmount: String(price.teacherCredit),
+      },
+    };
+    await db
+      .update(payments)
+      .set({
+        amountDue: String(price.monthDue),
+        fullTuitionAmount: String(price.fullTuition),
+        teacherCreditAmount: String(price.teacherCredit),
+        discountId: price.discountId,
+        editHistory: [...p.editHistory, entry],
+      })
+      .where(eq(payments.id, p.id));
+    updated++;
+  }
+
+  await recomputeStatuses();
+  return { updated, total: rows.length };
 }
 
 /** Students currently awaiting payment or overdue, for the dedicated list. */

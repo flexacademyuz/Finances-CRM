@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Building2 } from "lucide-react";
+import { Plus, Pencil, Building2, Calculator } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import type { Branch } from "../../lib/types";
@@ -62,6 +62,7 @@ export function BranchesPage() {
 function BranchCard({ branch, onEdit }: { branch: Branch; onEdit: () => void }) {
   const { t } = useI18n();
   const qc = useQueryClient();
+  const [recalcOpen, setRecalcOpen] = useState(false);
   const group = useQuery({
     queryKey: ["branch-group", branch.id],
     queryFn: () => api<PaymentGroupStatus>(`/api/branches/${branch.id}/payment-group`),
@@ -70,6 +71,12 @@ function BranchCard({ branch, onEdit }: { branch: Branch; onEdit: () => void }) 
   const unlink = useMutation({
     mutationFn: () => api(`/api/branches/${branch.id}/payment-group/unlink`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["branch-group", branch.id] }),
+  });
+
+  const recalc = useMutation({
+    mutationFn: () =>
+      api<{ updated: number; total: number }>(`/api/branches/${branch.id}/recalculate-balances`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries(),
   });
 
   return (
@@ -88,6 +95,40 @@ function BranchCard({ branch, onEdit }: { branch: Branch; onEdit: () => void }) 
           <Pencil size={16} />
         </button>
       </div>
+
+      {/* Fix outstanding balances / partial labels after correcting fees. */}
+      <button
+        onClick={() => { recalc.reset(); setRecalcOpen(true); }}
+        className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm transition hover:border-primary hover:bg-primary-soft"
+      >
+        <Calculator size={16} className="shrink-0 text-primary" />
+        <span className="flex-1 font-medium">{t("recalcBalances")}</span>
+      </button>
+      {recalcOpen && (
+        <Modal open onClose={() => setRecalcOpen(false)} title={`${t("recalcBalances")} — ${branch.name}`}>
+          <div className="space-y-4">
+            <p className="rounded-lg bg-primary-soft px-3 py-2 text-sm text-tg-text">{t("recalcBalancesNote")}</p>
+            {recalc.isError && (
+              <div className="text-sm text-status-overdue">{(recalc.error as Error).message}</div>
+            )}
+            {recalc.isSuccess ? (
+              <>
+                <div className="text-sm font-medium text-status-paid">
+                  {t("recalcDone").replace("{n}", String(recalc.data.updated))}
+                </div>
+                <Button className="w-full" onClick={() => setRecalcOpen(false)}>{t("save")}</Button>
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="ghost" className="flex-1" onClick={() => setRecalcOpen(false)}>{t("cancel")}</Button>
+                <Button className="flex-1" disabled={recalc.isPending} onClick={() => recalc.mutate()}>
+                  {t("recalcBalances")}
+                </Button>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {/* Telegram payment-notification group for this branch. */}
       <div className="rounded-lg border border-border px-3 py-2">

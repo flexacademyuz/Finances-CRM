@@ -416,6 +416,12 @@ const dict = {
     en: "Salaries are paid per teacher (company-wide), so payroll isn't split by branch.",
     uz: "Maoshlar har bir o'qituvchiga umumiy to'lanadi, shuning uchun maosh filiallar bo'yicha bo'linmaydi.",
   },
+  recalcBalances: { en: "Recalculate balances", uz: "Balanslarni qayta hisoblash" },
+  recalcBalancesNote: {
+    en: "Re-checks every payment in this branch against the students' CURRENT fees, so outstanding balances and \"partially paid\" labels become correct. Use this after fixing wrong fees. The amount each student actually paid is never changed. Do not use it if a fee legitimately changed over time.",
+    uz: "Ushbu filialdagi har bir to'lovni o'quvchilarning HOZIRGI to'lovlariga solishtirib qayta tekshiradi, shunda qoldiq va \"qisman to'langan\" belgilar to'g'ri bo'ladi. Noto'g'ri to'lovlarni tuzatgandan keyin ishlating. O'quvchi to'lagan summa o'zgarmaydi.",
+  },
+  recalcDone: { en: "Updated {n} payment(s). Balances refreshed.", uz: "{n} ta to'lov yangilandi. Balanslar yangilandi." },
 } as const;
 
 export type StringKey = keyof typeof dict;
