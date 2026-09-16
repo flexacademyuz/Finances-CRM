@@ -122,6 +122,90 @@ export async function sendToFinanceChannels(
   ]);
 }
 
+/**
+ * Notify the CEO(s) when a teacher edits a student's details. Lists exactly what
+ * changed (name, phone, fee, group, start date, active) with before → after, so
+ * money-affecting edits by teachers stay visible. Best-effort; sent only to
+ * active CEOs whose branch access covers the student's branch.
+ */
+export async function notifyStudentEdited(
+  studentId: string,
+  editorUserId: string,
+  before: {
+    fullName: string;
+    phone: string | null;
+    monthlyFee: string | null;
+    classId: string;
+    enrolledAt: string;
+    active: boolean;
+  },
+  patch: {
+    fullName?: string;
+    phone?: string | null;
+    monthlyFee?: number | null;
+    classId?: string;
+    enrolledAt?: string;
+    active?: boolean;
+  },
+): Promise<void> {
+  const [student, editor, settings] = await Promise.all([
+    getStudentById(studentId),
+    getUserById(editorUserId),
+    getSettings(),
+  ]);
+  if (!student) return;
+  const branch = await getBranchById(student.branchId);
+  const fmtMoney = (v: string | number | null | undefined) =>
+    v == null || v === "" ? "—" : money(Number(v), settings?.currency);
+
+  const changes: string[] = [];
+  if (patch.fullName !== undefined && patch.fullName !== before.fullName) {
+    changes.push(`• Name: ${before.fullName} → ${patch.fullName}`);
+  }
+  if (patch.phone !== undefined && (patch.phone ?? "") !== (before.phone ?? "")) {
+    changes.push(`• Phone: ${before.phone ?? "—"} → ${patch.phone ?? "—"}`);
+  }
+  if (
+    patch.monthlyFee !== undefined &&
+    String(patch.monthlyFee ?? "") !== String(before.monthlyFee ?? "")
+  ) {
+    changes.push(`• Fee: ${fmtMoney(before.monthlyFee)} → ${fmtMoney(patch.monthlyFee)}`);
+  }
+  if (patch.enrolledAt !== undefined && patch.enrolledAt !== before.enrolledAt) {
+    changes.push(`• Start date: ${before.enrolledAt} → ${patch.enrolledAt}`);
+  }
+  if (patch.classId !== undefined && patch.classId !== before.classId) {
+    const [fromC, toC] = await Promise.all([getClassById(before.classId), getClassById(patch.classId)]);
+    changes.push(`• Group: ${fromC?.name ?? "—"} → ${toC?.name ?? "—"}`);
+  }
+  if (patch.active !== undefined && patch.active !== before.active) {
+    changes.push(`• Status: ${before.active ? "active" : "stopped"} → ${patch.active ? "active" : "stopped"}`);
+  }
+  if (changes.length === 0) return; // nothing actually changed
+
+  const text = [
+    `✏️ <b>Student updated by teacher</b>`,
+    ``,
+    `👤 ${student.fullName}`,
+    `👨‍🏫 ${editor?.fullName ?? "—"}`,
+    `🏢 ${branch?.name ?? "—"}`,
+    ``,
+    ...changes,
+    ``,
+    `🗓 ${formatDateTime(new Date())}`,
+  ].join("\n");
+
+  const all = await listUsers();
+  const ceos = all.filter(
+    (u) =>
+      u.active &&
+      u.telegramId != null &&
+      u.role === "ceo" &&
+      ((u.branchIds ?? []).length === 0 || (u.branchIds ?? []).includes(student.branchId)),
+  );
+  await Promise.all(ceos.map((u) => sendMessage(u.telegramId as number, text)));
+}
+
 /* ─────────────────────── "Today so far" summary ─────────────────────── */
 
 const TZ = "Asia/Tashkent";

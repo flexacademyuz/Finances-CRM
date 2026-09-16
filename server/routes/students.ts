@@ -23,6 +23,7 @@ import {
 import { parseDate, fullMonthsBetween, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { recomputeStatuses } from "../services/billing";
+import { notifyStudentEdited } from "../bot/notifications";
 import { env } from "../env";
 
 const router = Router();
@@ -210,24 +211,34 @@ router.patch(
       })
       .parse(req.body);
 
-    // Teachers cannot move a class, change fees, or move the start date (all
-    // affect billing/money); only CEO/Accountant may.
-    if (patch.classId && req.authUser!.role === "teacher") {
-      await assertClassWritable(req, patch.classId);
+    // Teachers may now edit every student detail (name, phone, fee, group,
+    // start date). A group move must target a class the caller can reach (its
+    // branch must be in their access set). Every teacher edit is reported to the
+    // CEO below so money-affecting changes stay visible.
+    if (patch.classId) {
+      const target = await getClassById(patch.classId);
+      if (!target) return res.status(404).json({ error: "not_found", message: "Class not found" });
+      assertBranchAccess(req, target.branchId);
     }
-    if (
-      req.authUser!.role === "teacher" &&
-      (patch.monthlyFee !== undefined || patch.classId !== undefined || patch.enrolledAt !== undefined)
-    ) {
-      return res.status(403).json({
-        error: "forbidden",
-        message: "Teachers cannot change fees, classes, or start dates.",
-      });
-    }
+
+    // Before-image, so a teacher edit can be summarised to the CEO.
+    const before = {
+      fullName: existing.fullName,
+      phone: existing.phone,
+      monthlyFee: existing.monthlyFee,
+      classId: existing.classId,
+      enrolledAt: existing.enrolledAt,
+      active: existing.active,
+    };
     const updated = await updateStudent(req.params.id, patch);
     // A class move keeps past payments with their original teacher; a start-date
     // change shifts the billing anchor. Either way, refresh status/coverage.
     if (patch.classId || patch.enrolledAt) await recomputeStatuses();
+
+    // Notify the CEO whenever a teacher changes a student's details.
+    if (req.authUser!.role === "teacher") {
+      void notifyStudentEdited(req.params.id, req.authUser!.id, before, patch).catch(() => undefined);
+    }
     res.json(updated);
   }),
 );
