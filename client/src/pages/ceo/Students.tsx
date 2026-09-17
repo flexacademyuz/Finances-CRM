@@ -172,7 +172,8 @@ export function StudentsPage() {
                     </div>
                   )}
                 </div>
-                <div className="hidden min-w-0 sm:block">
+                {/* Fixed-width columns so every row lines up. */}
+                <div className="hidden w-40 shrink-0 sm:block">
                   <div className="flex items-center gap-1 truncate text-sm font-medium">
                     <Users2 size={13} className="shrink-0 text-muted" /> {s.className}
                   </div>
@@ -184,7 +185,9 @@ export function StudentsPage() {
                   <div className="text-[11px] text-muted">{t("startDate")}</div>
                   <div className="text-sm">{formatDate(s.enrolledAt)}</div>
                 </div>
-                <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
+                <div className="flex w-[124px] shrink-0 justify-start">
+                  <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
+                </div>
                 <ChevronRight size={18} className="hidden shrink-0 text-muted sm:block" />
               </Link>
               {view === "archived" && (
