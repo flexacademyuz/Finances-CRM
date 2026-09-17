@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, Wallet, ClipboardList, Coins, Banknote } from "lucide-react";
 import { api, downloadCsv } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
-import { money, formatDate } from "../lib/format";
+import { money, formatDate, initials, avatarColor } from "../lib/format";
 import type { PaymentRow, RefundPreview } from "../lib/types";
-import { Button, Card, Empty, Field, Input, Modal, Spinner } from "../components/ui";
+import { Button, Card, Empty, Field, Input, Modal, Spinner, StatTile, MethodTag } from "../components/ui";
 
 /** Payments log. CEO sees all + can void/refund; Accountant sees own entries. */
 export function PaymentsLog() {
@@ -24,10 +24,21 @@ export function PaymentsLog() {
     queryFn: () => api<PaymentRow[]>("/api/payments", { query: isCeo ? { scope: "all" } : {} }),
   });
 
+  const rows = payments.data ?? [];
+  const live = rows.filter((p) => !p.voided);
+  const net = (p: PaymentRow) => Number(p.amount) - Number(p.refundedAmount);
+  const totalCollected = live.reduce((s, p) => s + net(p), 0);
+  const cashTotal = live.filter((p) => p.method === "cash").reduce((s, p) => s + net(p), 0);
+  const onlineTotal = live.filter((p) => p.method === "online").reduce((s, p) => s + net(p), 0);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("payments")}</h1>
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("payments")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("paymentsSubtitle")}</p>
+        </div>
         {isCeo && (
           <Button variant="ghost" onClick={() => downloadCsv("/api/reports/payments.csv", "payments.csv")}>
             <Download size={16} /> {t("exportCsv")}
@@ -35,49 +46,54 @@ export function PaymentsLog() {
         )}
       </div>
 
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile tint="blue" label={t("totalCollected")} value={money(totalCollected)} icon={<Wallet size={18} />} sub={t("netAmount")} />
+        <StatTile tint="violet" label={t("transactions")} value={live.length} icon={<ClipboardList size={18} />} />
+        <StatTile tint="green" label={t("cash")} value={money(cashTotal)} icon={<Coins size={18} />} />
+        <StatTile tint="amber" label={t("online")} value={money(onlineTotal)} icon={<Banknote size={18} />} />
+      </div>
+
       {payments.isLoading ? (
         <Spinner />
-      ) : payments.data?.length ? (
+      ) : rows.length ? (
         <div className="space-y-2">
-          {payments.data.map((p) => {
+          {rows.map((p) => {
             const refunded = Number(p.refundedAmount);
-            const net = Number(p.amount) - refunded;
-            const fullyRefunded = refunded > 0 && net <= 0;
+            const nt = Number(p.amount) - refunded;
+            const fullyRefunded = refunded > 0 && nt <= 0;
+            const accent = p.voided ? "#7a8699" : fullyRefunded ? "#e23744" : "#12b76a";
             return (
-              <Card key={p.id} className={p.voided ? "opacity-50" : ""}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold">
-                      {p.studentName} {p.voided && <span className="text-status-overdue">(void)</span>}
-                    </div>
-                    <div className="text-xs text-tg-hint">
-                      {p.className} · {formatDate(p.createdAt, locale)} · {t(p.method)}
-                    </div>
+              <div
+                key={p.id}
+                className={`relative flex items-center gap-3 overflow-hidden rounded-card bg-surface p-3 pl-4 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover ${p.voided ? "opacity-60" : ""}`}
+              >
+                <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: accent }} />
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(p.studentName) }}>
+                  {initials(p.studentName)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold">
+                    {p.studentName} {p.voided && <span className="text-xs text-status-overdue">({t("void")})</span>}
                   </div>
-                  <div className="text-right">
-                    <div className={`font-bold ${fullyRefunded ? "line-through text-tg-hint" : ""}`}>
-                      {money(p.amount)}
-                    </div>
-                    {refunded > 0 && !p.voided && (
-                      <div className="text-xs text-status-overdue">
-                        −{money(refunded)} {t("refunded")} · {t("netAmount")} {money(net)}
-                      </div>
-                    )}
-                    {!p.voided && canVoid && (
-                      <div className="flex justify-end gap-2">
-                        {isCeo && net > 0 && (
-                          <button className="text-xs text-status-discount" onClick={() => setRefundFor(p)}>
-                            {t("refund")}
-                          </button>
-                        )}
-                        <button className="text-xs text-status-overdue" onClick={() => setVoidFor(p)}>
-                          {t("void")}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <div className="truncate text-xs text-muted">{p.className} · {formatDate(p.createdAt, locale)}</div>
                 </div>
-              </Card>
+                <div className="hidden w-20 shrink-0 sm:block"><MethodTag method={p.method} /></div>
+                <div className="shrink-0 text-right">
+                  <div className={`figure font-bold ${fullyRefunded ? "text-tg-hint line-through" : ""}`}>{money(p.amount)}</div>
+                  {refunded > 0 && !p.voided && (
+                    <div className="text-[11px] text-status-overdue">−{money(refunded)} · {t("netAmount")} {money(nt)}</div>
+                  )}
+                  {!p.voided && canVoid && (
+                    <div className="mt-0.5 flex justify-end gap-2">
+                      {isCeo && nt > 0 && (
+                        <button className="text-xs font-semibold text-status-discount" onClick={() => setRefundFor(p)}>{t("refund")}</button>
+                      )}
+                      <button className="text-xs font-semibold text-status-overdue" onClick={() => setVoidFor(p)}>{t("void")}</button>
+                    </div>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>

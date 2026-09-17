@@ -124,7 +124,10 @@ export function RecordPayment() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">{t("recordPayment")}</h1>
+      <div>
+        <h1 className="text-2xl font-extrabold">{t("recordPayment")}</h1>
+        <p className="mt-0.5 text-sm text-muted">{t("recordPaymentSubtitle")}</p>
+      </div>
 
       {/* Shortcut: find any student by name instead of drilling teacher → group. */}
       {!student && (

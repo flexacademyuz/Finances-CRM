@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Folder } from "lucide-react";
+import { Plus, Pencil, Folder, BookOpen, Users2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
 import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
-import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner } from "../../components/ui";
+import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner, StatTile } from "../../components/ui";
 
 /**
  * Groups (classes) management. Available to CEO and Accountant: both can create
@@ -26,15 +26,26 @@ export function ClassesPage() {
   const teachers = useQuery({ queryKey: ["teachers"], queryFn: () => api<TeacherRow[]>("/api/teachers") });
   const teacherName = (id: string) => teachers.data?.find((x) => x.id === id)?.fullName ?? "—";
 
+  const groupCount = classes.data?.length ?? 0;
+  const teacherCount = new Set((classes.data ?? []).map((c) => c.teacherId)).size;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("groups")}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("groups")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("groupsSubtitle")}</p>
+        </div>
         {canAdd && (
           <Button onClick={() => setEditing("new")}>
-            <Plus size={18} /> {t("add")}
+            <Plus size={18} /> {t("createGroup")}
           </Button>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <StatTile tint="blue" label={t("groups")} value={groupCount} icon={<BookOpen size={18} />} />
+        <StatTile tint="violet" label={t("teacher_count")} value={teacherCount} icon={<Users2 size={18} />} />
       </div>
 
       {classes.isLoading ? (

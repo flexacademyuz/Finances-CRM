@@ -21,3 +21,16 @@ export function formatDate(iso: string | Date, locale = "en"): string {
     day: "numeric",
   });
 }
+
+/** Two-letter initials for an avatar chip. */
+export function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
+}
+
+/** Deterministic, varied avatar colour from a name. */
+const AVATAR_COLORS = ["#3457f5", "#7b5cf5", "#12b76a", "#e23744", "#d18700", "#0ea5e9", "#ec4899"];
+export function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}

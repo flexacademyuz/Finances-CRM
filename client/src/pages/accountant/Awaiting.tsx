@@ -25,7 +25,10 @@ export function AwaitingPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">{t("awaiting")}</h1>
+      <div>
+        <h1 className="text-2xl font-extrabold">{t("awaiting")}</h1>
+        <p className="mt-0.5 text-sm text-muted">{t("awaitingSubtitle")}</p>
+      </div>
 
       <div className="flex gap-2">
         <Select value={classId} onChange={(e) => setClassId(e.target.value)}>

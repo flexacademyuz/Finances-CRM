@@ -9,7 +9,10 @@ export function MySalary() {
   const { t } = useI18n();
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">{t("mySalary")}</h1>
+      <div>
+        <h1 className="text-2xl font-extrabold">{t("mySalary")}</h1>
+        <p className="mt-0.5 text-sm text-muted">{t("mySalarySubtitle")}</p>
+      </div>
       {/* No teacherId → the API resolves to the signed-in teacher; read-only. */}
       <SalaryCard />
     </div>

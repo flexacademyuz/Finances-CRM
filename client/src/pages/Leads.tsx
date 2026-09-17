@@ -101,9 +101,12 @@ export function LeadsPage() {
   const unsorted = (pending.data ?? []).filter((l) => !l.classId && !l.draftClassId);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("leads")}</h1>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("leads")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("leadsSubtitle")}</p>
+        </div>
         {canRegister && (
           <Button onClick={() => setRegistering(true)}>
             <Plus size={16} /> {t("registerLead")}

@@ -33,7 +33,10 @@ export function UsersPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("users")}</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("users")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("usersSubtitle")}</p>
+        </div>
         <Button onClick={() => setInviting(true)}>
           <Plus size={18} /> {t("invite")}
         </Button>

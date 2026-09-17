@@ -23,13 +23,15 @@ export function BranchesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("branches")}</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("branches")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("branchesNote")}</p>
+        </div>
         <Button onClick={() => setCreating(true)}>
           <Plus size={18} /> {t("addBranch")}
         </Button>
       </div>
 
-      <p className="text-sm text-tg-hint">{t("branchesNote")}</p>
 
       {branches.isLoading ? (
         <Spinner />

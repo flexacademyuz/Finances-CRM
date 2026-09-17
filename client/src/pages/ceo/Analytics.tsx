@@ -30,7 +30,10 @@ export function AnalyticsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">{t("analytics")}</h1>
+      <div>
+        <h1 className="text-2xl font-extrabold">{t("analytics")}</h1>
+        <p className="mt-0.5 text-sm text-muted">{t("analyticsSubtitle")}</p>
+      </div>
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {TABS.map((tb) => (

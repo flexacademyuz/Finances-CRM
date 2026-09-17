@@ -30,7 +30,10 @@ export function FinancesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("finances")}</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("finances")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("financesSubtitle")}</p>
+        </div>
         <Select className="w-36" value={String(year)} onChange={(e) => setYear(Number(e.target.value))}>
           {[defaultYear + 1, defaultYear, defaultYear - 1, defaultYear - 2].map((y) => (
             <option key={y} value={y}>{`${y}–${y + 1}`}</option>

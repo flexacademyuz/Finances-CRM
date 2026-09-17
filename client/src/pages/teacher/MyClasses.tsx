@@ -14,7 +14,10 @@ export function MyClasses() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">{t("myClasses")}</h1>
+      <div>
+        <h1 className="text-2xl font-extrabold">{t("myClasses")}</h1>
+        <p className="mt-0.5 text-sm text-muted">{t("myClassesSubtitle")}</p>
+      </div>
 
       {classes.isLoading ? (
         <Spinner />

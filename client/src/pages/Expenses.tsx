@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Receipt, Layers, Coins } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
-import { money, formatDate } from "../lib/format";
+import { money, formatDate, avatarColor, initials } from "../lib/format";
 import { monthKey } from "@shared/date";
 import {
   EXPENSE_CATEGORY_NAMES,
@@ -12,7 +12,7 @@ import {
   EXPENSE_PAYMENT_METHODS,
 } from "@shared/expense-categories";
 import type { ExpenseRow, ExpenseSummary } from "../lib/types";
-import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner } from "../components/ui";
+import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner, StatTile } from "../components/ui";
 
 /** Expenses list + add, with per-category month summary (V2 Change 5). */
 export function ExpensesPage() {
@@ -47,41 +47,43 @@ export function ExpensesPage() {
 
   const total = expenses.data?.filter((e) => !e.isDeleted).reduce((s, e) => s + Number(e.amount), 0) ?? 0;
 
+  const catCount = summary.data ? Object.keys(summary.data.byCategory).length : 0;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("expenses")}</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("expenses")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("expensesSubtitle")}</p>
+        </div>
         <Button onClick={() => setAdding(true)}>
-          <Plus size={18} /> {t("add")}
+          <Plus size={18} /> {t("addExpense")}
         </Button>
       </div>
 
-      {/* Category summary cards */}
-      {summary.data && Object.keys(summary.data.byCategory).length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {Object.entries(summary.data.byCategory).map(([cat, amt]) => (
-            <Card key={cat} className="min-w-[110px] shrink-0">
-              <div className="text-xs text-tg-hint">{cat}</div>
-              <div className="mt-1 font-bold">{money(amt)}</div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-center gap-2">
-        <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="">{t("category")}</option>
-          {EXPENSE_CATEGORY_NAMES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </Select>
-        {isCeo && (
-          <label className="flex shrink-0 items-center gap-1.5 text-xs text-tg-hint">
-            <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
-            {t("showDeleted")}
-          </label>
-        )}
+      {/* Stat tiles */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatTile tint="red" label={t("totalExpenses")} value={money(summary.data?.total ?? 0)} icon={<Receipt size={18} />} sub={new Date().toLocaleDateString("en-US", { month: "long" })} />
+        <StatTile tint="violet" label={t("category")} value={catCount} icon={<Layers size={18} />} />
+        <StatTile tint="amber" label={t("transactions")} value={expenses.data?.filter((e) => !e.isDeleted).length ?? 0} icon={<Coins size={18} />} />
       </div>
+
+      <Card className="!p-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select className="w-auto min-w-[150px]" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">{t("category")}</option>
+            {EXPENSE_CATEGORY_NAMES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </Select>
+          {isCeo && (
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+              <input type="checkbox" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />
+              {t("showDeleted")}
+            </label>
+          )}
+        </div>
+      </Card>
 
       {expenses.isLoading ? (
         <Spinner />
@@ -89,37 +91,42 @@ export function ExpensesPage() {
         <>
           <div className="space-y-2">
             {expenses.data.map((e) => (
-              <Card key={e.id} className={`flex items-center justify-between gap-2 ${e.isDeleted ? "opacity-50" : ""}`}>
-                <div className="min-w-0">
+              <div
+                key={e.id}
+                className={`flex items-center gap-3 rounded-card bg-surface p-3 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover ${e.isDeleted ? "opacity-50" : ""}`}
+              >
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: avatarColor(e.category) }}>
+                  {initials(e.category)}
+                </span>
+                <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">
-                    {e.category}
-                    {e.subCategory ? ` · ${e.subCategory}` : ""}
-                    {e.isDeleted && <span className="text-status-overdue"> (deleted)</span>}
+                    {e.category}{e.subCategory ? ` · ${e.subCategory}` : ""}
+                    {e.isDeleted && <span className="text-xs text-status-overdue"> (deleted)</span>}
                   </div>
-                  <div className="text-xs text-tg-hint">
+                  <div className="truncate text-xs text-muted">
                     {formatDate(e.expenseDate, locale)} · {t(e.paymentMethod as "cash" | "bank_transfer" | "card")}
                     {e.vendor ? ` · ${e.vendor}` : ""}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2.5">
                   {e.receiptUrl && (
-                    <a href={e.receiptUrl} target="_blank" rel="noreferrer" className="text-tg-link">
+                    <a href={e.receiptUrl} target="_blank" rel="noreferrer" className="text-primary">
                       <ExternalLink size={15} />
                     </a>
                   )}
-                  <span className="font-bold">{money(e.amount)}</span>
+                  <span className="figure font-bold">{money(e.amount)}</span>
                   {isCeo && !e.isDeleted && (
                     <button className="text-status-overdue" onClick={() => del.mutate(e.id)}>
                       <Trash2 size={15} />
                     </button>
                   )}
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
-          <Card className="flex justify-between font-semibold">
+          <Card className="flex justify-between font-bold">
             <span>{t("totalExpenses")}</span>
-            <span>{money(total)}</span>
+            <span className="figure">{money(total)}</span>
           </Card>
         </>
       ) : (
