@@ -1,47 +1,54 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Link, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronRight, Search, X, SlidersHorizontal, Archive } from "lucide-react";
+import {
+  Plus,
+  ChevronRight,
+  Search,
+  Archive,
+  Phone,
+  Users2,
+  Coins,
+  GraduationCap,
+  UserCheck,
+  UserX,
+  CalendarClock,
+} from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
 import { can } from "@shared/permissions";
-import { money } from "../../lib/format";
+import { money, formatDate } from "../../lib/format";
 import type { StudentRow, Class, TeacherRow } from "../../lib/types";
 import type { StudentStatus } from "@shared/schema";
-import { Button, Card, Empty, Field, Input, Modal, Select, Spinner, StatusBadge } from "../../components/ui";
+import {
+  Button,
+  Card,
+  Empty,
+  Field,
+  Input,
+  Modal,
+  Select,
+  Spinner,
+  StatTile,
+  StatusPill,
+  STATUS_ACCENT,
+} from "../../components/ui";
+
+/** Deterministic avatar colour from a name (varied, like the reference). */
+const AVATARS = ["#3457f5", "#7b5cf5", "#12b76a", "#e23744", "#d18700", "#0ea5e9", "#ec4899"];
+function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATARS[h % AVATARS.length];
+}
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
+}
 
 const STATUSES: (StudentStatus | "")[] = ["", "paid", "awaiting_payment", "overdue", "frozen", "not_due"];
 
 /** Round, tap-to-reveal icon button used in the students toolbar. */
-function IconButton({
-  label,
-  active,
-  onClick,
-  children,
-}: {
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={`relative grid h-9 w-9 shrink-0 place-items-center rounded-full border transition ${
-        active
-          ? "border-primary bg-primary text-white"
-          : "border-border bg-surface text-muted hover:border-primary hover:text-primary"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function StudentsPage() {
   const { t } = useI18n();
   const { user } = useSession();
@@ -55,14 +62,12 @@ export function StudentsPage() {
   );
   const [classId, setClassId] = useState("");
   const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [resuming, setResuming] = useState<StudentRow | null>(null);
 
-  const hasFilters = !!classId || (view === "active" && !!status);
-
   const classes = useQuery({ queryKey: ["classes"], queryFn: () => api<Class[]>("/api/classes") });
+  // All students (active + archived) power the stat tiles.
+  const allStudents = useQuery({ queryKey: ["students-all"], queryFn: () => api<StudentRow[]>("/api/students", {}) });
   const students = useQuery({
     queryKey: ["students", view, status, classId],
     queryFn: () =>
@@ -74,144 +79,118 @@ export function StudentsPage() {
       }),
   });
 
+  const all = allStudents.data ?? [];
+  const total = all.length;
+  const active = all.filter((s) => s.active).length;
+  const inactive = total - active;
+  const ym = new Date().toISOString().slice(0, 7);
+  const newThisMonth = all.filter((s) => (s.enrolledAt ?? "").startsWith(ym)).length;
+
   // Live name/phone search over the already-filtered list.
   const q = search.trim().toLowerCase();
   const filtered = (students.data ?? []).filter(
-    (s) =>
-      !q ||
-      s.fullName.toLowerCase().includes(q) ||
-      (s.phone ?? "").toLowerCase().includes(q),
+    (s) => !q || s.fullName.toLowerCase().includes(q) || (s.phone ?? "").toLowerCase().includes(q),
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">{t("students")}</h1>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">{t("students")}</h1>
+          <p className="mt-0.5 text-sm text-muted">{t("studentsSubtitle")}</p>
+        </div>
         {canAdd && (
           <Button onClick={() => setAdding(true)}>
-            <Plus size={16} /> {t("add")}
+            <Plus size={16} /> {t("addStudentAction")}
           </Button>
         )}
       </div>
 
-      {/* Icon toolbar — tap to reveal. Archive toggles the view, the magnifier
-          expands into a search field, the sliders open the filters popover. */}
-      <div className="flex items-center gap-2">
-        <IconButton
-          label={view === "archived" ? t("archived") : t("active")}
-          active={view === "archived"}
-          onClick={() => setView(view === "active" ? "archived" : "active")}
-        >
-          <Archive size={17} />
-        </IconButton>
-
-        <div className="flex flex-1 items-center justify-end gap-2">
-          {searchOpen || search ? (
-            <div className="relative w-full animate-fade-in sm:max-w-xs">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <Input
-                autoFocus
-                className="rounded-full pl-8 pr-8"
-                placeholder={t("search")}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onBlur={() => { if (!search) setSearchOpen(false); }}
-              />
-              <button
-                type="button"
-                onClick={() => { setSearch(""); setSearchOpen(false); }}
-                aria-label={t("clear")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:text-text"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          ) : (
-            <IconButton label={t("search")} onClick={() => setSearchOpen(true)}>
-              <Search size={17} />
-            </IconButton>
-          )}
-
-          <div className="relative shrink-0">
-            <IconButton
-              label={t("filters")}
-              active={hasFilters || filterOpen}
-              onClick={() => setFilterOpen((v) => !v)}
-            >
-              <SlidersHorizontal size={17} />
-              {hasFilters && (
-                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-bg" />
-              )}
-            </IconButton>
-            {filterOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
-                <div className="absolute right-0 z-20 mt-2 w-64 origin-top-right animate-scale-in rounded-card border border-border bg-surface p-3 shadow-card-hover">
-                  <div className="space-y-2">
-                    <div>
-                      <span className="label">{t("classes")}</span>
-                      <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
-                        <option value="">{t("classes")}</option>
-                        {classes.data?.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </Select>
-                    </div>
-                    {view === "active" && (
-                      <div>
-                        <span className="label">{t("status")}</span>
-                        <Select value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | "")}>
-                          {STATUSES.map((s) => (
-                            <option key={s} value={s}>{s ? t(s) : t("status")}</option>
-                          ))}
-                        </Select>
-                      </div>
-                    )}
-                    {hasFilters && (
-                      <button
-                        type="button"
-                        onClick={() => { setClassId(""); setStatus(""); }}
-                        className="pt-1 text-xs font-semibold text-primary hover:underline"
-                      >
-                        {t("clear")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile tint="blue" label={t("totalStudents")} value={total} icon={<Users2 size={18} />} sub={t("enrolled")} />
+        <StatTile tint="green" label={t("activeStudents")} value={active} icon={<UserCheck size={18} />} sub={total ? `${Math.round((active / total) * 100)}% ${t("ofTotal")}` : undefined} />
+        <StatTile tint="violet" label={t("newThisMonth")} value={newThisMonth} icon={<CalendarClock size={18} />} sub={new Date().toLocaleDateString("en-US", { month: "long" })} />
+        <StatTile tint="red" label={t("inactiveStudents")} value={inactive} icon={<UserX size={18} />} sub={t("archived")} />
       </div>
 
+      {/* Search + filters */}
+      <Card className="!p-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[180px] flex-1">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <Input className="pl-9" placeholder={t("searchStudentHint")} value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <Select className="w-auto min-w-[150px]" value={classId} onChange={(e) => setClassId(e.target.value)}>
+            <option value="">{t("allGroups")}</option>
+            {classes.data?.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
+          {view === "active" && (
+            <Select className="w-auto min-w-[140px]" value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | "")}>
+              <option value="">{t("allStatus")}</option>
+              {STATUSES.filter(Boolean).map((s) => (
+                <option key={s} value={s}>{t(s as StudentStatus)}</option>
+              ))}
+            </Select>
+          )}
+          <button
+            type="button"
+            onClick={() => setView(view === "active" ? "archived" : "active")}
+            title={t("archived")}
+            className={`inline-flex items-center gap-1.5 rounded-btn px-3 py-2 text-sm font-semibold transition ${
+              view === "archived" ? "bg-primary text-white" : "bg-bg text-muted ring-1 ring-border hover:text-primary"
+            }`}
+          >
+            <Archive size={16} /> {view === "archived" ? t("archived") : t("active")}
+          </button>
+        </div>
+      </Card>
+
+      {/* List — rich rows with a status accent bar, avatar, group/fee, join date, status */}
       {students.isLoading ? (
         <Spinner />
       ) : filtered.length ? (
         <div className="space-y-2">
           {filtered.map((s) => (
-            <Card key={s.id} className="flex items-center justify-between gap-2 p-0">
-              {/* Whole row opens the profile, where the per-student actions live. */}
-              <Link href={`/student/${s.id}`} className="flex min-w-0 flex-1 items-center gap-2 p-3">
+            <div
+              key={s.id}
+              className="group relative flex items-center gap-2 overflow-hidden rounded-card bg-surface p-3 pl-4 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover"
+            >
+              <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: STATUS_ACCENT[s.status] ?? "#7a8699" }} />
+              <Link href={`/student/${s.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(s.fullName) }}>
+                  {initials(s.fullName)}
+                </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold text-tg-link">{s.fullName}</div>
-                  <div className="truncate text-xs text-tg-hint">
-                    {s.className} · {money(s.effectiveFee)}
-                  </div>
-                  {Number(s.balance) > 0 && (
-                    <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
-                      {t("owes")} {money(s.balance)}
+                  <div className="truncate font-semibold">{s.fullName}</div>
+                  {s.phone && (
+                    <div className="flex items-center gap-1 truncate text-xs text-muted">
+                      <Phone size={12} /> {s.phone}
                     </div>
                   )}
                 </div>
-                {view !== "archived" && <StatusBadge status={s.status} balance={s.balance} />}
-                <ChevronRight size={18} className="shrink-0 text-tg-hint" />
+                <div className="hidden min-w-0 sm:block">
+                  <div className="flex items-center gap-1 truncate text-sm font-medium">
+                    <Users2 size={13} className="shrink-0 text-muted" /> {s.className}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted">
+                    <Coins size={12} /> {money(s.effectiveFee)}
+                  </div>
+                </div>
+                <div className="hidden w-28 shrink-0 md:block">
+                  <div className="text-[11px] text-muted">{t("startDate")}</div>
+                  <div className="text-sm">{formatDate(s.enrolledAt)}</div>
+                </div>
+                <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
+                <ChevronRight size={18} className="hidden shrink-0 text-muted sm:block" />
               </Link>
               {view === "archived" && (
-                <div className="shrink-0 pr-3">
-                  <Button variant="ghost" onClick={() => setResuming(s)}>{t("resumeStudent")}</Button>
-                </div>
+                <Button variant="ghost" className="shrink-0" onClick={() => setResuming(s)}>{t("resumeStudent")}</Button>
               )}
-            </Card>
+            </div>
           ))}
         </div>
       ) : (
@@ -222,14 +201,14 @@ export function StudentsPage() {
         open={adding}
         onClose={() => setAdding(false)}
         classes={classes.data ?? []}
-        onSaved={() => { setAdding(false); qc.invalidateQueries({ queryKey: ["students"] }); }}
+        onSaved={() => { setAdding(false); qc.invalidateQueries({ queryKey: ["students"] }); qc.invalidateQueries({ queryKey: ["students-all"] }); }}
       />
       {resuming && (
         <ResumeStudentModal
           student={resuming}
           classes={classes.data ?? []}
           onClose={() => setResuming(null)}
-          onSaved={() => { setResuming(null); qc.invalidateQueries({ queryKey: ["students"] }); }}
+          onSaved={() => { setResuming(null); qc.invalidateQueries({ queryKey: ["students"] }); qc.invalidateQueries({ queryKey: ["students-all"] }); }}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
 import { Link } from "wouter";
 import { twMerge } from "tailwind-merge";
+import { Clock, AlertTriangle, CheckCircle2, Snowflake, CircleDollarSign, ArrowUpRight } from "lucide-react";
 import type { StudentStatus, PaymentMethod } from "@shared/schema";
 import { statusColor, money } from "../lib/format";
 import { useI18n } from "../lib/i18n";
@@ -191,6 +192,112 @@ export function Stat({
     card
   );
 }
+
+/* ─────────────────── Rich stat tiles & status pills ──────────────────── */
+
+export type TileTint = "blue" | "violet" | "green" | "amber" | "red";
+const TILE: Record<TileTint, { grad: string; bg: string; fg: string }> = {
+  blue: { grad: "linear-gradient(135deg,#5b83ff,#3457f5)", bg: "linear-gradient(135deg,#eff3ff,#e3e9ff)", fg: "#2440d4" },
+  violet: { grad: "linear-gradient(135deg,#a084f7,#7b5cf5)", bg: "linear-gradient(135deg,#f6f1ff,#eee5fe)", fg: "#5a3fd0" },
+  green: { grad: "linear-gradient(135deg,#3ddc97,#12b76a)", bg: "linear-gradient(135deg,#ecfbf3,#dcf5e7)", fg: "#0e9d63" },
+  amber: { grad: "linear-gradient(135deg,#fcc44d,#f59e0b)", bg: "linear-gradient(135deg,#fef8e8,#fdeecb)", fg: "#a56708" },
+  red: { grad: "linear-gradient(135deg,#fb7185,#e23744)", bg: "linear-gradient(135deg,#fef0f2,#fbdfe3)", fg: "#c0212f" },
+};
+
+/** Small green ↑ / red ↓ percent chip. Only render with a real delta. */
+export function Delta({ pct, light }: { pct: number | null | undefined; light?: boolean }) {
+  if (pct == null) return null;
+  const up = pct >= 0;
+  return (
+    <span
+      className={twMerge(
+        "inline-flex items-center gap-0.5 rounded-pill px-1.5 py-0.5 text-[11px] font-bold",
+        light ? "bg-white/20 text-white" : up ? "bg-status-paid/15 text-status-paid" : "bg-status-overdue/15 text-status-overdue",
+      )}
+    >
+      <ArrowUpRight size={11} className={up ? "" : "rotate-90"} />
+      {up ? "+" : ""}
+      {pct}%
+    </span>
+  );
+}
+
+/**
+ * Rich KPI tile — a vibrant gradient icon disc, label, big figure, and an
+ * optional delta chip / subtitle. The shared stat card across the app.
+ */
+export function StatTile({
+  tint,
+  label,
+  value,
+  icon,
+  href,
+  delta,
+  sub,
+}: {
+  tint: TileTint;
+  label: string;
+  value: ReactNode;
+  icon: ReactNode;
+  href?: string;
+  delta?: number | null;
+  sub?: ReactNode;
+}) {
+  const c = TILE[tint];
+  const inner = (
+    <div
+      className="h-full rounded-card p-4 shadow-card ring-1 ring-dark/[0.04] transition hover:-translate-y-0.5 hover:shadow-card-hover"
+      style={{ background: c.bg }}
+    >
+      <div className="flex items-center gap-2.5">
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white"
+          style={{ background: c.grad, boxShadow: "0 8px 18px -6px rgba(24,32,56,0.4)" }}
+        >
+          {icon}
+        </span>
+        <span className="text-sm font-semibold text-black/60">{label}</span>
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="figure text-2xl font-extrabold leading-none" style={{ color: c.fg }}>{value}</span>
+        <Delta pct={delta} />
+      </div>
+      {sub != null && <div className="mt-1.5 text-xs text-black/45">{sub}</div>}
+    </div>
+  );
+  return href ? <Link href={href} className="block">{inner}</Link> : inner;
+}
+
+/** Status pill with a leading icon — used in rich list rows. */
+export function StatusPill({ status, balance }: { status: StudentStatus; balance?: number | string }) {
+  const { t } = useI18n();
+  const partial = balance != null && Number(balance) > 0;
+  const key = partial ? "partial" : status;
+  const map: Record<string, { ic: ReactNode; cls: string; label: string }> = {
+    paid: { ic: <CheckCircle2 size={13} />, cls: "bg-status-paid/12 text-status-paid", label: t("paid") },
+    awaiting_payment: { ic: <Clock size={13} />, cls: "bg-status-awaiting/12 text-status-awaiting", label: t("awaiting_payment") },
+    overdue: { ic: <AlertTriangle size={13} />, cls: "bg-status-overdue/12 text-status-overdue", label: t("overdue") },
+    frozen: { ic: <Snowflake size={13} />, cls: "bg-status-frozen/12 text-status-frozen", label: t("frozen") },
+    not_due: { ic: <Clock size={13} />, cls: "bg-freeze/12 text-freeze", label: t("not_due") },
+    partial: { ic: <CircleDollarSign size={13} />, cls: "bg-warning/12 text-warning", label: t("partiallyPaid") },
+  };
+  const m = map[key] ?? map.not_due;
+  return (
+    <span className={twMerge("inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-xs font-semibold", m.cls)}>
+      {m.ic}
+      {m.label}
+    </span>
+  );
+}
+
+/** Colour bar accent (left border) keyed to a student's status. */
+export const STATUS_ACCENT: Record<string, string> = {
+  paid: "#12b76a",
+  awaiting_payment: "#d18700",
+  overdue: "#e23744",
+  frozen: "#7a8699",
+  not_due: "#7b5cf5",
+};
 
 export function Empty({ children }: { children?: ReactNode }) {
   const { t } = useI18n();

@@ -32,16 +32,7 @@ import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
 import { money } from "../../lib/format";
 import type { DashboardData, PaymentRow } from "../../lib/types";
-import { Card, Spinner, MethodTag } from "../../components/ui";
-
-/* Soft pastel tints keyed to the CRM's semantic colours (fixed light identity). */
-type Tint = "violet" | "green" | "amber" | "red";
-const TINTS: Record<Tint, { bg: string; fg: string; icon: string; disc: string }> = {
-  violet: { bg: "linear-gradient(135deg,#f4efff 0%,#eae0fe 100%)", fg: "#5a3fd0", icon: "#7b5cf5", disc: "#efe7fe" },
-  green: { bg: "linear-gradient(135deg,#e9f8f0 0%,#d6f0e2 100%)", fg: "#0e9d63", icon: "#12b76a", disc: "#d6f2e3" },
-  amber: { bg: "linear-gradient(135deg,#fdf5df 0%,#fbe9c2 100%)", fg: "#a56708", icon: "#d18700", disc: "#fbeaca" },
-  red: { bg: "linear-gradient(135deg,#fdedef 0%,#fbdce0 100%)", fg: "#c0212f", icon: "#e23744", disc: "#fbdde1" },
-};
+import { Card, Spinner, MethodTag, StatTile, Delta } from "../../components/ui";
 
 /** Twelve most-recent months as { value: YYYY-MM-01, label: "September 2026" }. */
 function monthOptions(count = 12): { value: string; label: string }[] {
@@ -53,64 +44,6 @@ function monthOptions(count = 12): { value: string; label: string }[] {
       label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
     };
   });
-}
-
-/** Green ↑ / red ↓ percent chip. `light` inverts it for the dark hero card. */
-function Delta({ pct, light }: { pct: number | null; light?: boolean }) {
-  if (pct == null) return null;
-  const up = pct >= 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-0.5 rounded-pill px-1.5 py-0.5 text-[11px] font-bold ${
-        light
-          ? "bg-white/20 text-white"
-          : up
-            ? "bg-status-paid/15 text-status-paid"
-            : "bg-status-overdue/15 text-status-overdue"
-      }`}
-    >
-      <ArrowUpRight size={11} className={up ? "" : "rotate-90"} />
-      {up ? "+" : ""}
-      {pct}%
-    </span>
-  );
-}
-
-/** Soft-tinted KPI card: icon disc, label, big figure, optional delta / subtitle. */
-function StatCard({
-  tint,
-  label,
-  value,
-  icon,
-  href,
-  sub,
-}: {
-  tint: Tint;
-  label: string;
-  value: ReactNode;
-  icon: ReactNode;
-  href: string;
-  sub?: ReactNode;
-}) {
-  const c = TINTS[tint];
-  return (
-    <Link
-      href={href}
-      className="block rounded-card p-4 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover"
-      style={{ background: c.bg }}
-    >
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: c.disc, color: c.icon }}>
-          {icon}
-        </span>
-        <span className="text-sm font-semibold text-black/60">{label}</span>
-      </div>
-      <div className="figure mt-3 text-3xl font-extrabold leading-none" style={{ color: c.fg }}>
-        {value}
-      </div>
-      {sub != null && <div className="mt-2 text-xs text-black/45">{sub}</div>}
-    </Link>
-  );
 }
 
 const chartAxis = { fontSize: 10, stroke: "var(--text-muted)", tickLine: false as const, axisLine: false as const };
@@ -184,31 +117,30 @@ export function CeoDashboard() {
         </select>
       </div>
 
-      {/* KPI band: 6 stat cards (revenue hero + 5) on the left, Quick Actions right */}
+      {/* KPI band: 6 uniform tiles on the left, Quick Actions on the right */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Revenue hero — gradient */}
-          <div className="relative overflow-hidden rounded-card p-4 text-white shadow-brand sm:col-span-2 lg:col-span-1" style={{ background: "var(--brand-gradient)" }}>
+          {/* Revenue tile — gradient, same shape as the others */}
+          <div className="relative overflow-hidden rounded-card p-4 text-white shadow-brand" style={{ background: "var(--brand-gradient)" }}>
             <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20"><Wallet size={16} /></span>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/20"><Wallet size={18} /></span>
               <span className="text-sm font-semibold text-white/85">{t("totalRevenue")}</span>
             </div>
-            <div className="figure mt-3 text-3xl font-extrabold leading-none">{money(data.revenue.total)}</div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="figure text-2xl font-extrabold leading-none">{money(data.revenue.total)}</span>
               <Delta pct={revDelta} light />
-              {revDelta != null && <span className="text-xs text-white/70">{t("vsLastMonth")}</span>}
             </div>
-            <div className="mt-3 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-medium">
+            <div className="mt-1.5 truncate text-xs text-white/80">
               {t("cash")} {money(data.revenue.cash)} · {t("online")} {money(data.revenue.online)}
             </div>
-            <ArrowUpRight className="pointer-events-none absolute right-3 top-3 text-white/25" size={26} />
+            <ArrowUpRight className="pointer-events-none absolute right-3 top-3 text-white/25" size={24} />
           </div>
 
-          <StatCard tint="violet" label={t("totalStudents")} value={data.totalStudents} icon={<GraduationCap size={16} />} href="/students" sub={months.find((m) => m.value === month)?.label} />
-          <StatCard tint="green" label={t("paid")} value={data.statusCounts.paid} icon={<CheckCircle2 size={16} />} href="/students?status=paid" />
-          <StatCard tint="amber" label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} icon={<Clock size={16} />} href="/students?status=awaiting_payment" />
-          <StatCard tint="red" label={t("overdue")} value={data.statusCounts.overdue} icon={<AlertTriangle size={16} />} href="/students?status=overdue" />
-          <StatCard tint="violet" label={t("payrollObligation")} value={money(data.payrollObligation)} icon={<BadgeDollarSign size={16} />} href="/payroll" />
+          <StatTile tint="violet" label={t("totalStudents")} value={data.totalStudents} icon={<GraduationCap size={18} />} href="/students" sub={months.find((m) => m.value === month)?.label} />
+          <StatTile tint="green" label={t("paid")} value={data.statusCounts.paid} icon={<CheckCircle2 size={18} />} href="/students?status=paid" sub={t("paid")} />
+          <StatTile tint="amber" label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} icon={<Clock size={18} />} href="/students?status=awaiting_payment" sub={t("awaiting")} />
+          <StatTile tint="red" label={t("overdue")} value={data.statusCounts.overdue} icon={<AlertTriangle size={18} />} href="/students?status=overdue" sub={t("overdue")} />
+          <StatTile tint="violet" label={t("payrollObligation")} value={money(data.payrollObligation)} icon={<BadgeDollarSign size={18} />} href="/payroll" sub={months.find((m) => m.value === month)?.label} />
         </div>
 
         {/* Quick Actions */}
