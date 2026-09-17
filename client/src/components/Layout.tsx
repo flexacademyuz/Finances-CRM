@@ -361,7 +361,7 @@ function SidebarContent({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex h-full flex-col border-r border-border bg-sidebar-bg text-sidebar-text">
+    <div className="flex h-full flex-col bg-sidebar-bg text-sidebar-text shadow-[1px_0_0_var(--border)]">
       {/* Brand / role */}
       <div className="flex items-center gap-3 px-4 py-4">
         <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-sm font-bold text-white shadow-brand">

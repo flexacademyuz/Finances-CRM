@@ -2,17 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Brand system — "Aurora": modeled on the Figma "CRM Mobile App" template.
-   A vivid blue→violet gradient does the hero/brand work, on a cool off-white
-   ground with airy white cards, soft diffuse shadows, and a violet secondary
-   accent (donut charts, highlights). Bold navy text; big tabular figures for
-   money. Fixed identity — same in light/dark clients. */
+/* Brand system — "Aurora Soft": a soft-UI refresh (Fenco-inspired). The app now
+   sits on a soft light-grey ground so airy WHITE cards visibly float on diffuse,
+   low-contrast shadows (no hard borders). A vivid blue→violet gradient still does
+   the hero/brand work, with a violet secondary accent. Bold navy text; big
+   tabular figures for money. Fixed identity — same in light/dark clients. */
 :root,
 :root[data-theme="light"],
 :root[data-theme="dark"] {
-  --bg: #f5f7fb;
+  /* Soft cool-grey ground — cards lift off it. */
+  --bg: #e9ebf2;
   --surface: #ffffff;
-  --border: #eaeef5;
+  --border: #e7ebf4;
   --text: #1a2338;
   --text-muted: #7a8699;
   --primary: #3457f5;
@@ -51,8 +52,11 @@ body {
 }
 
 @layer components {
+  /* Soft-UI card: borderless white, floating on a diffuse shadow over the grey
+     ground, with a hairline ring so the top edge (where the shadow is faint)
+     still reads crisp. */
   .card {
-    @apply rounded-card border border-border bg-surface p-5 shadow-card transition;
+    @apply rounded-card bg-surface p-5 shadow-card ring-1 ring-dark/[0.04] transition;
   }
   /* Signature brand panel — the blue→violet gradient hero from the Figma design.
      Floated on the dreamy `float`-style shadow LimeTalk uses under hero cards. */

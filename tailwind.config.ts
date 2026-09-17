@@ -70,18 +70,19 @@ export default {
         mono: ["ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "monospace"],
       },
       borderRadius: {
-        // Softer, larger radii (LimeTalk form language): roomy cards, pill-ish
+        // Softer, larger radii (soft-UI form language): roomy cards, pill-ish
         // buttons/inputs. `pill` is fully round for segmented tracks & chips.
-        card: "20px",
+        card: "22px",
         btn: "14px",
         input: "16px",
         pill: "999px",
       },
       boxShadow: {
-        // Diffuse, low-contrast card shadows; `float` is the dreamy large-offset
-        // shadow LimeTalk floats its hero cards on. `brand` keeps the colored glow.
-        card: "0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.10)",
-        "card-hover": "0 8px 30px -10px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.05)",
+        // Diffuse, low-contrast soft-UI card shadows — cards float on the grey
+        // ground. `float` is the dreamy large-offset shadow for hero cards;
+        // `brand` keeps the colored glow.
+        card: "0 1px 2px rgba(24,32,56,0.03), 0 14px 34px -16px rgba(24,32,56,0.14)",
+        "card-hover": "0 12px 40px -12px rgba(24,32,56,0.18), 0 2px 8px rgba(24,32,56,0.05)",
         float: "0 30px 60px -30px rgba(16,24,40,0.28)",
         brand: "0 14px 30px -12px rgba(52,87,245,0.45)",
         // Tactile "pressable" primary: inset top highlight + hard bottom edge
