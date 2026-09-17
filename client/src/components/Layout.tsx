@@ -19,6 +19,7 @@ import {
   Plus,
   HandCoins,
   Building2,
+  LogOut,
   X,
 } from "lucide-react";
 import type { Role, User } from "@shared/schema";
@@ -26,7 +27,8 @@ import { useI18n, type StringKey } from "../lib/i18n";
 import { useSession, useBranch } from "../lib/session";
 import { accessFor } from "../lib/access";
 import { can } from "@shared/permissions";
-import { haptic } from "../lib/telegram";
+import { haptic, isTelegram } from "../lib/telegram";
+import { clearToken } from "../lib/auth";
 
 type NavItem = { href: string; label: StringKey; icon: ReactNode };
 type BottomItem = NavItem & { center?: boolean };
@@ -113,6 +115,103 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
 }
 
+/* ───────────────────────── Nav grouping & active state ──────────────── */
+
+type NavSection = "overview" | "people" | "money" | "admin" | "account";
+
+/** Which section each nav item belongs to (groups the sidebar/drawer). */
+const SECTION_OF: Partial<Record<StringKey, NavSection>> = {
+  dashboard: "overview", myClasses: "overview", recordPayment: "overview",
+  students: "people", leads: "people", groups: "people",
+  payments: "money", awaiting: "money", payroll: "money",
+  expenses: "money", finances: "money", analytics: "money", mySalary: "money",
+  users: "admin", branches: "admin",
+  myAccount: "account",
+};
+const SECTION_ORDER: NavSection[] = ["overview", "people", "money", "admin", "account"];
+const SECTION_LABEL: Record<NavSection, StringKey> = {
+  overview: "navOverview", people: "navPeople", money: "navMoney", admin: "navAdmin", account: "navAccount",
+};
+
+/** Split the flat nav into ordered, labelled sections (drops empty ones). */
+function groupNav(items: NavItem[]): { section: NavSection; items: NavItem[] }[] {
+  const bySection = new Map<NavSection, NavItem[]>();
+  for (const it of items) {
+    const s = SECTION_OF[it.label] ?? "money";
+    (bySection.get(s) ?? bySection.set(s, []).get(s)!).push(it);
+  }
+  return SECTION_ORDER.filter((s) => bySection.has(s)).map((s) => ({ section: s, items: bySection.get(s)! }));
+}
+
+/** Highlight the nav item for the current route, incl. detail pages. */
+function navActive(href: string, location: string): boolean {
+  if (href === "/") return location === "/";
+  if (location === href) return true;
+  if (href === "/students" && location.startsWith("/student")) return true;
+  if ((href === "/classes" || href === "/groups") && location.startsWith("/class")) return true;
+  return false;
+}
+
+/**
+ * Desktop icon rail — a compact vertical bar of icon buttons grouped in a
+ * floating white capsule over the grey ground. Labels appear on hover (title);
+ * the active route is filled in the brand blue. My-account + logout sit in a
+ * separate capsule at the foot.
+ */
+function DesktopRail({ items, location }: { items: NavItem[]; location: string }) {
+  const { t } = useI18n();
+  const mainItems = items.filter((i) => i.label !== "myAccount");
+  const account = items.find((i) => i.label === "myAccount");
+  const web = !isTelegram();
+
+  const IconLink = ({ href, label, icon }: NavItem) => {
+    const active = navActive(href, location);
+    return (
+      <Link
+        href={href}
+        title={t(label)}
+        aria-label={t(label)}
+        onClick={() => haptic("light")}
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl transition ${
+          active ? "bg-primary text-white shadow-brand" : "text-muted hover:bg-primary-soft hover:text-primary"
+        }`}
+      >
+        {icon}
+      </Link>
+    );
+  };
+
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center gap-3 py-4 md:flex">
+      <Link
+        href="/"
+        aria-label="Home"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand text-white shadow-brand"
+      >
+        <Wallet size={20} />
+      </Link>
+      <nav className="no-scrollbar flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto rounded-[26px] bg-surface px-2 py-3 shadow-card ring-1 ring-dark/[0.04]">
+        {mainItems.map((it) => (
+          <IconLink key={it.href} {...it} />
+        ))}
+      </nav>
+      <div className="flex shrink-0 flex-col items-center gap-1 rounded-[26px] bg-surface px-2 py-2 shadow-card ring-1 ring-dark/[0.04]">
+        {account && <IconLink {...account} />}
+        {web && (
+          <button
+            title={t("logOut")}
+            aria-label={t("logOut")}
+            onClick={() => { clearToken(); window.location.reload(); }}
+            className="grid h-11 w-11 place-items-center rounded-2xl text-muted transition hover:bg-danger/10 hover:text-danger"
+          >
+            <LogOut size={20} />
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 export function Layout({ role, children }: { role: Role; children: ReactNode }) {
   const { t, locale, setLocale } = useI18n();
   const { user } = useSession();
@@ -143,20 +242,20 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
 
   return (
     <div className="min-h-full bg-bg">
-      {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 hidden w-60 md:block">{nav}</aside>
+      {/* Desktop icon rail */}
+      <DesktopRail items={items} location={location} />
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — full labelled menu, grouped into sections */}
       {drawer && (
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setDrawer(false)}>
           <div className="absolute inset-0 bg-black/40 animate-fade-in" />
-          <div className="absolute inset-y-0 left-0 w-64 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-y-0 left-0 w-72 animate-slide-up" onClick={(e) => e.stopPropagation()}>
             {nav}
           </div>
         </div>
       )}
 
-      <div className="md:pl-60">
+      <div className="md:pl-[84px]">
         {/* Top bar — 64px, shows the section name only (no branding). */}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur">
           <button className="md:hidden" onClick={() => setDrawer(true)} aria-label="Menu">
@@ -373,26 +472,33 @@ function SidebarContent({
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {items.map((item) => {
-          const active = location === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => { haptic("light"); onNavigate(); }}
-              className={`flex items-center gap-3 rounded-btn px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-                active
-                  ? "bg-primary-soft font-semibold text-primary-hover"
-                  : "text-sidebar-text hover:bg-slate-100 hover:text-text"
-              }`}
-            >
-              {item.icon}
-              <span className="truncate">{t(item.label)}</span>
-            </Link>
-          );
-        })}
+      {/* Nav — grouped into labelled sections so a long menu stays scannable. */}
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-2">
+        {groupNav(items).map(({ section, items: group }) => (
+          <div key={section} className="space-y-1">
+            <div className="px-3 pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted/70">
+              {t(SECTION_LABEL[section])}
+            </div>
+            {group.map((item) => {
+              const active = navActive(item.href, location);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => { haptic("light"); onNavigate(); }}
+                  className={`flex items-center gap-3 rounded-btn px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+                    active
+                      ? "bg-primary-soft font-semibold text-primary-hover"
+                      : "text-sidebar-text hover:bg-slate-100 hover:text-text"
+                  }`}
+                >
+                  {item.icon}
+                  <span className="truncate">{t(item.label)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}

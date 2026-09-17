@@ -124,3 +124,13 @@ body {
     @apply inline-flex items-center rounded-pill bg-primary-soft px-2 py-0.5 text-xs font-bold text-primary-hover;
   }
 }
+
+/* Hide the scrollbar (used by the compact desktop icon rail) while keeping it
+   scrollable. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

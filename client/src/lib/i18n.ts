@@ -435,6 +435,13 @@ const dict = {
     en: "The fixed amount the teacher earns per paying student in each group. This is the primary way pay is set and overrides the model above; it is never reduced by discounts.",
     uz: "O'qituvchi har bir guruhda to'lagan o'quvchi uchun oladigan qat'iy summa. Bu maoshni belgilashning asosiy usuli va yuqoridagi modeldan ustun turadi; chegirmalar uni kamaytirmaydi.",
   },
+  // Navigation section groups (sidebar rail + mobile drawer).
+  menu: { en: "Menu", uz: "Menyu" },
+  navOverview: { en: "Overview", uz: "Umumiy" },
+  navPeople: { en: "People", uz: "Odamlar" },
+  navMoney: { en: "Money", uz: "Moliya" },
+  navAdmin: { en: "Admin", uz: "Boshqaruv" },
+  navAccount: { en: "Account", uz: "Hisob" },
   recalcSalary: { en: "Recalculate salary", uz: "Maoshni qayta hisoblash" },
   recalcSalaryNote: {
     en: "Re-applies the current fees & per-student rate to this teacher's existing payments, so past months reflect the rate. The amount each student paid is never changed.",
