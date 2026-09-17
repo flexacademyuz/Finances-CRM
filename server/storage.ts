@@ -395,11 +395,16 @@ export async function listClasses(
   if (opts.teacherId) conds.push(eq(classes.teacherId, opts.teacherId));
   if (opts.activeOnly) conds.push(eq(classes.active, true));
   if (opts.branchId) conds.push(eq(classes.branchId, opts.branchId));
-  return db
+  const rows = await db
     .select()
     .from(classes)
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(classes.name);
+  // Attach each group's fixed per-student teacher rate (from teacher_salary_rules)
+  // so the edit form can show it and payroll screens can display the rate.
+  const rules = await db.select().from(teacherSalaryRules);
+  const rateByGroup = new Map(rules.map((r) => [r.groupId, r.fixedSalaryPerStudent]));
+  return rows.map((c) => ({ ...c, perStudentRate: rateByGroup.get(c.id) ?? null }));
 }
 
 export async function getClassById(id: string) {
@@ -1753,6 +1758,11 @@ export async function getSalaryRuleForGroup(groupId: string) {
     .from(teacherSalaryRules)
     .where(eq(teacherSalaryRules.groupId, groupId));
   return r;
+}
+
+/** Remove a group's fixed per-student rate (falls back to the teacher's model). */
+export async function deleteTeacherSalaryRule(groupId: string): Promise<void> {
+  await db.delete(teacherSalaryRules).where(eq(teacherSalaryRules.groupId, groupId));
 }
 
 export async function listSalaryRulesForTeacher(teacherId: string) {

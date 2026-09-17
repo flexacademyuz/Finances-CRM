@@ -5,7 +5,7 @@ import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useBranch } from "../../lib/session";
 import { money } from "../../lib/format";
-import type { UserRow, TeacherRow } from "../../lib/types";
+import type { UserRow, TeacherRow, Class } from "../../lib/types";
 import type { Role, SalaryModel } from "@shared/schema";
 import { PERMISSIONS, ROLE_DEFAULTS, type Permission } from "@shared/permissions";
 import { Button, Card, Field, Input, Modal, Select, Spinner } from "../../components/ui";
@@ -438,21 +438,61 @@ function SalaryRuleModal({
   onSaved: () => void;
 }) {
   const { t } = useI18n();
+  const qc = useQueryClient();
   const [salaryModel, setSalaryModel] = useState<SalaryModel>(teacher?.salaryModel ?? "percentage");
   const [salaryValue, setSalaryValue] = useState(teacher?.salaryValue ?? "0");
+  // Per-group fixed per-student rates for this teacher's groups.
+  const [rates, setRates] = useState<Record<string, string>>({});
+  const [recalcMsg, setRecalcMsg] = useState<string | null>(null);
+
+  // The teacher's groups (with their current per-student rate) so the CEO can set
+  // each group's rate from here, not just on the group-edit screen.
+  const classes = useQuery({
+    queryKey: ["teacher-classes", teacher?.id],
+    enabled: !!teacher?.id,
+    queryFn: () => api<Class[]>("/api/classes", { query: { teacherId: teacher!.id } }),
+  });
+
+  // Seed each group's rate box from the API once the classes load.
+  const groups = classes.data ?? [];
+  const rateFor = (c: Class) =>
+    rates[c.id] ?? (c.perStudentRate != null ? String(c.perStudentRate) : "");
 
   const save = useMutation({
-    mutationFn: () =>
-      api(`/api/users/${user.id}/salary-rule`, {
+    mutationFn: async () => {
+      await api(`/api/users/${user.id}/salary-rule`, {
         method: "PATCH",
         body: { salaryModel, salaryValue: Number(salaryValue) },
-      }),
-    onSuccess: onSaved,
+      });
+      // Persist any changed per-group rates: set/update when a value is entered,
+      // clear (delete) when the box was emptied.
+      for (const c of groups) {
+        if (!(c.id in rates)) continue; // untouched
+        const v = (rates[c.id] ?? "").trim();
+        const had = c.perStudentRate != null;
+        if (v !== "") {
+          await api("/api/teacher-salary-rules", {
+            method: "PUT",
+            body: { groupId: c.id, fixedSalaryPerStudent: Number(v) },
+          });
+        } else if (had) {
+          await api(`/api/teacher-salary-rules/group/${c.id}`, { method: "DELETE" });
+        }
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries(); onSaved(); },
+  });
+
+  // Apply the rates to this teacher's existing payments right away.
+  const recalc = useMutation({
+    mutationFn: () =>
+      api<{ updated: number }>("/api/salary/recalculate", { method: "POST", body: { teacherId: teacher!.id } }),
+    onSuccess: (d) => { setRecalcMsg(t("recalcDone").replace("{n}", String(d.updated))); qc.invalidateQueries(); },
   });
 
   return (
     <Modal open onClose={onClose} title={`${t("salaryModel")} — ${user.fullName}`}>
-      <div className="space-y-3">
+      <div className="max-h-[75vh] space-y-3 overflow-y-auto">
         <Field label={t("salaryModel")}>
           <Select value={salaryModel} onChange={(e) => setSalaryModel(e.target.value as SalaryModel)}>
             {MODELS.map((m) => (
@@ -468,9 +508,56 @@ function SalaryRuleModal({
           {salaryModel === "per_student" && `${money(Number(salaryValue))} per paid student.`}
           {salaryModel === "fixed" && `${money(Number(salaryValue))} fixed per month.`}
         </p>
+
+        {/* Per-group per-student rates — the primary way pay is set. A group with
+            a rate here overrides the model above and is unaffected by discounts. */}
+        {teacher?.id && (
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <div className="text-sm font-semibold">{t("groupRates")}</div>
+            <p className="text-xs text-tg-hint">{t("groupRatesNote")}</p>
+            {classes.isLoading ? (
+              <Spinner />
+            ) : groups.length === 0 ? (
+              <div className="text-xs text-tg-hint">{t("noData")}</div>
+            ) : (
+              groups.map((c) => (
+                <div key={c.id} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1 truncate text-sm">{c.name}</div>
+                  <div className="w-32">
+                    <Input
+                      type="number"
+                      placeholder={t("perStudentRate")}
+                      value={rateFor(c)}
+                      onChange={(e) => setRates((r) => ({ ...r, [c.id]: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {save.isError && <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>}
         <Button className="w-full" disabled={save.isPending} onClick={() => save.mutate()}>
           {t("save")}
         </Button>
+
+        {/* Re-apply the rates to existing payments so past months reflect them. */}
+        {teacher?.id && (
+          <div className="space-y-1 border-t border-border pt-3">
+            {recalcMsg && <div className="text-xs font-medium text-status-paid">{recalcMsg}</div>}
+            {recalc.isError && <div className="text-sm text-status-overdue">{(recalc.error as Error).message}</div>}
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={recalc.isPending}
+              onClick={() => recalc.mutate()}
+            >
+              {t("recalcSalary")}
+            </Button>
+            <p className="text-xs text-tg-hint">{t("recalcSalaryNote")}</p>
+          </div>
+        )}
       </div>
     </Modal>
   );

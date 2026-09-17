@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { HandCoins, BadgeDollarSign, Check, ChevronRight } from "lucide-react";
+import { HandCoins, BadgeDollarSign, Check, ChevronRight, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { haptic } from "../lib/telegram";
@@ -32,6 +32,20 @@ export function SalaryCard({
 
   const [month, setMonth] = useState<string | null>(null);
   const selected = month ?? months.data?.[0]?.month ?? null;
+  const qc = useQueryClient();
+  const [recalcMsg, setRecalcMsg] = useState<string | null>(null);
+
+  // CEO-only: re-apply the current fees + per-student rate to this teacher's
+  // existing payments, so the salary reflects a rate that was set/fixed after the
+  // payments were recorded — without deleting and re-recording anything.
+  const recalc = useMutation({
+    mutationFn: () =>
+      api<{ updated: number }>("/api/salary/recalculate", { method: "POST", body: { teacherId } }),
+    onSuccess: (d) => {
+      setRecalcMsg(t("recalcDone").replace("{n}", String(d.updated)));
+      qc.invalidateQueries();
+    },
+  });
 
   if (months.isLoading || !months.data) return <Spinner />;
 
@@ -49,6 +63,25 @@ export function SalaryCard({
         <Stat label={t("avgMonthly")} value={money(avg)} />
         <Stat label={t("unpaidMonths")} value={String(unpaid)} accent={unpaid ? "warning" : undefined} />
       </div>
+
+      {/* CEO: recompute this teacher's salary from the current per-student rate. */}
+      {canManage && teacherId && (
+        <div>
+          <Button
+            variant="ghost"
+            className="w-full"
+            disabled={recalc.isPending}
+            onClick={() => recalc.mutate()}
+          >
+            <RefreshCw size={15} className={recalc.isPending ? "animate-spin" : ""} /> {t("recalcSalary")}
+          </Button>
+          {recalcMsg && <div className="mt-1 text-center text-xs font-medium text-status-paid">{recalcMsg}</div>}
+          {recalc.isError && (
+            <div className="mt-1 text-center text-xs text-status-overdue">{(recalc.error as Error).message}</div>
+          )}
+          <p className="mt-1 text-center text-xs text-tg-hint">{t("recalcSalaryNote")}</p>
+        </div>
+      )}
 
       {/* Monthly table */}
       <div>

@@ -1,6 +1,8 @@
-import type { StudentStatus, SalaryModel, PaymentMethod, Role, Class, Branch } from "@shared/schema";
+import type { StudentStatus, SalaryModel, PaymentMethod, Role, Class as SchemaClass, Branch } from "@shared/schema";
 
-export type { Class, Branch };
+export type { Branch };
+/** A class row plus its group-level fixed per-student teacher rate (from the API). */
+export type Class = SchemaClass & { perStudentRate?: string | null };
 
 export type StudentRow = {
   id: string;

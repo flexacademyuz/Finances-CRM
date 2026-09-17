@@ -105,7 +105,12 @@ function GroupModal({
   const [room, setRoom] = useState(group?.room ?? "");
   const [maxStudents, setMaxStudents] = useState(group?.maxStudents ? String(group.maxStudents) : "");
   const [startDate, setStartDate] = useState(group?.startDate ?? "");
-  const [perStudentRate, setPerStudentRate] = useState("");
+  // Load the group's current fixed per-student teacher rate so the box shows it
+  // (the API now returns it on the class). Blank = no rate set.
+  const [perStudentRate, setPerStudentRate] = useState(
+    group?.perStudentRate != null ? String(group.perStudentRate) : "",
+  );
+  const hadRate = group?.perStudentRate != null;
 
   const body = () => ({
     name,
@@ -123,12 +128,16 @@ function GroupModal({
       const saved = editing
         ? await api<Class>(`/api/classes/${group!.id}`, { method: "PATCH", body: body() })
         : await api<Class>("/api/classes", { method: "POST", body: body() });
-      // Optionally set the teacher's fixed per-student rate for this group.
-      if (perStudentRate) {
+      // Set, update, or clear the teacher's fixed per-student rate for this group.
+      const rate = perStudentRate.trim();
+      if (rate !== "") {
         await api("/api/teacher-salary-rules", {
           method: "PUT",
-          body: { groupId: saved.id, fixedSalaryPerStudent: Number(perStudentRate) },
+          body: { groupId: saved.id, fixedSalaryPerStudent: Number(rate) },
         });
+      } else if (hadRate) {
+        // The box was cleared → remove the rate.
+        await api(`/api/teacher-salary-rules/group/${saved.id}`, { method: "DELETE" });
       }
       return saved;
     },
@@ -177,9 +186,10 @@ function GroupModal({
             type="number"
             value={perStudentRate}
             onChange={(e) => setPerStudentRate(e.target.value)}
-            placeholder="leave blank to keep current"
+            placeholder="e.g. 125000"
           />
           <MoneyHint value={perStudentRate} />
+          <span className="mt-1 block text-xs text-tg-hint">{t("perStudentRateNote")}</span>
         </Field>
         {save.isError && (
           <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>

@@ -16,6 +16,7 @@ import {
   listDiscountsForStudent,
   setDiscountActive,
   upsertTeacherSalaryRule,
+  deleteTeacherSalaryRule,
   listSalaryRulesForTeacher,
   getClassById,
 } from "../storage";
@@ -127,6 +128,16 @@ router.get(
   "/teacher-salary-rules/teacher/:teacherId",
   asyncHandler(async (req, res) => {
     res.json(await listSalaryRulesForTeacher(req.params.teacherId));
+  }),
+);
+
+/** Clear a group's fixed per-student rate (revert to the teacher's model). */
+router.delete(
+  "/teacher-salary-rules/group/:groupId",
+  requirePermission("manage_discounts"),
+  asyncHandler(async (req, res) => {
+    await deleteTeacherSalaryRule(req.params.groupId);
+    res.json({ ok: true });
   }),
 );
 

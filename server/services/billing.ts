@@ -157,7 +157,31 @@ export async function recalculateBranchDues(
     .select()
     .from(payments)
     .where(and(eq(payments.branchId, branchId), eq(payments.voided, false)));
+  return recalcPaymentRows(rows, byUserId);
+}
 
+/**
+ * Re-snapshot a single teacher's non-voided payments to the students' current
+ * fees + the group's current per-student teacher rate. Use it from the salary
+ * card after fixing a group's per-student rate or a teacher's salary model, so
+ * the teacher's salary reflects the corrected rate without re-recording payments.
+ */
+export async function recalculateTeacherDues(
+  teacherId: string,
+  byUserId: string,
+): Promise<{ updated: number; total: number }> {
+  const rows = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.teacherId, teacherId), eq(payments.voided, false)));
+  return recalcPaymentRows(rows, byUserId);
+}
+
+/** Shared recompute loop: re-price each payment from current fees + rates. */
+async function recalcPaymentRows(
+  rows: (typeof payments.$inferSelect)[],
+  byUserId: string,
+): Promise<{ updated: number; total: number }> {
   let updated = 0;
   for (const p of rows) {
     const price = await freshMonthPricing(p.studentId, p.billingMonth);

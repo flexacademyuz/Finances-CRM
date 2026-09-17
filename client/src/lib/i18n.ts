@@ -423,8 +423,22 @@ const dict = {
   },
   recalcDone: { en: "Updated {n} payment(s). Balances refreshed.", uz: "{n} ta to'lov yangilandi. Balanslar yangilandi." },
   salaryRateUnset: {
-    en: "Salary is 0 because this teacher's pay rate isn't set (or was 0 when these payments were recorded). Set it in Users → the teacher → salary model, then run Branches → Recalculate balances to apply it to existing payments.",
-    uz: "Maosh 0, chunki o'qituvchining to'lov stavkasi belgilanmagan (yoki to'lovlar kiritilganda 0 bo'lgan). Uni Foydalanuvchilar → o'qituvchi → maosh modelida belgilang, so'ng Filiallar → Balanslarni qayta hisoblashni ishga tushiring.",
+    en: "Salary is 0 because this teacher's pay rate isn't set (or was 0 when these payments were recorded). Set it in Users → the teacher → salary model, then press \"Recalculate salary\" to apply it to existing payments.",
+    uz: "Maosh 0, chunki o'qituvchining to'lov stavkasi belgilanmagan (yoki to'lovlar kiritilganda 0 bo'lgan). Uni Foydalanuvchilar → o'qituvchi → maosh modelida belgilang, so'ng \"Maoshni qayta hisoblash\"ni bosing.",
+  },
+  perStudentRateNote: {
+    en: "What the teacher earns per paying student in this group — a fixed amount, unaffected by student discounts (those come from the center).",
+    uz: "O'qituvchi bu guruhda to'lagan har bir o'quvchi uchun oladigan qat'iy summa — o'quvchi chegirmalariga bog'liq emas (chegirmalar markaz hisobidan).",
+  },
+  groupRates: { en: "Per-student rate by group", uz: "Guruh bo'yicha har o'quvchi stavkasi" },
+  groupRatesNote: {
+    en: "The fixed amount the teacher earns per paying student in each group. This is the primary way pay is set and overrides the model above; it is never reduced by discounts.",
+    uz: "O'qituvchi har bir guruhda to'lagan o'quvchi uchun oladigan qat'iy summa. Bu maoshni belgilashning asosiy usuli va yuqoridagi modeldan ustun turadi; chegirmalar uni kamaytirmaydi.",
+  },
+  recalcSalary: { en: "Recalculate salary", uz: "Maoshni qayta hisoblash" },
+  recalcSalaryNote: {
+    en: "Re-applies the current fees & per-student rate to this teacher's existing payments, so past months reflect the rate. The amount each student paid is never changed.",
+    uz: "Joriy to'lovlar va har o'quvchi stavkasini o'qituvchining mavjud to'lovlariga qayta qo'llaydi. O'quvchi to'lagan summa o'zgarmaydi.",
   },
 } as const;
 

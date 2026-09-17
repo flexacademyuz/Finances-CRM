@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { asyncHandler } from "./helpers";
 import { requireRole, branchFilter } from "../auth/middleware";
 import { can } from "@shared/permissions";
@@ -18,6 +19,7 @@ import {
   recordMonthlyPayout,
   payrollMonthView,
 } from "../services/salary";
+import { recalculateTeacherDues } from "../services/billing";
 import { monthKey, normalizeMonth } from "@shared/date";
 import { createAdvanceSchema, createPayoutSchema } from "@shared/schema";
 
@@ -179,6 +181,22 @@ router.post(
       }
       throw err;
     }
+  }),
+);
+
+/**
+ * POST /api/salary/recalculate — re-snapshot a teacher's payments to the current
+ * fees + per-student rate, so their salary reflects the up-to-date rate without
+ * re-recording payments (CEO). Used by the salary card's "Recalculate" button.
+ */
+router.post(
+  "/salary/recalculate",
+  requireRole("ceo"),
+  asyncHandler(async (req, res) => {
+    const { teacherId } = z.object({ teacherId: z.string().uuid() }).parse(req.body);
+    const teacher = await getTeacherById(teacherId);
+    if (!teacher) return res.status(404).json({ error: "not_found", message: "Teacher not found" });
+    res.json(await recalculateTeacherDues(teacherId, req.authUser!.id));
   }),
 );
 

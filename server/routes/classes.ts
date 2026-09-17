@@ -85,7 +85,14 @@ router.get(
     }
     if (activeOnly === "1" || activeOnly === "true") filter.activeOnly = true;
     filter.branchId = branchFilter(req);
-    res.json(await listClasses(filter));
+    const rows = await listClasses(filter);
+    // Teacher pay rates are finance data — only CEO/Accountant see them; a
+    // teacher may still see their own groups' rates.
+    const role = req.authUser!.role;
+    if (role === "ceo" || role === "accountant" || role === "teacher") {
+      return res.json(rows);
+    }
+    res.json(rows.map(({ perStudentRate: _r, ...c }) => c));
   }),
 );
 
