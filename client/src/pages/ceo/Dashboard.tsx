@@ -1,6 +1,7 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   Wallet,
   GraduationCap,
@@ -9,14 +10,22 @@ import {
   AlertTriangle,
   BadgeDollarSign,
   ArrowUpRight,
+  ArrowRight,
+  UserPlus,
+  BookOpen,
+  BarChart3,
+  Sparkles,
+  Send,
 } from "lucide-react";
 import {
   BarChart,
   Bar,
   ResponsiveContainer,
   XAxis,
+  YAxis,
   Tooltip,
   Cell,
+  LabelList,
 } from "recharts";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
@@ -25,85 +34,106 @@ import { money } from "../../lib/format";
 import type { DashboardData, PaymentRow } from "../../lib/types";
 import { Card, Spinner, MethodTag } from "../../components/ui";
 
-/**
- * Soft pastel gradient tints keyed to the CRM's semantic colors. The cards are
- * always light (the app has a fixed light identity), so dark text sits on them.
- */
-type Tint = "blue" | "violet" | "green" | "amber" | "red";
-const TINTS: Record<Tint, { bg: string; fg: string; icon: string }> = {
-  blue: { bg: "linear-gradient(135deg,#eef2ff 0%,#dbe4ff 100%)", fg: "#2440d4", icon: "#3457f5" },
-  violet: { bg: "linear-gradient(135deg,#f3edfe 0%,#e7dcfe 100%)", fg: "#5a3fd0", icon: "#7b5cf5" },
-  green: { bg: "linear-gradient(135deg,#e8f7ef 0%,#d3efe0 100%)", fg: "#0e9d63", icon: "#12b76a" },
-  amber: { bg: "linear-gradient(135deg,#fdf4dd 0%,#fbe8bf 100%)", fg: "#a56708", icon: "#d18700" },
-  red: { bg: "linear-gradient(135deg,#fdebed 0%,#fbd9dd 100%)", fg: "#c0212f", icon: "#e23744" },
+/* Soft pastel tints keyed to the CRM's semantic colours (fixed light identity). */
+type Tint = "violet" | "green" | "amber" | "red";
+const TINTS: Record<Tint, { bg: string; fg: string; icon: string; disc: string }> = {
+  violet: { bg: "linear-gradient(135deg,#f4efff 0%,#eae0fe 100%)", fg: "#5a3fd0", icon: "#7b5cf5", disc: "#efe7fe" },
+  green: { bg: "linear-gradient(135deg,#e9f8f0 0%,#d6f0e2 100%)", fg: "#0e9d63", icon: "#12b76a", disc: "#d6f2e3" },
+  amber: { bg: "linear-gradient(135deg,#fdf5df 0%,#fbe9c2 100%)", fg: "#a56708", icon: "#d18700", disc: "#fbeaca" },
+  red: { bg: "linear-gradient(135deg,#fdedef 0%,#fbdce0 100%)", fg: "#c0212f", icon: "#e23744", disc: "#fbdde1" },
 };
 
-/** LimeTalk-style KPI tile: soft tint, label, big figure, icon in a soft disc. */
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon,
-  tint,
-  href,
-}: {
-  label: string;
-  value: ReactNode;
-  sub?: ReactNode;
-  icon: ReactNode;
-  tint: Tint;
-  href?: string;
-}) {
-  const c = TINTS[tint];
-  const inner = (
-    <div
-      className="h-full rounded-card p-4 shadow-card transition hover:shadow-card-hover"
-      style={{ background: c.bg }}
+/** Twelve most-recent months as { value: YYYY-MM-01, label: "September 2026" }. */
+function monthOptions(count = 12): { value: string; label: string }[] {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return {
+      value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`,
+      label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    };
+  });
+}
+
+/** Green ↑ / red ↓ percent chip. `light` inverts it for the dark hero card. */
+function Delta({ pct, light }: { pct: number | null; light?: boolean }) {
+  if (pct == null) return null;
+  const up = pct >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-pill px-1.5 py-0.5 text-[11px] font-bold ${
+        light
+          ? "bg-white/20 text-white"
+          : up
+            ? "bg-status-paid/15 text-status-paid"
+            : "bg-status-overdue/15 text-status-overdue"
+      }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-xs font-semibold text-black/60">{label}</div>
-        <span
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/70"
-          style={{ color: c.icon }}
-        >
-          {icon}
-        </span>
-      </div>
-      <div className="figure mt-2 text-2xl font-bold leading-tight" style={{ color: c.fg }}>
-        {value}
-      </div>
-      {sub != null && <div className="mt-1 truncate text-xs text-black/45">{sub}</div>}
-    </div>
-  );
-  return href ? (
-    <Link href={href} className="block">
-      {inner}
-    </Link>
-  ) : (
-    inner
+      <ArrowUpRight size={11} className={up ? "" : "rotate-90"} />
+      {up ? "+" : ""}
+      {pct}%
+    </span>
   );
 }
 
-const chartAxis = {
-  fontSize: 10,
-  stroke: "var(--text-muted)",
-  tickLine: false as const,
-  axisLine: false as const,
-};
+/** Soft-tinted KPI card: icon disc, label, big figure, optional delta / subtitle. */
+function StatCard({
+  tint,
+  label,
+  value,
+  icon,
+  href,
+  sub,
+}: {
+  tint: Tint;
+  label: string;
+  value: ReactNode;
+  icon: ReactNode;
+  href: string;
+  sub?: ReactNode;
+}) {
+  const c = TINTS[tint];
+  return (
+    <Link
+      href={href}
+      className="block rounded-card p-4 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover"
+      style={{ background: c.bg }}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full" style={{ background: c.disc, color: c.icon }}>
+          {icon}
+        </span>
+        <span className="text-sm font-semibold text-black/60">{label}</span>
+      </div>
+      <div className="figure mt-3 text-3xl font-extrabold leading-none" style={{ color: c.fg }}>
+        {value}
+      </div>
+      {sub != null && <div className="mt-2 text-xs text-black/45">{sub}</div>}
+    </Link>
+  );
+}
+
+const chartAxis = { fontSize: 10, stroke: "var(--text-muted)", tickLine: false as const, axisLine: false as const };
 const tooltipStyle = {
   background: "var(--surface)",
   border: "1px solid var(--border)",
   borderRadius: 12,
   boxShadow: "0 6px 24px rgba(16,24,40,0.10)",
 };
+const compact = (n: number) =>
+  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${Math.round(n / 1000)}K` : String(n);
 
-/** CEO center-wide overview — LimeTalk-style greeting, KPI tiles + analytics. */
+/** CEO center-wide overview — redesigned dashboard: KPIs, quick actions, charts,
+ *  recent activity and a payments table. */
 export function CeoDashboard() {
   const { t } = useI18n();
   const { user } = useSession();
+  const months = monthOptions();
+  const [month, setMonth] = useState(months[0].value);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => api<DashboardData>("/api/dashboard"),
+    queryKey: ["dashboard", month],
+    queryFn: () => api<DashboardData>("/api/dashboard", { query: { month } }),
   });
   const recent = useQuery({
     queryKey: ["dashboard-recent-payments"],
@@ -113,168 +143,228 @@ export function CeoDashboard() {
   if (isLoading || !data) return <Spinner />;
 
   const firstName = user.fullName.split(/\s+/)[0] || user.fullName;
-  const monthLabel = data.trend[data.trend.length - 1]?.label ?? "";
+  // Real month-over-month revenue delta from the trend (last vs previous month).
+  const trend = data.trend;
+  const cur = trend[trend.length - 1]?.total ?? 0;
+  const prev = trend[trend.length - 2]?.total ?? 0;
+  const revDelta = prev > 0 ? +(((cur - prev) / prev) * 100).toFixed(1) : null;
+
   const recentPayments = (recent.data ?? [])
     .slice()
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-    .slice(0, 6);
+    .slice(0, 8);
+  const activity = recentPayments.slice(0, 5);
+
+  const actions = [
+    { label: t("addStudentAction"), href: "/leads?register=1", icon: <UserPlus size={16} />, color: "#12b76a", soft: "#d6f2e3" },
+    { label: t("recordPayment"), href: "/record", icon: <Wallet size={16} />, color: "#3457f5", soft: "#e3e9ff" },
+    { label: t("createGroup"), href: "/classes", icon: <BookOpen size={16} />, color: "#7b5cf5", soft: "#ece4fe" },
+    { label: t("generateReport"), href: "/finances", icon: <BarChart3 size={16} />, color: "#3457f5", soft: "#e3e9ff" },
+  ];
 
   return (
-    <div className="space-y-5">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-bold">
-          {t("greeting")} {firstName},
-        </h1>
-        <p className="mt-0.5 text-sm text-muted">{t("dashboardSubtitle")}</p>
+    <div className="space-y-4">
+      {/* Greeting + month picker */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">
+            {t("greeting")} {firstName}, <span className="align-middle">👋</span>
+          </h1>
+          <p className="mt-0.5 text-sm text-muted">{t("dashboardSubtitle")}</p>
+        </div>
+        <select
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          className="select w-auto rounded-pill py-2 text-sm font-semibold"
+          aria-label={t("selectMonth")}
+        >
+          {months.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
       </div>
 
-      {/* KPI tiles */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <KpiCard
-          tint="blue"
-          label={t("totalRevenue")}
-          value={money(data.revenue.total)}
-          sub={`${t("cash")} ${money(data.revenue.cash)} · ${t("online")} ${money(data.revenue.online)}`}
-          icon={<Wallet size={16} />}
-          href="/finances"
-        />
-        <KpiCard
-          tint="violet"
-          label={t("totalStudents")}
-          value={data.totalStudents}
-          sub={monthLabel}
-          icon={<GraduationCap size={16} />}
-          href="/students"
-        />
-        <KpiCard
-          tint="green"
-          label={t("paid")}
-          value={data.statusCounts.paid}
-          icon={<CheckCircle2 size={16} />}
-          href="/students?status=paid"
-        />
-        <KpiCard
-          tint="amber"
-          label={t("awaiting_payment")}
-          value={data.statusCounts.awaiting_payment}
-          icon={<Clock size={16} />}
-          href="/students?status=awaiting_payment"
-        />
-        <KpiCard
-          tint="red"
-          label={t("overdue")}
-          value={data.statusCounts.overdue}
-          icon={<AlertTriangle size={16} />}
-          href="/students?status=overdue"
-        />
-        <KpiCard
-          tint="violet"
-          label={t("payrollObligation")}
-          value={money(data.payrollObligation)}
-          icon={<BadgeDollarSign size={16} />}
-          href="/payroll"
-        />
-      </div>
-
-      {/* Analytics band — revenue (wide) + payment-count trend. */}
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-bold">{t("revenueTrend")}</div>
-            <Link
-              href="/finances"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-            >
-              {t("financialDetail")} <ArrowUpRight size={14} />
-            </Link>
+      {/* KPI band: 6 stat cards (revenue hero + 5) on the left, Quick Actions right */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Revenue hero — gradient */}
+          <div className="relative overflow-hidden rounded-card p-4 text-white shadow-brand sm:col-span-2 lg:col-span-1" style={{ background: "var(--brand-gradient)" }}>
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20"><Wallet size={16} /></span>
+              <span className="text-sm font-semibold text-white/85">{t("totalRevenue")}</span>
+            </div>
+            <div className="figure mt-3 text-3xl font-extrabold leading-none">{money(data.revenue.total)}</div>
+            <div className="mt-2 flex items-center gap-2">
+              <Delta pct={revDelta} light />
+              {revDelta != null && <span className="text-xs text-white/70">{t("vsLastMonth")}</span>}
+            </div>
+            <div className="mt-3 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-medium">
+              {t("cash")} {money(data.revenue.cash)} · {t("online")} {money(data.revenue.online)}
+            </div>
+            <ArrowUpRight className="pointer-events-none absolute right-3 top-3 text-white/25" size={26} />
           </div>
-          <ResponsiveContainer width="100%" height={190}>
-            <BarChart data={data.trend}>
-              <defs>
-                <linearGradient id="barBrand" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#7256f2" />
-                  <stop offset="100%" stopColor="#3b6ef5" />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="label"
-                tickFormatter={(l: string) => l.split(" ")[0].slice(0, 3)}
-                {...chartAxis}
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(52,87,245,0.06)" }}
-                formatter={(v: number) => money(v)}
-                contentStyle={tooltipStyle}
-              />
-              <Bar dataKey="total" radius={[8, 8, 0, 0]}>
-                {data.trend.map((_, i) => (
-                  <Cell key={i} fill="url(#barBrand)" />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
 
-        <Card>
-          <div className="mb-3 text-sm font-bold">{t("paymentsTrend")}</div>
-          <ResponsiveContainer width="100%" height={190}>
-            <BarChart data={data.trend}>
-              <XAxis
-                dataKey="label"
-                tickFormatter={(l: string) => l.split(" ")[0].slice(0, 3)}
-                {...chartAxis}
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(123,92,245,0.08)" }}
-                formatter={(v: number) => String(v)}
-                contentStyle={tooltipStyle}
-              />
-              <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="var(--violet)" />
-            </BarChart>
-          </ResponsiveContainer>
+          <StatCard tint="violet" label={t("totalStudents")} value={data.totalStudents} icon={<GraduationCap size={16} />} href="/students" sub={months.find((m) => m.value === month)?.label} />
+          <StatCard tint="green" label={t("paid")} value={data.statusCounts.paid} icon={<CheckCircle2 size={16} />} href="/students?status=paid" />
+          <StatCard tint="amber" label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} icon={<Clock size={16} />} href="/students?status=awaiting_payment" />
+          <StatCard tint="red" label={t("overdue")} value={data.statusCounts.overdue} icon={<AlertTriangle size={16} />} href="/students?status=overdue" />
+          <StatCard tint="violet" label={t("payrollObligation")} value={money(data.payrollObligation)} icon={<BadgeDollarSign size={16} />} href="/payroll" />
+        </div>
+
+        {/* Quick Actions */}
+        <Card className="!p-0 overflow-hidden">
+          <div className="flex items-center gap-3 p-4 text-white" style={{ background: "var(--brand-gradient)" }}>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/20"><Sparkles size={18} /></span>
+            <div>
+              <div className="text-sm font-bold">{t("quickActions")}</div>
+              <div className="text-xs text-white/80">{t("quickActionsSub")}</div>
+            </div>
+          </div>
+          <div className="space-y-1 p-2">
+            {actions.map((a) => (
+              <Link key={a.href + a.label} href={a.href} className="flex items-center gap-3 rounded-input px-3 py-2.5 transition hover:bg-bg">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ background: a.soft, color: a.color }}>{a.icon}</span>
+                <span className="flex-1 text-sm font-semibold">{a.label}</span>
+                <ArrowRight size={16} className="text-muted" />
+              </Link>
+            ))}
+          </div>
         </Card>
       </div>
 
-      {/* Recent payments */}
-      <Card className="!p-0">
+      {/* Charts + Recent activity */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-bold">{t("revenueTrend")}</div>
+              <Link href="/finances" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                {t("financialDetail")} <ArrowUpRight size={13} />
+              </Link>
+            </div>
+            <ResponsiveContainer width="100%" height={210}>
+              <BarChart data={trend} margin={{ top: 18 }}>
+                <defs>
+                  <linearGradient id="barBrand" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7256f2" />
+                    <stop offset="100%" stopColor="#3b6ef5" />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="label" tickFormatter={(l: string) => l.split(" ")[0].slice(0, 3)} {...chartAxis} />
+                <YAxis width={30} tickFormatter={compact} {...chartAxis} />
+                <Tooltip cursor={{ fill: "rgba(52,87,245,0.06)" }} formatter={(v: number) => money(v)} contentStyle={tooltipStyle} />
+                <Bar dataKey="total" radius={[8, 8, 0, 0]} maxBarSize={44}>
+                  <LabelList dataKey="total" position="top" formatter={compact} style={{ fill: "var(--text-muted)", fontSize: 10, fontWeight: 700 }} />
+                  {trend.map((_, i) => (
+                    <Cell key={i} fill="url(#barBrand)" />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-bold">{t("paymentsTrend")}</div>
+              <Link href="/payments" className="text-xs font-semibold text-primary hover:underline">{t("viewAll")}</Link>
+            </div>
+            <ResponsiveContainer width="100%" height={210}>
+              <BarChart data={trend} margin={{ top: 18 }}>
+                <XAxis dataKey="label" tickFormatter={(l: string) => l.split(" ")[0].slice(0, 3)} {...chartAxis} />
+                <YAxis width={24} {...chartAxis} />
+                <Tooltip cursor={{ fill: "rgba(18,183,106,0.08)" }} formatter={(v: number) => String(v)} contentStyle={tooltipStyle} />
+                <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="#12b76a" maxBarSize={44}>
+                  <LabelList dataKey="count" position="top" style={{ fill: "var(--text-muted)", fontSize: 10, fontWeight: 700 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </div>
+
+        {/* Recent activity — built from the latest payments */}
+        <Card>
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+            <Clock size={16} className="text-primary" /> {t("recentActivity")}
+          </div>
+          {recent.isLoading ? (
+            <Spinner />
+          ) : activity.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted">{t("noActivity")}</div>
+          ) : (
+            <div className="space-y-1">
+              {activity.map((p) => (
+                <div key={p.id} className="flex items-center gap-3 py-2">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-status-paid/15 text-status-paid">
+                    <Send size={15} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold">{t("paymentReceived")}</div>
+                    <div className="truncate text-xs text-muted">{p.studentName}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="figure text-sm font-bold text-status-paid">+{money(p.amount)}</div>
+                    <div className="text-[11px] text-muted">
+                      {formatDistanceToNowStrict(new Date(p.createdAt))} {t("ago")}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Recent payments table */}
+      <Card className="!p-0 overflow-hidden">
         <div className="flex items-center justify-between px-5 pb-2 pt-4">
           <div className="text-sm font-bold">{t("recentPayments")}</div>
-          <Link href="/payments" className="text-xs font-semibold text-primary hover:underline">
-            {t("viewAll")}
-          </Link>
+          <Link href="/payments" className="text-xs font-semibold text-primary hover:underline">{t("viewAll")}</Link>
         </div>
         {recent.isLoading ? (
-          <div className="px-5 pb-4">
-            <Spinner />
-          </div>
+          <div className="px-5 pb-4"><Spinner /></div>
         ) : recentPayments.length === 0 ? (
           <div className="px-5 pb-6 text-center text-sm text-muted">{t("noData")}</div>
         ) : (
-          <div className="divide-y divide-border">
-            {recentPayments.map((p) => (
-              <Link
-                key={p.id}
-                href="/payments"
-                className="flex items-center gap-3 px-5 py-3 transition hover:bg-bg"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{p.studentName}</div>
-                  <div className="truncate text-xs text-muted">{p.className}</div>
-                </div>
-                <MethodTag method={p.method} />
-                {p.voided ? (
-                  <span className="rounded-full bg-freeze/15 px-2 py-0.5 text-xs font-semibold text-freeze">
-                    {t("voided")}
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-status-paid/15 px-2 py-0.5 text-xs font-semibold text-status-paid">
-                    {t("paid")}
-                  </span>
-                )}
-                <div className="figure w-28 shrink-0 text-right text-sm font-bold">{money(p.amount)}</div>
-              </Link>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-y border-border text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-5 py-2">{t("student")}</th>
+                  <th className="px-3 py-2">{t("class")}</th>
+                  <th className="px-3 py-2 text-right">{t("amount")}</th>
+                  <th className="px-3 py-2">{t("method")}</th>
+                  <th className="px-3 py-2">{t("date")}</th>
+                  <th className="px-5 py-2">{t("status")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {recentPayments.map((p) => (
+                  <tr key={p.id} className="transition hover:bg-bg">
+                    <td className="px-5 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[11px] font-bold text-primary">
+                          {p.studentName.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("")}
+                        </span>
+                        <span className="font-medium">{p.studentName}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-muted">{p.className}</td>
+                    <td className="figure px-3 py-2.5 text-right font-bold">{money(p.amount)}</td>
+                    <td className="px-3 py-2.5"><MethodTag method={p.method} /></td>
+                    <td className="px-3 py-2.5 text-muted">
+                      {new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="px-5 py-2.5">
+                      {p.voided ? (
+                        <span className="rounded-full bg-freeze/15 px-2 py-0.5 text-xs font-semibold text-freeze">{t("voided")}</span>
+                      ) : (
+                        <span className="rounded-full bg-status-paid/15 px-2 py-0.5 text-xs font-semibold text-status-paid">{t("paid")}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
