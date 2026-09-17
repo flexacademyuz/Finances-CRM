@@ -234,6 +234,7 @@ const dict = {
   newThisMonth: { en: "New This Month", uz: "Bu oy yangi" },
   allGroups: { en: "All Groups", uz: "Barcha guruhlar" },
   allStatus: { en: "All Status", uz: "Barcha holatlar" },
+  searchStudentsPh: { en: "Search by name, phone or group…", uz: "Ism, telefon yoki guruh bo'yicha…" },
   enrolled: { en: "Enrolled", uz: "Ro'yxatda" },
   ofTotal: { en: "of total", uz: "jamidan" },
   paymentsSubtitle: { en: "Every recorded payment, with corrections.", uz: "Har bir to'lov va tuzatishlar." },

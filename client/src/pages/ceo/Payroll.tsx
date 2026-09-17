@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Check, Users2, Wallet, BadgeDollarSign } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
-import { money, initials, avatarColor } from "../../lib/format";
+import { money, moneyShort, initials, avatarColor } from "../../lib/format";
 import { monthKey, shiftMonth, monthLabel, academicYearStart } from "@shared/date";
 import type { PayrollData } from "../../lib/types";
 import { Button, Empty, Modal, Spinner, StatTile } from "../../components/ui";
@@ -55,10 +55,10 @@ export function PayrollPage() {
       ) : (
         <>
           {/* Stat tiles */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <StatTile tint="blue" label={t("teacher_count")} value={teachers.length} icon={<Users2 size={18} />} />
-            <StatTile tint="amber" label={t("toPay")} value={money(data.total)} icon={<Wallet size={18} />} sub={monthLabel(month)} />
-            <StatTile tint="green" label={t("paidThisMonth")} value={money(paidSum)} icon={<BadgeDollarSign size={18} />} sub={`${paidCount} / ${teachers.length}`} />
+            <StatTile tint="amber" label={t("toPay")} value={moneyShort(data.total)} icon={<Wallet size={18} />} />
+            <StatTile tint="green" label={t("paidThisMonth")} value={moneyShort(paidSum)} icon={<BadgeDollarSign size={18} />} sub={`${paidCount} / ${teachers.length}`} />
           </div>
 
           {teachers.length ? (

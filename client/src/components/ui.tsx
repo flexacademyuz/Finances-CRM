@@ -246,26 +246,28 @@ export function StatTile({
   const c = TILE[tint];
   const inner = (
     <div
-      className="h-full rounded-card p-4 shadow-card ring-1 ring-dark/[0.04] transition hover:-translate-y-0.5 hover:shadow-card-hover"
+      className="flex h-full min-h-[96px] flex-col rounded-card p-3.5 shadow-card ring-1 ring-dark/[0.04] transition hover:-translate-y-0.5 hover:shadow-card-hover"
       style={{ background: c.bg }}
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2">
         <span
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white"
           style={{ background: c.grad, boxShadow: "0 8px 18px -6px rgba(24,32,56,0.4)" }}
         >
           {icon}
         </span>
-        <span className="text-sm font-semibold text-black/60">{label}</span>
+        <span className="min-w-0 text-[13px] font-semibold leading-tight text-black/60">{label}</span>
       </div>
-      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="figure text-2xl font-extrabold leading-none" style={{ color: c.fg }}>{value}</span>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="figure whitespace-nowrap text-xl font-extrabold leading-none sm:text-2xl" style={{ color: c.fg }}>
+          {value}
+        </span>
         <Delta pct={delta} />
       </div>
-      {sub != null && <div className="mt-1.5 text-xs text-black/45">{sub}</div>}
+      {sub != null && <div className="mt-auto pt-1 truncate text-xs text-black/45">{sub}</div>}
     </div>
   );
-  return href ? <Link href={href} className="block">{inner}</Link> : inner;
+  return href ? <Link href={href} className="block h-full">{inner}</Link> : inner;
 }
 
 /** Status pill with a leading icon — used in rich list rows. */

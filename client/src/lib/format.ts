@@ -5,6 +5,20 @@ export function money(value: number | string, currency = "UZS"): string {
   return `${new Intl.NumberFormat("en-US").format(Math.round(n))} ${currency}`;
 }
 
+/**
+ * Compact money for tight spaces (stat tiles): 10,945,000 → "10.95M UZS",
+ * 875,000 → "875K UZS", 5,000 → "5,000 UZS". Keeps big figures on one line so
+ * they never wrap; full amounts still show in rows and tables.
+ */
+export function moneyShort(value: number | string, currency = "UZS"): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  const abs = Math.abs(n);
+  const trim = (x: number) => String(Math.round(x * 100) / 100);
+  if (abs >= 1_000_000) return `${trim(n / 1_000_000)}M ${currency}`;
+  if (abs >= 100_000) return `${trim(n / 1000)}K ${currency}`;
+  return `${new Intl.NumberFormat("en-US").format(Math.round(n))} ${currency}`;
+}
+
 export const statusColor: Record<StudentStatus, string> = {
   paid: "bg-status-paid/15 text-status-paid",
   awaiting_payment: "bg-status-awaiting/15 text-status-awaiting",

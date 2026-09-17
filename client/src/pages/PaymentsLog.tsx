@@ -4,7 +4,7 @@ import { Download, Wallet, ClipboardList, Coins, Banknote } from "lucide-react";
 import { api, downloadCsv } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
-import { money, formatDate, initials, avatarColor } from "../lib/format";
+import { money, moneyShort, formatDate, initials, avatarColor } from "../lib/format";
 import type { PaymentRow, RefundPreview } from "../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatTile, MethodTag } from "../components/ui";
 
@@ -48,10 +48,10 @@ export function PaymentsLog() {
 
       {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile tint="blue" label={t("totalCollected")} value={money(totalCollected)} icon={<Wallet size={18} />} sub={t("netAmount")} />
+        <StatTile tint="blue" label={t("totalCollected")} value={moneyShort(totalCollected)} icon={<Wallet size={18} />} sub={t("netAmount")} />
         <StatTile tint="violet" label={t("transactions")} value={live.length} icon={<ClipboardList size={18} />} />
-        <StatTile tint="green" label={t("cash")} value={money(cashTotal)} icon={<Coins size={18} />} />
-        <StatTile tint="amber" label={t("online")} value={money(onlineTotal)} icon={<Banknote size={18} />} />
+        <StatTile tint="green" label={t("cash")} value={moneyShort(cashTotal)} icon={<Coins size={18} />} />
+        <StatTile tint="amber" label={t("online")} value={moneyShort(onlineTotal)} icon={<Banknote size={18} />} />
       </div>
 
       {payments.isLoading ? (

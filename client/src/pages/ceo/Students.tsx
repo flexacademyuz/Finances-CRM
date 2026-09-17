@@ -120,7 +120,7 @@ export function StudentsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[180px] flex-1">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <Input className="pl-9" placeholder={t("searchStudentHint")} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-9" placeholder={t("searchStudentsPh")} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select className="w-auto min-w-[150px]" value={classId} onChange={(e) => setClassId(e.target.value)}>
             <option value="">{t("allGroups")}</option>

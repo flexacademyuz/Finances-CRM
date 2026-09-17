@@ -4,7 +4,7 @@ import { Plus, Trash2, ExternalLink, Receipt, Layers, Coins } from "lucide-react
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
-import { money, formatDate, avatarColor, initials } from "../lib/format";
+import { money, moneyShort, formatDate, avatarColor, initials } from "../lib/format";
 import { monthKey } from "@shared/date";
 import {
   EXPENSE_CATEGORY_NAMES,
@@ -62,8 +62,8 @@ export function ExpensesPage() {
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile tint="red" label={t("totalExpenses")} value={money(summary.data?.total ?? 0)} icon={<Receipt size={18} />} sub={new Date().toLocaleDateString("en-US", { month: "long" })} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <StatTile tint="red" label={t("totalExpenses")} value={moneyShort(summary.data?.total ?? 0)} icon={<Receipt size={18} />} sub={new Date().toLocaleDateString("en-US", { month: "long" })} />
         <StatTile tint="violet" label={t("category")} value={catCount} icon={<Layers size={18} />} />
         <StatTile tint="amber" label={t("transactions")} value={expenses.data?.filter((e) => !e.isDeleted).length ?? 0} icon={<Coins size={18} />} />
       </div>

@@ -30,7 +30,7 @@ import {
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { useSession } from "../../lib/session";
-import { money } from "../../lib/format";
+import { money, moneyShort } from "../../lib/format";
 import type { DashboardData, PaymentRow } from "../../lib/types";
 import { Card, Spinner, MethodTag, StatTile, Delta } from "../../components/ui";
 
@@ -119,28 +119,27 @@ export function CeoDashboard() {
 
       {/* KPI band: 6 uniform tiles on the left, Quick Actions on the right */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
           {/* Revenue tile — gradient, same shape as the others */}
-          <div className="relative overflow-hidden rounded-card p-4 text-white shadow-brand" style={{ background: "var(--brand-gradient)" }}>
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/20"><Wallet size={18} /></span>
-              <span className="text-sm font-semibold text-white/85">{t("totalRevenue")}</span>
+          <div className="flex min-h-[96px] flex-col overflow-hidden rounded-card p-3.5 text-white shadow-brand" style={{ background: "var(--brand-gradient)" }}>
+            <div className="flex items-center gap-2">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20"><Wallet size={18} /></span>
+              <span className="min-w-0 text-[13px] font-semibold leading-tight text-white/85">{t("totalRevenue")}</span>
             </div>
-            <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="figure text-2xl font-extrabold leading-none">{money(data.revenue.total)}</span>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="figure whitespace-nowrap text-xl font-extrabold leading-none sm:text-2xl">{moneyShort(data.revenue.total)}</span>
               <Delta pct={revDelta} light />
             </div>
-            <div className="mt-1.5 truncate text-xs text-white/80">
-              {t("cash")} {money(data.revenue.cash)} · {t("online")} {money(data.revenue.online)}
+            <div className="mt-auto truncate pt-1 text-xs text-white/80">
+              {t("cash")} {moneyShort(data.revenue.cash)} · {t("online")} {moneyShort(data.revenue.online)}
             </div>
-            <ArrowUpRight className="pointer-events-none absolute right-3 top-3 text-white/25" size={24} />
           </div>
 
-          <StatTile tint="violet" label={t("totalStudents")} value={data.totalStudents} icon={<GraduationCap size={18} />} href="/students" sub={months.find((m) => m.value === month)?.label} />
-          <StatTile tint="green" label={t("paid")} value={data.statusCounts.paid} icon={<CheckCircle2 size={18} />} href="/students?status=paid" sub={t("paid")} />
-          <StatTile tint="amber" label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} icon={<Clock size={18} />} href="/students?status=awaiting_payment" sub={t("awaiting")} />
-          <StatTile tint="red" label={t("overdue")} value={data.statusCounts.overdue} icon={<AlertTriangle size={18} />} href="/students?status=overdue" sub={t("overdue")} />
-          <StatTile tint="violet" label={t("payrollObligation")} value={money(data.payrollObligation)} icon={<BadgeDollarSign size={18} />} href="/payroll" sub={months.find((m) => m.value === month)?.label} />
+          <StatTile tint="violet" label={t("totalStudents")} value={data.totalStudents} icon={<GraduationCap size={18} />} href="/students" />
+          <StatTile tint="green" label={t("paid")} value={data.statusCounts.paid} icon={<CheckCircle2 size={18} />} href="/students?status=paid" />
+          <StatTile tint="amber" label={t("awaiting_payment")} value={data.statusCounts.awaiting_payment} icon={<Clock size={18} />} href="/students?status=awaiting_payment" />
+          <StatTile tint="red" label={t("overdue")} value={data.statusCounts.overdue} icon={<AlertTriangle size={18} />} href="/students?status=overdue" />
+          <StatTile tint="violet" label={t("payrollObligation")} value={moneyShort(data.payrollObligation)} icon={<BadgeDollarSign size={18} />} href="/payroll" />
         </div>
 
         {/* Quick Actions */}
