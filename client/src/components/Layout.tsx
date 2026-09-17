@@ -20,6 +20,8 @@ import {
   HandCoins,
   Building2,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
   X,
 } from "lucide-react";
 import type { Role, User } from "@shared/schema";
@@ -153,58 +155,121 @@ function navActive(href: string, location: string): boolean {
 }
 
 /**
- * Desktop icon rail — a compact vertical bar of icon buttons grouped in a
- * floating white capsule over the grey ground. Labels appear on hover (title);
- * the active route is filled in the brand blue. My-account + logout sit in a
- * separate capsule at the foot.
+ * Desktop sidebar — a floating white panel over the grey ground with two states:
+ *  - expanded: logo + name, section headers, labelled nav items, user at foot;
+ *  - collapsed ("half-closed"): icon-only, with a label tooltip on hover.
+ * A chevron button toggles between them (persisted in localStorage by the parent).
  */
-function DesktopRail({ items, location }: { items: NavItem[]; location: string }) {
+function DesktopSidebar({
+  items,
+  location,
+  user,
+  collapsed,
+  onToggle,
+}: {
+  items: NavItem[];
+  location: string;
+  user: User;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const { t } = useI18n();
-  const mainItems = items.filter((i) => i.label !== "myAccount");
-  const account = items.find((i) => i.label === "myAccount");
   const web = !isTelegram();
+  const groups = groupNav(items);
 
-  const IconLink = ({ href, label, icon }: NavItem) => {
+  const Item = ({ href, label, icon }: NavItem) => {
     const active = navActive(href, location);
     return (
-      <Link
-        href={href}
-        title={t(label)}
-        aria-label={t(label)}
-        onClick={() => haptic("light")}
-        className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl transition ${
-          active ? "bg-primary text-white shadow-brand" : "text-muted hover:bg-primary-soft hover:text-primary"
-        }`}
-      >
-        {icon}
-      </Link>
+      <div className="group relative">
+        <Link
+          href={href}
+          aria-label={t(label)}
+          title={collapsed ? t(label) : undefined}
+          onClick={() => haptic("light")}
+          className={
+            collapsed
+              ? `mx-auto grid h-11 w-11 place-items-center rounded-2xl transition ${
+                  active ? "bg-primary text-white shadow-brand" : "text-muted hover:bg-primary-soft hover:text-primary"
+                }`
+              : `flex items-center gap-3 rounded-btn px-3 py-2 text-sm font-medium transition ${
+                  active
+                    ? "bg-primary-soft font-semibold text-primary-hover"
+                    : "text-sidebar-text hover:bg-slate-100 hover:text-text"
+                }`
+          }
+        >
+          {icon}
+          {!collapsed && <span className="truncate">{t(label)}</span>}
+        </Link>
+        {/* Hover tooltip in the collapsed state (like the reference). */}
+        {collapsed && (
+          <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-dark px-2.5 py-1 text-xs font-semibold text-white opacity-0 shadow-card-hover transition group-hover:opacity-100">
+            {t(label)}
+          </span>
+        )}
+      </div>
     );
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[76px] flex-col items-center gap-3 py-4 md:flex">
-      <Link
-        href="/"
-        aria-label="Home"
-        className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand text-white shadow-brand"
-      >
-        <Wallet size={20} />
-      </Link>
-      <nav className="no-scrollbar flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto rounded-[26px] bg-surface px-2 py-3 shadow-card ring-1 ring-dark/[0.04]">
-        {mainItems.map((it) => (
-          <IconLink key={it.href} {...it} />
+    <aside
+      className={`fixed bottom-3 left-3 top-3 z-30 hidden flex-col rounded-card bg-surface py-4 shadow-card ring-1 ring-dark/[0.04] transition-[width] duration-200 md:flex ${
+        collapsed ? "w-[68px] px-2" : "w-56 px-3"
+      }`}
+    >
+      {/* Header: brand mark + name + collapse toggle */}
+      <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "gap-2 px-1"}`}>
+        <Link href="/" aria-label="Home" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand text-white shadow-brand">
+          <Wallet size={18} />
+        </Link>
+        {!collapsed && <span className="min-w-0 flex-1 truncate text-sm font-extrabold">Flex Academy</span>}
+        <button
+          onClick={onToggle}
+          aria-label="Toggle sidebar"
+          title="Collapse / expand"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-bg text-muted ring-1 ring-border transition hover:text-primary"
+        >
+          {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+        </button>
+      </div>
+
+      {/* Nav — grouped sections; headers hidden when collapsed. */}
+      <nav className="no-scrollbar mt-4 flex-1 space-y-3 overflow-y-auto">
+        {groups.map(({ section, items: group }, i) => (
+          <div key={section} className={collapsed ? "space-y-1" : "space-y-0.5"}>
+            {!collapsed ? (
+              <div className="px-3 pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted/70">
+                {t(SECTION_LABEL[section])}
+              </div>
+            ) : (
+              i > 0 && <div className="mx-auto my-1 h-px w-6 bg-border" />
+            )}
+            {group.map((it) => (
+              <Item key={it.href} {...it} />
+            ))}
+          </div>
         ))}
       </nav>
-      <div className="flex shrink-0 flex-col items-center gap-1 rounded-[26px] bg-surface px-2 py-2 shadow-card ring-1 ring-dark/[0.04]">
-        {account && <IconLink {...account} />}
-        {web && (
+
+      {/* Footer: user profile + logout (web) */}
+      <div className={`mt-2 flex items-center gap-2 border-t border-border pt-3 ${collapsed ? "justify-center" : ""}`}>
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-white shadow-brand">
+          {initials(user.fullName)}
+        </div>
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-text">{user.fullName}</div>
+            <div className="text-xs capitalize text-muted">{user.role}</div>
+          </div>
+        )}
+        {!collapsed && web && (
           <button
             title={t("logOut")}
             aria-label={t("logOut")}
             onClick={() => { clearToken(); window.location.reload(); }}
-            className="grid h-11 w-11 place-items-center rounded-2xl text-muted transition hover:bg-danger/10 hover:text-danger"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-danger/10 hover:text-danger"
           >
-            <LogOut size={20} />
+            <LogOut size={16} />
           </button>
         )}
       </div>
@@ -217,6 +282,16 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
   const { user } = useSession();
   const [location] = useLocation();
   const [drawer, setDrawer] = useState(false);
+  // Desktop sidebar collapse state ("half-closed"), remembered across sessions.
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebarCollapsed") === "1"; } catch { return false; }
+  });
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const n = !c;
+      try { localStorage.setItem("sidebarCollapsed", n ? "1" : "0"); } catch { /* storage off */ }
+      return n;
+    });
   const items = buildNav(user);
 
   // Title from the matching nav item, with sensible fallbacks for detail pages.
@@ -242,8 +317,14 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
 
   return (
     <div className="min-h-full bg-bg">
-      {/* Desktop icon rail */}
-      <DesktopRail items={items} location={location} />
+      {/* Desktop collapsible sidebar */}
+      <DesktopSidebar
+        items={items}
+        location={location}
+        user={user}
+        collapsed={collapsed}
+        onToggle={toggleCollapsed}
+      />
 
       {/* Mobile drawer — full labelled menu, grouped into sections */}
       {drawer && (
@@ -255,7 +336,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
         </div>
       )}
 
-      <div className="md:pl-[84px]">
+      <div className={`transition-[padding] duration-200 ${collapsed ? "md:pl-[92px]" : "md:pl-[248px]"}`}>
         {/* Top bar — 64px, shows the section name only (no branding). */}
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur">
           <button className="md:hidden" onClick={() => setDrawer(true)} aria-label="Menu">
