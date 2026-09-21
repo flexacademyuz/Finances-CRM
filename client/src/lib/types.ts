@@ -4,6 +4,44 @@ export type { Branch };
 /** A class row plus its group-level fixed per-student teacher rate (from the API). */
 export type Class = SchemaClass & { perStudentRate?: string | null };
 
+/** One row of the outbound parent-SMS log (GET /api/sms). */
+export type SmsMessage = {
+  id: string;
+  studentId: string | null;
+  branchId: string | null;
+  kind: "payment_receipt" | "overdue_reminder";
+  toPhone: string;
+  body: string;
+  status: "queued" | "logged" | "sent" | "failed" | "skipped";
+  providerMessageId: string | null;
+  error: string | null;
+  dedupeKey: string | null;
+  createdAt: string;
+};
+
+/** SMS feature status + recent log, as returned by GET /api/sms. */
+export type SmsOverview = {
+  config: {
+    enabled: boolean;
+    dryRun: boolean;
+    receiptEnabled: boolean;
+    overdueEnabled: boolean;
+    sender: string;
+    configured: boolean;
+  };
+  messages: SmsMessage[];
+};
+
+/** Result of POST /api/sms/test. */
+export type SmsTestResult = {
+  ok: boolean;
+  dryRun: boolean;
+  to: string;
+  message: string;
+  providerMessageId?: string | null;
+  error?: string;
+};
+
 export type StudentRow = {
   id: string;
   fullName: string;

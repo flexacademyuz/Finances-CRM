@@ -19,6 +19,7 @@ import { UsersPage } from "./pages/ceo/Users";
 import { BranchesPage } from "./pages/ceo/Branches";
 import { FinancesPage } from "./pages/ceo/Finances";
 import { AnalyticsPage } from "./pages/ceo/Analytics";
+import { SmsPage } from "./pages/ceo/Sms";
 // Shared / accountant
 import { PaymentsLog } from "./pages/PaymentsLog";
 import { LeadsPage } from "./pages/Leads";
@@ -149,6 +150,7 @@ function Routes({ me }: { me: Me }) {
         {a.analytics && <Route path="/analytics" component={AnalyticsPage} />}
         {a.users && <Route path="/users" component={UsersPage} />}
         {role === "ceo" && <Route path="/branches" component={BranchesPage} />}
+        {role === "ceo" && <Route path="/sms" component={SmsPage} />}
         {a.salary && <Route path="/salary" component={MySalary} />}
         <Route path="/account" component={AccountPage} />
         <Route><Redirect to="/" /></Route>
