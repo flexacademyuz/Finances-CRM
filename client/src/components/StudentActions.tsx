@@ -140,6 +140,8 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
   const qc = useQueryClient();
   const [fullName, setFullName] = useState(student.fullName);
   const [phone, setPhone] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
+  const [smsOptOut, setSmsOptOut] = useState(false);
   const [monthlyFee, setMonthlyFee] = useState("");
   const [enrolledAt, setEnrolledAt] = useState("");
 
@@ -151,6 +153,8 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
   useEffect(() => {
     if (!detail.data) return;
     setPhone(detail.data.phone ?? "");
+    setParentPhone(detail.data.parentPhone ?? "");
+    setSmsOptOut(detail.data.smsOptOut ?? false);
     setMonthlyFee(detail.data.monthlyFee ?? "");
     setEnrolledAt(detail.data.enrolledAt?.slice(0, 10) ?? "");
   }, [detail.data]);
@@ -162,6 +166,8 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
         body: {
           fullName,
           phone: phone || null,
+          parentPhone: parentPhone || null,
+          smsOptOut,
           monthlyFee: monthlyFee === "" ? null : Number(monthlyFee),
           enrolledAt: enrolledAt || undefined,
         },
@@ -178,6 +184,17 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
         <Field label={t("phone")}>
           <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
         </Field>
+        <Field label={t("parentPhone")}>
+          <Input
+            value={parentPhone}
+            onChange={(e) => setParentPhone(e.target.value)}
+            placeholder="+998 90 123 45 67"
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={smsOptOut} onChange={(e) => setSmsOptOut(e.target.checked)} />
+          {t("smsOptOut")}
+        </label>
         <Field label={t("fee")}>
           <Input type="number" inputMode="decimal" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} placeholder={student.effectiveFee} />
           <MoneyHint value={monthlyFee} />

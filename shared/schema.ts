@@ -44,6 +44,17 @@ export const freezeStatusEnum = pgEnum("freeze_status", ["active", "lifted", "ex
 export const leadStatusEnum = pgEnum("lead_status", ["pending", "approved", "rejected"]);
 // Which part of the day the student wants to study.
 export const shiftEnum = pgEnum("shift", ["morning", "afternoon"]);
+// Outbound parent SMS: which kind of message, and what became of it. Kinds map
+// 1:1 to a moderated Eskiz template. "logged" = dry-run only (recorded, not
+// actually sent); "skipped" = not eligible (no phone / opted out / disabled).
+export const smsKindEnum = pgEnum("sms_kind", ["payment_receipt", "overdue_reminder"]);
+export const smsStatusEnum = pgEnum("sms_status", [
+  "queued",
+  "logged",
+  "sent",
+  "failed",
+  "skipped",
+]);
 
 export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
 export type FreezeStatus = (typeof freezeStatusEnum.enumValues)[number];
@@ -165,6 +176,16 @@ export const students = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
+    // The parent/guardian's phone for outbound SMS (payment receipts, overdue
+    // reminders). Kept separate from `phone` (which may be the student's own):
+    // notifications only go here. Null = no SMS contact on file.
+    parentPhone: text("parent_phone"),
+    // Parent has opted out of SMS — no message of any kind is sent to them.
+    smsOptOut: boolean("sms_opt_out").notNull().default(false),
+    // When we last sent this parent an overdue reminder, so the reminder fires at
+    // most once per overdue spell (see sms/service.notifyOverdueParents) rather
+    // than every day the student stays overdue. Null = never reminded.
+    lastOverdueSmsAt: timestamp("last_overdue_sms_at", { withTimezone: true }),
     // Branch this student belongs to (denormalized from their class for scoping;
     // kept in sync when the student moves class). See storage.moveStudentBranch.
     branchId: uuid("branch_id")
@@ -607,6 +628,50 @@ export const leads = pgTable(
   }),
 );
 
+/**
+ * Outbound parent SMS log — one row per message we decided to send (or would
+ * have sent, in dry-run/log-only mode). Serves three jobs at once:
+ *
+ *  1. Audit: exactly what text went to which number, when, and the outcome.
+ *  2. Dedup: `dedupeKey` is unique, so a receipt fires once per payment and an
+ *     overdue reminder once per student per month — a retried request, a double
+ *     click, or an overlapping cron run can never send twice.
+ *  3. Rollout safety: in log-only mode rows are written with status "logged"
+ *     but no provider call is made, so the exact traffic can be reviewed before
+ *     real messages (and real cost) are switched on.
+ */
+export const smsMessages = pgTable(
+  "sms_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // The student the message concerns (null if they were later hard-deleted).
+    studentId: uuid("student_id").references(() => students.id, { onDelete: "set null" }),
+    // Denormalized branch for scoping the log per location.
+    branchId: uuid("branch_id"),
+    kind: smsKindEnum("kind").notNull(),
+    // Recipient in E.164-ish digits (998XXXXXXXXX). Kept even if the student row
+    // is deleted, so the audit trail survives.
+    toPhone: text("to_phone").notNull(),
+    // The fully rendered message text actually submitted (or that would be).
+    body: text("body").notNull(),
+    status: smsStatusEnum("status").notNull(),
+    // Provider (Eskiz) message id on a successful send; null otherwise.
+    providerMessageId: text("provider_message_id"),
+    // Failure reason for status "failed", or the skip reason for "skipped".
+    error: text("error"),
+    // Idempotency key — "receipt:<paymentId>" or "overdue:<studentId>:<YYYY-MM>".
+    // Unique, so the same logical event is only ever recorded (and sent) once.
+    dedupeKey: text("dedupe_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byDedupe: uniqueIndex("sms_messages_dedupe_idx").on(t.dedupeKey),
+    byStudent: index("sms_messages_student_idx").on(t.studentId),
+    byBranch: index("sms_messages_branch_idx").on(t.branchId),
+    byKind: index("sms_messages_kind_idx").on(t.kind),
+  }),
+);
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const branchesRelations = relations(branches, ({ many }) => ({
@@ -649,6 +714,7 @@ export type Teacher = typeof teachers.$inferSelect;
 export type Class = typeof classes.$inferSelect;
 export type Student = typeof students.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type SmsMessage = typeof smsMessages.$inferSelect;
 export type SalaryRecord = typeof salaryRecords.$inferSelect;
 export type SalaryAdvance = typeof salaryAdvances.$inferSelect;
 export type SalaryPayout = typeof salaryPayouts.$inferSelect;
@@ -746,6 +812,7 @@ export const insertStudentSchema = createInsertSchema(students, {
 }).pick({
   fullName: true,
   phone: true,
+  parentPhone: true,
   classId: true,
   monthlyFee: true,
   enrolledAt: true,

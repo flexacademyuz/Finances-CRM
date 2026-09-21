@@ -25,6 +25,7 @@ import {
 import { monthKey, normalizeMonth, monthLabel, parseDate, toIso } from "@shared/date";
 import { refundSuggestion, paymentCoverWindow, isMonthSettled } from "@shared/billing";
 import { notifyPaymentRecorded } from "../bot/notifications";
+import { notifyPaymentReceipt } from "../sms/service";
 import { buildPaymentContext } from "../services/payment-context";
 import { recomputeStatuses } from "../services/billing";
 
@@ -171,8 +172,12 @@ router.post(
     // student stays awaiting/overdue with a balance until the month is settled.
     await recomputeStatuses();
 
-    // Fire-and-forget notification via the companion bot.
+    // Fire-and-forget notifications: staff via the companion bot, and the parent
+    // via SMS (a receipt for the amount just paid). Both best-effort — neither
+    // can fail the payment. `input.amount` is this transaction's amount, which a
+    // top-up keeps distinct from the month's running total.
     void notifyPaymentRecorded(payment.id).catch(() => undefined);
+    void notifyPaymentReceipt(payment.id, input.amount).catch(() => undefined);
 
     res.status(201).json(payment);
   }),
