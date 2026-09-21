@@ -359,6 +359,7 @@ function AddStudentModal({
   const { t } = useI18n();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [parentPhone, setParentPhone] = useState("");
   const [monthlyFee, setMonthlyFee] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [markPaid, setMarkPaid] = useState(false);
@@ -373,6 +374,7 @@ function AddStudentModal({
         body: {
           fullName,
           phone: phone || undefined,
+          parentPhone: parentPhone || undefined,
           classId,
           monthlyFee: monthlyFee ? Number(monthlyFee) : undefined,
           enrolledAt: startDate || undefined,
@@ -397,6 +399,13 @@ function AddStudentModal({
         </Field>
         <Field label={t("phone")}>
           <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </Field>
+        <Field label={t("parentPhone")}>
+          <Input
+            value={parentPhone}
+            onChange={(e) => setParentPhone(e.target.value)}
+            placeholder="+998 90 123 45 67"
+          />
         </Field>
         <Field label={t("startDate")}>
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />

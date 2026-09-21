@@ -56,6 +56,8 @@ const dict = {
   date: { en: "Date", uz: "Sana" },
   status: { en: "Status", uz: "Holat" },
   phone: { en: "Phone", uz: "Telefon" },
+  parentPhone: { en: "Parent phone (SMS)", uz: "Ota-ona telefoni (SMS)" },
+  smsOptOut: { en: "No SMS to parent", uz: "Ota-onaga SMS yubormaslik" },
   fee: { en: "Monthly fee", uz: "Oylik to'lov" },
   save: { en: "Save", uz: "Saqlash" },
   cancel: { en: "Cancel", uz: "Bekor qilish" },

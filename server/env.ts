@@ -42,6 +42,28 @@ export const env = {
 
   defaultGracePeriodDays: Number(optional("DEFAULT_GRACE_PERIOD_DAYS", "5")),
   defaultCurrency: optional("DEFAULT_CURRENCY", "UZS"),
+
+  // ─── Parent SMS (Eskiz.uz) ──────────────────────────────────────────────
+  // Master switch. Off by default: nothing is sent, and no SMS row is written,
+  // until this is "1". Flip on only after the Eskiz contract + templates exist.
+  smsEnabled: optional("SMS_ENABLED", "0") === "1",
+  // Log-only / dry run. When "1" (the default even after enabling), every
+  // message is RECORDED in sms_messages with status "logged" but the provider is
+  // never called — so real traffic can be reviewed before spending on live SMS.
+  // Set to "0" to actually deliver.
+  smsDryRun: optional("SMS_DRY_RUN", "1") === "1",
+  // Per-scenario toggles, both on by default (still gated by smsEnabled).
+  smsReceiptEnabled: optional("SMS_RECEIPT_ENABLED", "1") === "1",
+  smsOverdueEnabled: optional("SMS_OVERDUE_ENABLED", "1") === "1",
+  // Name shown to parents in the message body / as the branded sender context.
+  smsAcademyName: optional("SMS_ACADEMY_NAME", "Flex Academy"),
+
+  // Eskiz gateway credentials + endpoint. Supplied once the contract is signed.
+  eskizEmail: process.env.ESKIZ_EMAIL ?? "",
+  eskizPassword: process.env.ESKIZ_PASSWORD ?? "",
+  eskizBaseUrl: optional("ESKIZ_BASE_URL", "https://notify.eskiz.uz/api"),
+  // Approved alphanumeric sender, or the shared test sender "4546" for sandbox.
+  eskizSender: optional("ESKIZ_SENDER", "4546"),
 };
 
 if (env.devAuthBypass && env.isProd) {

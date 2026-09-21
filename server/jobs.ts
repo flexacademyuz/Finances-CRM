@@ -1,5 +1,6 @@
 import { recomputeStatuses } from "./services/billing";
 import { sendAwaitingDigest, sendTodaySummary } from "./bot/notifications";
+import { notifyOverdueParents } from "./sms/service";
 
 /**
  * Lightweight in-process scheduler. Recomputes student statuses hourly (cheap,
@@ -34,6 +35,24 @@ export function startJobs(): void {
         await sendAwaitingDigest();
       } catch (err) {
         console.error("[jobs] sendAwaitingDigest failed:", (err as Error).message);
+      }
+    }
+  }, HOUR);
+
+  // Daily overdue parent-SMS reminders at ~06:00 UTC (11:00 Tashkent), after the
+  // hourly recompute has refreshed statuses. Once per day; the service itself
+  // guarantees once-per-student-per-month and is a no-op while SMS is disabled.
+  let lastOverdueSmsDay = "";
+  setInterval(async () => {
+    const now = new Date();
+    const dayKey = now.toISOString().slice(0, 10);
+    if (now.getUTCHours() === 6 && lastOverdueSmsDay !== dayKey) {
+      lastOverdueSmsDay = dayKey;
+      try {
+        const tally = await notifyOverdueParents();
+        console.log("[jobs] notifyOverdueParents:", JSON.stringify(tally));
+      } catch (err) {
+        console.error("[jobs] notifyOverdueParents failed:", (err as Error).message);
       }
     }
   }, HOUR);

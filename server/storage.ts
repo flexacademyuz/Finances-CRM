@@ -17,6 +17,7 @@ import {
   expenses,
   leads,
   draftClasses,
+  smsMessages,
   DEFAULT_BRANCH_ID,
   type Role,
   type PaymentEdit,
@@ -511,6 +512,7 @@ export async function getStudentById(id: string) {
 export async function createStudent(input: {
   fullName: string;
   phone?: string | null;
+  parentPhone?: string | null;
   classId: string;
   branchId: string;
   monthlyFee?: number | null;
@@ -521,6 +523,7 @@ export async function createStudent(input: {
     .values({
       fullName: input.fullName,
       phone: input.phone ?? null,
+      parentPhone: input.parentPhone ?? null,
       classId: input.classId,
       branchId: input.branchId,
       monthlyFee: input.monthlyFee != null ? String(input.monthlyFee) : null,
@@ -536,6 +539,9 @@ export async function updateStudent(
   patch: Partial<{
     fullName: string;
     phone: string | null;
+    parentPhone: string | null;
+    smsOptOut: boolean;
+    lastOverdueSmsAt: Date | null;
     classId: string;
     monthlyFee: number | null;
     enrolledAt: string;
@@ -1508,6 +1514,79 @@ export async function updateSettings(patch: {
     .where(eq(settings.id, "global"))
     .returning();
   return s;
+}
+
+/* ─────────────────────────────── Parent SMS ────────────────────────── */
+
+/**
+ * Reserve an outbound SMS by inserting its log row. The unique `dedupeKey` makes
+ * this the single dedup gate: the FIRST caller for a given key gets the new row
+ * back, and any later caller (retry, double-click, overlapping cron) gets
+ * `undefined` because the insert is a no-op. Callers only send when a row is
+ * returned, so a message can never go out twice. The row starts in whatever
+ * `status` the caller decides (e.g. "skipped" when ineligible, or a pending
+ * marker that `updateSmsStatus` finalizes after the provider call).
+ */
+export async function recordSmsAttempt(row: {
+  studentId: string | null;
+  branchId: string | null;
+  kind: "payment_receipt" | "overdue_reminder";
+  toPhone: string;
+  body: string;
+  status: "queued" | "logged" | "sent" | "failed" | "skipped";
+  dedupeKey: string;
+  providerMessageId?: string | null;
+  error?: string | null;
+}) {
+  const [inserted] = await db
+    .insert(smsMessages)
+    .values(row)
+    .onConflictDoNothing({ target: smsMessages.dedupeKey })
+    .returning();
+  return inserted; // undefined when the dedupeKey already existed
+}
+
+/** Finalize an SMS log row after the provider call resolves. */
+export async function updateSmsStatus(
+  id: string,
+  patch: { status: "sent" | "failed"; providerMessageId?: string | null; error?: string | null },
+) {
+  await db.update(smsMessages).set(patch).where(eq(smsMessages.id, id));
+}
+
+/** Recent SMS log rows (newest first), optionally scoped to a branch/kind. */
+export async function listSmsMessages(
+  filter: { branchId?: string; kind?: "payment_receipt" | "overdue_reminder"; limit?: number } = {},
+) {
+  const conds = [];
+  if (filter.branchId) conds.push(eq(smsMessages.branchId, filter.branchId));
+  if (filter.kind) conds.push(eq(smsMessages.kind, filter.kind));
+  return db
+    .select()
+    .from(smsMessages)
+    .where(conds.length ? and(...conds) : undefined)
+    .orderBy(desc(smsMessages.createdAt))
+    .limit(Math.min(filter.limit ?? 100, 500));
+}
+
+/** Stamp the last-overdue-reminder time so the cadence guard fires once per spell. */
+export async function markStudentOverdueReminded(studentId: string, at: Date = new Date()) {
+  await db.update(students).set({ lastOverdueSmsAt: at }).where(eq(students.id, studentId));
+}
+
+/** Active, currently-overdue students with just the fields the SMS cron needs. */
+export async function listOverdueStudentsForSms() {
+  return db
+    .select({
+      id: students.id,
+      fullName: students.fullName,
+      parentPhone: students.parentPhone,
+      smsOptOut: students.smsOptOut,
+      branchId: students.branchId,
+      lastOverdueSmsAt: students.lastOverdueSmsAt,
+    })
+    .from(students)
+    .where(and(eq(students.active, true), eq(students.status, "overdue")));
 }
 
 /**

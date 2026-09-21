@@ -12,6 +12,7 @@ import dashboardRouter from "./dashboard";
 import pricingRouter from "./pricing";
 import expensesRouter from "./expenses";
 import analyticsRouter from "./analytics";
+import smsRouter from "./sms";
 
 const api = Router();
 
@@ -37,5 +38,6 @@ api.use(dashboardRouter);
 api.use(pricingRouter);
 api.use(expensesRouter);
 api.use(analyticsRouter);
+api.use(smsRouter);
 
 export default api;
