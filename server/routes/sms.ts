@@ -39,6 +39,7 @@ router.get(
         sender: env.eskizSender,
         configured: Boolean(env.eskizEmail && env.eskizPassword),
         // CEO-editable (via PATCH /api/settings):
+        sendingEnabled: settings?.smsSendingEnabled ?? false,
         receiptEnabled: settings?.smsReceiptEnabled ?? true,
         overdueEnabled: settings?.smsOverdueEnabled ?? true,
         overdueDays: settings?.smsOverdueDays ?? 10,

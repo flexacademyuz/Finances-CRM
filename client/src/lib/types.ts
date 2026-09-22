@@ -27,6 +27,7 @@ export type SmsOverview = {
     sender: string;
     configured: boolean;
     // CEO-editable settings:
+    sendingEnabled: boolean;
     receiptEnabled: boolean;
     overdueEnabled: boolean;
     overdueDays: number;

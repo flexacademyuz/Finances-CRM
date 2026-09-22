@@ -1504,6 +1504,7 @@ export async function updateSettings(patch: {
   gracePeriodDays?: number;
   currency?: string;
   paymentGroupChatId?: string | null;
+  smsSendingEnabled?: boolean;
   smsReceiptEnabled?: boolean;
   smsOverdueEnabled?: boolean;
   smsOverdueDays?: number;

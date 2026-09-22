@@ -435,9 +435,13 @@ export const settings = pgTable("settings", {
   // by a CEO running /here in the group (see server/bot/bot.ts). Stored as text
   // because supergroup ids are large negatives. Null = no group configured.
   paymentGroupChatId: text("payment_group_chat_id"),
-  // Parent-SMS business settings, CEO-editable in-app (the master on/off and
-  // dry-run safety switches stay in env). `smsOverdueDays` = how many days past
+  // Parent-SMS business settings, CEO-editable in-app (the deployment-level
+  // dry-run + credentials switches stay in env). `smsSendingEnabled` is the
+  // in-app master kill-switch: when off, no automatic receipt or overdue SMS is
+  // sent (the CEO test tool still works). Defaults OFF so nothing goes to parents
+  // until the CEO explicitly turns it on. `smsOverdueDays` = how many days past
   // the due date before an overdue reminder is sent (see sms/service).
+  smsSendingEnabled: boolean("sms_sending_enabled").notNull().default(false),
   smsReceiptEnabled: boolean("sms_receipt_enabled").notNull().default(true),
   smsOverdueEnabled: boolean("sms_overdue_enabled").notNull().default(true),
   smsOverdueDays: bigint("sms_overdue_days", { mode: "number" }).notNull().default(10),
@@ -920,6 +924,7 @@ export const salaryRuleSchema = z.object({
 export const settingsSchema = z.object({
   gracePeriodDays: z.coerce.number().int().min(0).max(28).optional(),
   currency: z.string().min(1).max(8).optional(),
+  smsSendingEnabled: z.boolean().optional(),
   smsReceiptEnabled: z.boolean().optional(),
   smsOverdueEnabled: z.boolean().optional(),
   // 0–120 days past due before the overdue reminder fires.

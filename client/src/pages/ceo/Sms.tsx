@@ -22,29 +22,31 @@ export function SmsPage() {
   const [result, setResult] = useState<SmsTestResult | null>(null);
 
   // Editable settings, seeded from the server once it loads.
+  const [sendingEnabled, setSendingEnabled] = useState(false);
   const [receiptEnabled, setReceiptEnabled] = useState(true);
   const [overdueEnabled, setOverdueEnabled] = useState(true);
   const [overdueDays, setOverdueDays] = useState("10");
   useEffect(() => {
     const c = overview.data?.config;
     if (!c) return;
+    setSendingEnabled(c.sendingEnabled);
     setReceiptEnabled(c.receiptEnabled);
     setOverdueEnabled(c.overdueEnabled);
     setOverdueDays(String(c.overdueDays));
   }, [overview.data?.config]);
 
   const saveSettings = useMutation({
-    mutationFn: () =>
-      api("/api/settings", {
-        method: "PATCH",
-        body: {
-          smsReceiptEnabled: receiptEnabled,
-          smsOverdueEnabled: overdueEnabled,
-          smsOverdueDays: Number(overdueDays) || 0,
-        },
-      }),
+    mutationFn: (patch: Record<string, unknown>) =>
+      api("/api/settings", { method: "PATCH", body: patch }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sms"] }),
   });
+
+  // The master switch saves immediately (one-click on/off), so it doesn't rely
+  // on the CEO also pressing "Save settings" below.
+  const toggleSending = (next: boolean) => {
+    setSendingEnabled(next);
+    saveSettings.mutate({ smsSendingEnabled: next });
+  };
 
   const test = useMutation({
     mutationFn: (live: boolean) =>
@@ -91,6 +93,40 @@ export function SmsPage() {
         </p>
       </Card>
 
+      {/* Master switch — one click to stop / resume all automatic parent SMS. */}
+      <Card className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Send SMS to parents</div>
+            <div className="text-xs text-tg-hint">
+              Master switch for automatic receipts &amp; overdue reminders. Turn OFF to stop all
+              parent messages. The test tool below still works while this is off.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={sendingEnabled}
+            disabled={saveSettings.isPending}
+            onClick={() => toggleSending(!sendingEnabled)}
+            className={`relative h-7 w-12 shrink-0 rounded-full ring-1 transition-colors ${
+              sendingEnabled
+                ? "bg-status-paid ring-status-paid/30"
+                : "bg-border ring-border"
+            } disabled:opacity-50`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${
+                sendingEnabled ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+        <div className={`text-sm font-semibold ${sendingEnabled ? "text-status-paid" : "text-status-overdue"}`}>
+          {sendingEnabled ? "ON — parents receive automatic SMS" : "OFF — no automatic SMS is sent"}
+        </div>
+      </Card>
+
       {/* Settings */}
       <Card className="space-y-3">
         <div className="text-sm font-semibold">Settings</div>
@@ -129,7 +165,17 @@ export function SmsPage() {
           <div className="text-sm text-status-overdue">{(saveSettings.error as Error).message}</div>
         )}
         {saveSettings.isSuccess && <div className="text-sm text-status-paid">Saved.</div>}
-        <Button className="w-full" disabled={saveSettings.isPending} onClick={() => saveSettings.mutate()}>
+        <Button
+          className="w-full"
+          disabled={saveSettings.isPending}
+          onClick={() =>
+            saveSettings.mutate({
+              smsReceiptEnabled: receiptEnabled,
+              smsOverdueEnabled: overdueEnabled,
+              smsOverdueDays: Number(overdueDays) || 0,
+            })
+          }
+        >
           Save settings
         </Button>
       </Card>

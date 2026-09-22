@@ -92,6 +92,7 @@ async function skip(args: {
 export async function notifyPaymentReceipt(paymentId: string, amountPaidNow: number): Promise<void> {
   if (!env.smsEnabled) return;
   const settings = await getSettings();
+  if (!settings?.smsSendingEnabled) return; // in-app master kill-switch
   if (!settings?.smsReceiptEnabled) return;
 
   const payment = await getPaymentById(paymentId);
@@ -140,6 +141,7 @@ export async function notifyOverdueParents(
   const tally = { sent: 0, logged: 0, failed: 0, skipped: 0 };
   if (!env.smsEnabled) return tally;
   const settings = await getSettings();
+  if (!settings?.smsSendingEnabled) return tally; // in-app master kill-switch
   if (!settings?.smsOverdueEnabled) return tally;
   const threshold = settings.smsOverdueDays ?? 10;
 
