@@ -203,7 +203,7 @@ export function StudentDetail() {
             <div className="text-base font-bold">{t("smsHistory")}</div>
             <Button
               variant="ghost"
-              disabled={!student.parentPhone}
+              disabled={!student.phone}
               onClick={() => setSmsOpen(true)}
             >
               <span className="inline-flex items-center gap-1">
@@ -213,9 +213,9 @@ export function StudentDetail() {
           </div>
           <Card className="space-y-2">
             <div className="text-sm text-tg-hint">
-              {student.parentPhone ? (
+              {student.phone ? (
                 <span className="inline-flex items-center gap-1">
-                  <Phone size={13} /> {student.parentPhone}
+                  <Phone size={13} /> {student.phone}
                   {student.smsOptOut && (
                     <span className="text-status-overdue"> · {t("parentOptedOut")}</span>
                   )}
@@ -251,7 +251,7 @@ export function StudentDetail() {
         <SendSmsModal
           studentId={student.id}
           studentName={student.fullName}
-          parentPhone={student.parentPhone}
+          phone={student.phone}
           optedOut={student.smsOptOut}
           onClose={() => setSmsOpen(false)}
         />
@@ -293,13 +293,13 @@ function looksLikeName(token: string): boolean {
 function SendSmsModal({
   studentId,
   studentName,
-  parentPhone,
+  phone,
   optedOut,
   onClose,
 }: {
   studentId: string;
   studentName: string;
-  parentPhone: string | null;
+  phone: string | null;
   optedOut: boolean;
   onClose: () => void;
 }) {
@@ -347,7 +347,7 @@ function SendSmsModal({
     <Modal open onClose={onClose} title={`${t("sendSms")} — ${studentName}`}>
       <div className="space-y-3">
         <div className="text-sm text-tg-hint">
-          {parentPhone}
+          {phone}
           {optedOut && <span className="text-status-overdue"> · {t("parentOptedOut")}</span>}
         </div>
 

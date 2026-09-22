@@ -97,7 +97,6 @@ router.get(
         id: student.id,
         fullName: student.fullName,
         phone: student.phone,
-        parentPhone: student.parentPhone,
         smsOptOut: student.smsOptOut,
         classId: student.classId,
         className: cls?.name ?? null,
@@ -183,7 +182,6 @@ router.post(
     const created = await createStudent({
       fullName: input.fullName,
       phone: input.phone ?? null,
-      parentPhone: input.parentPhone ?? null,
       classId: input.classId,
       branchId: cls.branchId,
       monthlyFee: input.monthlyFee ?? null,
@@ -205,9 +203,8 @@ router.patch(
       .object({
         fullName: z.string().min(1).optional(),
         phone: z.string().nullable().optional(),
-        // Parent contact for SMS, and their opt-out. Editable so staff can add a
-        // number or honor an opt-out request.
-        parentPhone: z.string().nullable().optional(),
+        // Whether to skip SMS for this student. Editable so staff can honor an
+        // opt-out request (SMS goes to the `phone` above).
         smsOptOut: z.boolean().optional(),
         classId: z.string().uuid().optional(),
         monthlyFee: z.coerce.number().nonnegative().nullable().optional(),

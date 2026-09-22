@@ -512,7 +512,6 @@ export async function getStudentById(id: string) {
 export async function createStudent(input: {
   fullName: string;
   phone?: string | null;
-  parentPhone?: string | null;
   classId: string;
   branchId: string;
   monthlyFee?: number | null;
@@ -523,7 +522,6 @@ export async function createStudent(input: {
     .values({
       fullName: input.fullName,
       phone: input.phone ?? null,
-      parentPhone: input.parentPhone ?? null,
       classId: input.classId,
       branchId: input.branchId,
       monthlyFee: input.monthlyFee != null ? String(input.monthlyFee) : null,
@@ -539,7 +537,6 @@ export async function updateStudent(
   patch: Partial<{
     fullName: string;
     phone: string | null;
-    parentPhone: string | null;
     smsOptOut: boolean;
     lastOverdueSmsAt: Date | null;
     classId: string;
@@ -1594,7 +1591,7 @@ export async function listUnpaidStudentsForSms() {
     .select({
       id: students.id,
       fullName: students.fullName,
-      parentPhone: students.parentPhone,
+      phone: students.phone,
       smsOptOut: students.smsOptOut,
       branchId: students.branchId,
       paidThroughDate: students.paidThroughDate,

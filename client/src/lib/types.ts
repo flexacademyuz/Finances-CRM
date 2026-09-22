@@ -59,7 +59,6 @@ export type StudentRow = {
   id: string;
   fullName: string;
   phone: string | null;
-  parentPhone: string | null;
   smsOptOut: boolean;
   classId: string;
   className: string;
@@ -406,7 +405,6 @@ export type StudentDetail = {
     id: string;
     fullName: string;
     phone: string | null;
-    parentPhone: string | null;
     smsOptOut: boolean;
     classId: string;
     className: string | null;
