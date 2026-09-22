@@ -18,6 +18,9 @@ export type SendResult =
   | { ok: true; providerMessageId: string | null }
   | { ok: false; error: string };
 
+/** A message template as Eskiz stores it (for the manual-send picker). */
+export type EskizTemplate = { id: number; text: string; status: string };
+
 let cachedToken: string | null = null;
 
 /** Digits-only Uzbek MSISDN (998XXXXXXXXX), or null if it can't be normalized. */
@@ -117,5 +120,42 @@ export async function sendSms(phone: string, message: string): Promise<SendResul
     return { ok: true, providerMessageId };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * List the account's message templates (GET /user/templates), for the manual-send
+ * picker. Returns them with their moderation status so the UI can show only
+ * approved ones. Best-effort: returns [] on any failure.
+ */
+export async function listTemplates(): Promise<EskizTemplate[]> {
+  if (!env.eskizEmail || !env.eskizPassword) return [];
+  try {
+    let token = await getToken();
+    if (!token) return [];
+
+    const fetchOnce = (t: string) =>
+      fetch(apiUrl("/user/templates"), { headers: { Authorization: `Bearer ${t}` } });
+
+    let res = await fetchOnce(token);
+    if (res.status === 401) {
+      cachedToken = null;
+      token = await login();
+      if (!token) return [];
+      res = await fetchOnce(token);
+    }
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as {
+      result?: { id: number; original_text?: string; template?: string; status?: string }[];
+    };
+    return (json.result ?? []).map((r) => ({
+      id: r.id,
+      text: r.original_text || r.template || "",
+      status: r.status ?? "unknown",
+    }));
+  } catch (err) {
+    console.error("[eskiz] listTemplates error:", (err as Error).message);
+    return [];
   }
 }

@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { ArrowLeft, Phone, CalendarClock, CalendarCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Phone, CalendarClock, CalendarCheck, Trash2, MessageSquare } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { can } from "@shared/permissions";
 import { money, formatDate } from "../lib/format";
-import type { StudentDetail as StudentDetailData, PaymentRow } from "../lib/types";
+import type {
+  StudentDetail as StudentDetailData,
+  PaymentRow,
+  SmsMessage,
+  SmsTemplate,
+  SmsSendResult,
+} from "../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge, MethodTag } from "../components/ui";
 import { StudentActions } from "../components/StudentActions";
 
@@ -18,10 +24,19 @@ export function StudentDetail() {
   const params = useParams();
   const id = params.id!;
   const [removeFor, setRemoveFor] = useState<PaymentRow | null>(null);
+  const [smsOpen, setSmsOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["student-detail", id],
     queryFn: () => api<StudentDetailData>(`/api/students/${id}/detail`),
+  });
+
+  // Parent SMS is a finance-staff feature.
+  const canSms = user.role === "ceo" || user.role === "accountant";
+  const smsHistory = useQuery({
+    queryKey: ["student-sms", id],
+    queryFn: () => api<SmsMessage[]>(`/api/sms/student/${id}`),
+    enabled: canSms,
   });
 
   if (isLoading || !data) return <Spinner />;
@@ -181,8 +196,234 @@ export function StudentDetail() {
         )}
       </div>
 
+      {/* Parent SMS (finance staff only) */}
+      {canSms && (
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-base font-bold">{t("smsHistory")}</div>
+            <Button
+              variant="ghost"
+              disabled={!student.parentPhone}
+              onClick={() => setSmsOpen(true)}
+            >
+              <span className="inline-flex items-center gap-1">
+                <MessageSquare size={15} /> {t("sendSms")}
+              </span>
+            </Button>
+          </div>
+          <Card className="space-y-2">
+            <div className="text-sm text-tg-hint">
+              {student.parentPhone ? (
+                <span className="inline-flex items-center gap-1">
+                  <Phone size={13} /> {student.parentPhone}
+                  {student.smsOptOut && (
+                    <span className="text-status-overdue"> · {t("parentOptedOut")}</span>
+                  )}
+                </span>
+              ) : (
+                t("noParentPhone")
+              )}
+            </div>
+            {(smsHistory.data ?? []).length === 0 ? (
+              <div className="text-sm text-tg-hint">{t("noSmsYet")}</div>
+            ) : (
+              <div className="space-y-2">
+                {smsHistory.data!.map((m) => (
+                  <div key={m.id} className="rounded-btn bg-tg-bg px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-tg-hint">{formatDate(m.createdAt, locale)}</span>
+                      <span className={`text-xs font-semibold ${smsStatusColor(m.status)}`}>
+                        {m.status}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-sm">{m.body}</div>
+                    {m.error && <div className="mt-0.5 text-xs text-status-overdue">{m.error}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       {removeFor && <RemovePaymentModal payment={removeFor} onClose={() => setRemoveFor(null)} />}
+      {smsOpen && (
+        <SendSmsModal
+          studentId={student.id}
+          studentName={student.fullName}
+          parentPhone={student.parentPhone}
+          optedOut={student.smsOptOut}
+          onClose={() => setSmsOpen(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function smsStatusColor(status: string): string {
+  switch (status) {
+    case "sent":
+      return "text-status-paid";
+    case "failed":
+      return "text-status-overdue";
+    case "skipped":
+      return "text-tg-hint";
+    default:
+      return "text-status-awaiting";
+  }
+}
+
+/** Placeholders in a template look like [ism] or {name} — pull the unique ones. */
+function findPlaceholders(text: string): string[] {
+  const found = text.match(/\[[^\]]+\]|\{[^}]+\}/g) ?? [];
+  return Array.from(new Set(found));
+}
+
+/** Guess which placeholder is the student's name, to pre-fill it. */
+function looksLikeName(token: string): boolean {
+  return /ism|name|farzand|o'quvchi|student/i.test(token);
+}
+
+/**
+ * Send a manual SMS to a student's parent. Because Eskiz only delivers approved
+ * wording, the operator picks one of the account's templates; any [placeholders]
+ * in it become inputs (the name one is pre-filled), and the assembled text is
+ * sent as-is.
+ */
+function SendSmsModal({
+  studentId,
+  studentName,
+  parentPhone,
+  optedOut,
+  onClose,
+}: {
+  studentId: string;
+  studentName: string;
+  parentPhone: string | null;
+  optedOut: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [fills, setFills] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<SmsSendResult | null>(null);
+
+  const templates = useQuery({
+    queryKey: ["sms-templates"],
+    queryFn: () => api<SmsTemplate[]>("/api/sms/templates"),
+  });
+
+  const selected = templates.data?.find((tpl) => tpl.id === selectedId) ?? null;
+  const placeholders = selected ? findPlaceholders(selected.text) : [];
+  const finalText = selected
+    ? placeholders.reduce((s, p) => s.split(p).join(fills[p] ?? p), selected.text)
+    : "";
+  const ready = Boolean(selected) && placeholders.every((p) => (fills[p] ?? "").trim().length > 0);
+
+  const choose = (tpl: SmsTemplate) => {
+    setSelectedId(tpl.id);
+    setResult(null);
+    // Pre-fill a name-like placeholder with the student's first name.
+    const first = studentName.trim().split(/\s+/)[0] ?? studentName;
+    const seed: Record<string, string> = {};
+    for (const p of findPlaceholders(tpl.text)) if (looksLikeName(p)) seed[p] = first;
+    setFills(seed);
+  };
+
+  const send = useMutation({
+    mutationFn: () =>
+      api<SmsSendResult>(`/api/sms/student/${studentId}`, {
+        method: "POST",
+        body: { text: finalText },
+      }),
+    onSuccess: (r) => {
+      setResult(r);
+      qc.invalidateQueries({ queryKey: ["student-sms", studentId] });
+    },
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${t("sendSms")} — ${studentName}`}>
+      <div className="space-y-3">
+        <div className="text-sm text-tg-hint">
+          {parentPhone}
+          {optedOut && <span className="text-status-overdue"> · {t("parentOptedOut")}</span>}
+        </div>
+
+        {templates.isLoading && <div className="text-sm text-tg-hint">Loading templates…</div>}
+        {templates.data && templates.data.length === 0 && (
+          <div className="rounded-btn bg-status-awaiting/10 px-3 py-2 text-sm">
+            No approved templates found. Add and get a message approved in Eskiz first.
+          </div>
+        )}
+
+        {/* Template picker */}
+        <div className="space-y-2">
+          {(templates.data ?? []).map((tpl) => {
+            const approved = tpl.status === "service" || tpl.status === "reklama";
+            const active = tpl.id === selectedId;
+            return (
+              <button
+                key={tpl.id}
+                onClick={() => choose(tpl)}
+                className={`w-full rounded-btn border px-3 py-2 text-left text-sm transition ${
+                  active ? "border-primary bg-primary-soft" : "border-border hover:border-primary"
+                }`}
+              >
+                <div>{tpl.text}</div>
+                <div className={`mt-0.5 text-xs ${approved ? "text-status-paid" : "text-status-awaiting"}`}>
+                  {approved ? "approved" : `status: ${tpl.status}`}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Fill placeholders */}
+        {placeholders.map((p) => (
+          <Field key={p} label={p}>
+            <Input
+              value={fills[p] ?? ""}
+              onChange={(e) => setFills((f) => ({ ...f, [p]: e.target.value }))}
+            />
+          </Field>
+        ))}
+
+        {selected && (
+          <div className="rounded-btn bg-tg-bg px-3 py-2 text-sm">
+            <div className="mb-1 text-xs text-tg-hint">Preview</div>
+            {finalText}
+          </div>
+        )}
+
+        {send.isError && (
+          <div className="text-sm text-status-overdue">{(send.error as Error).message}</div>
+        )}
+        {result && (
+          <div
+            className={`rounded-btn px-3 py-2 text-sm ${
+              result.ok ? "bg-status-paid/10 text-status-paid" : "bg-status-overdue/10 text-status-overdue"
+            }`}
+          >
+            {result.status === "sent"
+              ? `✅ Sent to ${result.to}`
+              : result.status === "logged"
+                ? `Logged (dry-run) for ${result.to} — not actually sent`
+                : `❌ Failed: ${result.error ?? "error"}`}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          <Button className="flex-1" disabled={!ready || send.isPending} onClick={() => send.mutate()}>
+            {t("sendSms")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
