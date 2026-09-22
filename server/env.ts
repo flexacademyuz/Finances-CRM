@@ -52,9 +52,8 @@ export const env = {
   // never called — so real traffic can be reviewed before spending on live SMS.
   // Set to "0" to actually deliver.
   smsDryRun: optional("SMS_DRY_RUN", "1") === "1",
-  // Per-scenario toggles, both on by default (still gated by smsEnabled).
-  smsReceiptEnabled: optional("SMS_RECEIPT_ENABLED", "1") === "1",
-  smsOverdueEnabled: optional("SMS_OVERDUE_ENABLED", "1") === "1",
+  // Note: the per-scenario toggles (receipt / overdue on-off) and the overdue-day
+  // threshold are now CEO-editable in-app (settings table), not env vars.
   // Name shown to parents in the message body / as the branded sender context.
   smsAcademyName: optional("SMS_ACADEMY_NAME", "Flex Academy"),
 

@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { requireRole, branchFilter } from "../auth/middleware";
-import { listSmsMessages } from "../storage";
-import { notifyOverdueParents } from "../sms/service";
-import { sendSms, normalizeUzPhone } from "../sms/eskiz";
+import { requireRole, branchFilter, assertBranchAccess } from "../auth/middleware";
+import { listSmsMessages, getSettings, getStudentById } from "../storage";
+import { notifyOverdueParents, sendManualToStudent } from "../sms/service";
+import { sendSms, normalizeUzPhone, listTemplates } from "../sms/eskiz";
 import { env } from "../env";
 
 const router = Router();
@@ -15,27 +15,78 @@ router.use("/sms", requireRole("ceo", "accountant"));
 /**
  * GET /api/sms — the outbound parent-SMS log (newest first), plus the current
  * config so the operator can see at a glance whether SMS is live, dry-run, or
- * off. Scoped to the caller's branch when they're pinned to one. This is the
- * window used to review exactly what would go out during the log-only rollout.
+ * off. Deployment switches (enabled/dryRun/credentials/sender) come from env;
+ * the scenario toggles + overdue-day threshold are the CEO-editable settings.
+ * Scoped to the caller's branch when they're pinned to one.
  */
 router.get(
   "/sms",
   asyncHandler(async (req, res) => {
-    const kind = req.query.kind === "payment_receipt" || req.query.kind === "overdue_reminder"
-      ? req.query.kind
-      : undefined;
-    const messages = await listSmsMessages({ branchId: branchFilter(req), kind, limit: 200 });
+    const kind =
+      req.query.kind === "payment_receipt" ||
+      req.query.kind === "overdue_reminder" ||
+      req.query.kind === "manual"
+        ? req.query.kind
+        : undefined;
+    const [messages, settings] = await Promise.all([
+      listSmsMessages({ branchId: branchFilter(req), kind, limit: 200 }),
+      getSettings(),
+    ]);
     res.json({
       config: {
         enabled: env.smsEnabled,
         dryRun: env.smsDryRun,
-        receiptEnabled: env.smsReceiptEnabled,
-        overdueEnabled: env.smsOverdueEnabled,
         sender: env.eskizSender,
         configured: Boolean(env.eskizEmail && env.eskizPassword),
+        // CEO-editable (via PATCH /api/settings):
+        receiptEnabled: settings?.smsReceiptEnabled ?? true,
+        overdueEnabled: settings?.smsOverdueEnabled ?? true,
+        overdueDays: settings?.smsOverdueDays ?? 10,
       },
       messages,
     });
+  }),
+);
+
+/**
+ * GET /api/sms/templates — the account's Eskiz message templates, so the manual
+ * "send SMS" picker only offers wording Eskiz will actually deliver. Includes a
+ * `status` per template (approved ones are the safe choices).
+ */
+router.get(
+  "/sms/templates",
+  asyncHandler(async (_req, res) => {
+    res.json(await listTemplates());
+  }),
+);
+
+/**
+ * GET /api/sms/student/:id — the SMS history for one student, for their card.
+ */
+router.get(
+  "/sms/student/:id",
+  asyncHandler(async (req, res) => {
+    const student = await getStudentById(req.params.id);
+    if (!student) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, student.branchId);
+    res.json(await listSmsMessages({ studentId: req.params.id, limit: 100 }));
+  }),
+);
+
+/**
+ * POST /api/sms/student/:id — send a one-off manual SMS to a student's parent.
+ * The text should be an Eskiz-approved template (the client drives this from the
+ * picker); unapproved wording will be rejected by Eskiz and logged as failed.
+ */
+router.post(
+  "/sms/student/:id",
+  asyncHandler(async (req, res) => {
+    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(req.body);
+    const student = await getStudentById(req.params.id);
+    if (!student) return res.status(404).json({ error: "not_found" });
+    assertBranchAccess(req, student.branchId);
+    const result = await sendManualToStudent(req.params.id, text);
+    res.json(result);
   }),
 );
 

@@ -9,7 +9,7 @@ export type SmsMessage = {
   id: string;
   studentId: string | null;
   branchId: string | null;
-  kind: "payment_receipt" | "overdue_reminder";
+  kind: "payment_receipt" | "overdue_reminder" | "manual";
   toPhone: string;
   body: string;
   status: "queued" | "logged" | "sent" | "failed" | "skipped";
@@ -24,13 +24,18 @@ export type SmsOverview = {
   config: {
     enabled: boolean;
     dryRun: boolean;
-    receiptEnabled: boolean;
-    overdueEnabled: boolean;
     sender: string;
     configured: boolean;
+    // CEO-editable settings:
+    receiptEnabled: boolean;
+    overdueEnabled: boolean;
+    overdueDays: number;
   };
   messages: SmsMessage[];
 };
+
+/** An Eskiz message template (GET /api/sms/templates), for the manual-send picker. */
+export type SmsTemplate = { id: number; text: string; status: string };
 
 /** Result of POST /api/sms/test. */
 export type SmsTestResult = {
@@ -39,6 +44,14 @@ export type SmsTestResult = {
   to: string;
   message: string;
   providerMessageId?: string | null;
+  error?: string;
+};
+
+/** Result of POST /api/sms/student/:id (manual send). */
+export type SmsSendResult = {
+  ok: boolean;
+  status: "logged" | "sent" | "failed";
+  to: string;
   error?: string;
 };
 

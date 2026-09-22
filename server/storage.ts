@@ -1507,6 +1507,9 @@ export async function updateSettings(patch: {
   gracePeriodDays?: number;
   currency?: string;
   paymentGroupChatId?: string | null;
+  smsReceiptEnabled?: boolean;
+  smsOverdueEnabled?: boolean;
+  smsOverdueDays?: number;
 }) {
   const [s] = await db
     .update(settings)
@@ -1530,7 +1533,7 @@ export async function updateSettings(patch: {
 export async function recordSmsAttempt(row: {
   studentId: string | null;
   branchId: string | null;
-  kind: "payment_receipt" | "overdue_reminder";
+  kind: "payment_receipt" | "overdue_reminder" | "manual";
   toPhone: string;
   body: string;
   status: "queued" | "logged" | "sent" | "failed" | "skipped";
@@ -1554,13 +1557,19 @@ export async function updateSmsStatus(
   await db.update(smsMessages).set(patch).where(eq(smsMessages.id, id));
 }
 
-/** Recent SMS log rows (newest first), optionally scoped to a branch/kind. */
+/** Recent SMS log rows (newest first), optionally scoped to a branch/kind/student. */
 export async function listSmsMessages(
-  filter: { branchId?: string; kind?: "payment_receipt" | "overdue_reminder"; limit?: number } = {},
+  filter: {
+    branchId?: string;
+    kind?: "payment_receipt" | "overdue_reminder" | "manual";
+    studentId?: string;
+    limit?: number;
+  } = {},
 ) {
   const conds = [];
   if (filter.branchId) conds.push(eq(smsMessages.branchId, filter.branchId));
   if (filter.kind) conds.push(eq(smsMessages.kind, filter.kind));
+  if (filter.studentId) conds.push(eq(smsMessages.studentId, filter.studentId));
   return db
     .select()
     .from(smsMessages)
@@ -1574,8 +1583,13 @@ export async function markStudentOverdueReminded(studentId: string, at: Date = n
   await db.update(students).set({ lastOverdueSmsAt: at }).where(eq(students.id, studentId));
 }
 
-/** Active, currently-overdue students with just the fields the SMS cron needs. */
-export async function listOverdueStudentsForSms() {
+/**
+ * Active, still-unpaid students with the fields the overdue-SMS cron needs. The
+ * service computes "days overdue" from `paidThroughDate` (their next-due date)
+ * and applies the configurable threshold, so this returns awaiting + overdue
+ * students (paid / frozen / not-due are excluded).
+ */
+export async function listUnpaidStudentsForSms() {
   return db
     .select({
       id: students.id,
@@ -1583,10 +1597,17 @@ export async function listOverdueStudentsForSms() {
       parentPhone: students.parentPhone,
       smsOptOut: students.smsOptOut,
       branchId: students.branchId,
+      paidThroughDate: students.paidThroughDate,
+      status: students.status,
       lastOverdueSmsAt: students.lastOverdueSmsAt,
     })
     .from(students)
-    .where(and(eq(students.active, true), eq(students.status, "overdue")));
+    .where(
+      and(
+        eq(students.active, true),
+        sql`${students.status} in ('awaiting_payment', 'overdue')`,
+      ),
+    );
 }
 
 /**

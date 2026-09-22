@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { Button, Card, Field, Input } from "../../components/ui";
@@ -20,6 +20,31 @@ export function SmsPage() {
   const [phone, setPhone] = useState("");
   const [text, setText] = useState("");
   const [result, setResult] = useState<SmsTestResult | null>(null);
+
+  // Editable settings, seeded from the server once it loads.
+  const [receiptEnabled, setReceiptEnabled] = useState(true);
+  const [overdueEnabled, setOverdueEnabled] = useState(true);
+  const [overdueDays, setOverdueDays] = useState("10");
+  useEffect(() => {
+    const c = overview.data?.config;
+    if (!c) return;
+    setReceiptEnabled(c.receiptEnabled);
+    setOverdueEnabled(c.overdueEnabled);
+    setOverdueDays(String(c.overdueDays));
+  }, [overview.data?.config]);
+
+  const saveSettings = useMutation({
+    mutationFn: () =>
+      api("/api/settings", {
+        method: "PATCH",
+        body: {
+          smsReceiptEnabled: receiptEnabled,
+          smsOverdueEnabled: overdueEnabled,
+          smsOverdueDays: Number(overdueDays) || 0,
+        },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sms"] }),
+  });
 
   const test = useMutation({
     mutationFn: (live: boolean) =>
@@ -64,6 +89,49 @@ export function SmsPage() {
           These are controlled by the Railway environment variables (SMS_ENABLED, SMS_DRY_RUN,
           ESKIZ_EMAIL, ESKIZ_PASSWORD, ESKIZ_SENDER). Change them there, then redeploy.
         </p>
+      </Card>
+
+      {/* Settings */}
+      <Card className="space-y-3">
+        <div className="text-sm font-semibold">Settings</div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={receiptEnabled}
+            onChange={(e) => setReceiptEnabled(e.target.checked)}
+          />
+          Send a receipt SMS automatically when a payment is recorded
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={overdueEnabled}
+            onChange={(e) => setOverdueEnabled(e.target.checked)}
+          />
+          Send an overdue reminder SMS
+        </label>
+        <Field label="Send the overdue reminder when a payment is this many days overdue">
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={120}
+            value={overdueDays}
+            onChange={(e) => setOverdueDays(e.target.value)}
+            disabled={!overdueEnabled}
+          />
+        </Field>
+        <p className="text-xs text-tg-hint">
+          Each overdue student is reminded once per month, only after they are this many days past
+          their due date.
+        </p>
+        {saveSettings.isError && (
+          <div className="text-sm text-status-overdue">{(saveSettings.error as Error).message}</div>
+        )}
+        {saveSettings.isSuccess && <div className="text-sm text-status-paid">Saved.</div>}
+        <Button className="w-full" disabled={saveSettings.isPending} onClick={() => saveSettings.mutate()}>
+          Save settings
+        </Button>
       </Card>
 
       {/* Test send */}

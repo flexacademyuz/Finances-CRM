@@ -4,14 +4,15 @@ import { renderReceipt, renderOverdue } from "./templates";
 import {
   getPaymentById,
   getStudentById,
+  getSettings,
   recordSmsAttempt,
   updateSmsStatus,
   markStudentOverdueReminded,
-  listOverdueStudentsForSms,
+  listUnpaidStudentsForSms,
 } from "../storage";
 import { monthKey } from "@shared/date";
 
-type Kind = "payment_receipt" | "overdue_reminder";
+type Kind = "payment_receipt" | "overdue_reminder" | "manual";
 
 /**
  * Reserve a message (the unique dedupeKey is the single anti-double-send gate),
@@ -86,10 +87,12 @@ async function skip(args: {
  *
  * Dedupe is per payment row + running total, so each distinct record action
  * sends once while a retried identical state can't double-send. No-op unless the
- * receipt scenario is switched on.
+ * master switch is on AND the receipt scenario is enabled in settings.
  */
 export async function notifyPaymentReceipt(paymentId: string, amountPaidNow: number): Promise<void> {
-  if (!env.smsEnabled || !env.smsReceiptEnabled) return;
+  if (!env.smsEnabled) return;
+  const settings = await getSettings();
+  if (!settings?.smsReceiptEnabled) return;
 
   const payment = await getPaymentById(paymentId);
   if (!payment || payment.voided) return;
@@ -112,11 +115,22 @@ export async function notifyPaymentReceipt(paymentId: string, amountPaidNow: num
   await deliver({ ...base, toPhone: phone });
 }
 
+/** Whole days a student is past their due date (paidThroughDate), or null. */
+function daysOverdue(paidThroughDate: string | null, now: Date): number | null {
+  if (!paidThroughDate) return null;
+  const today = new Date(now);
+  today.setUTCHours(0, 0, 0, 0);
+  const due = new Date(paidThroughDate + "T00:00:00Z");
+  if (Number.isNaN(due.getTime())) return null;
+  return Math.floor((today.getTime() - due.getTime()) / 86_400_000);
+}
+
 /**
- * SMS overdue-payment reminders to parents, at most once per student per calendar
- * month (the dedupeKey guarantees it even if the cron overlaps). Safe to run
- * daily: students who already got this month's reminder, opted out, or have no
- * phone are skipped cheaply. No-op unless the overdue scenario is switched on.
+ * SMS overdue-payment reminders to parents. A student is reminded once they are
+ * at least `smsOverdueDays` (settings) days past their due date, and at most once
+ * per calendar month (the dedupeKey guarantees it even if the cron overlaps).
+ * Safe to run daily. No-op unless the master switch is on AND the overdue
+ * scenario is enabled in settings.
  *
  * Returns a small tally for logging/observability.
  */
@@ -124,16 +138,21 @@ export async function notifyOverdueParents(
   now: Date = new Date(),
 ): Promise<{ sent: number; logged: number; failed: number; skipped: number }> {
   const tally = { sent: 0, logged: 0, failed: 0, skipped: 0 };
-  if (!env.smsEnabled || !env.smsOverdueEnabled) return tally;
+  if (!env.smsEnabled) return tally;
+  const settings = await getSettings();
+  if (!settings?.smsOverdueEnabled) return tally;
+  const threshold = settings.smsOverdueDays ?? 10;
 
   const month = monthKey(now);
-  const students = await listOverdueStudentsForSms();
+  const students = await listUnpaidStudentsForSms();
 
   for (const s of students) {
     // Ineligible students are skipped silently (no row): re-checking them each
-    // day is cheap, and we don't want a "skipped" row per opted-out student per
-    // run. The dedupeKey row is only created once we actually attempt a send.
+    // day is cheap, and we don't want a "skipped" row per student per run. A
+    // dedupeKey row is only created once we actually attempt a send.
     if (s.smsOptOut) continue;
+    const overdueBy = daysOverdue(s.paidThroughDate, now);
+    if (overdueBy == null || overdueBy < threshold) continue;
     const phone = normalizeUzPhone(s.parentPhone);
     if (!phone) continue;
 
@@ -151,11 +170,40 @@ export async function notifyOverdueParents(
       tally.skipped++; // already reminded this month
     } else {
       tally[outcome]++;
-      // Stamp the spell so the UI can show "reminded on …"; the dedupeKey is the
-      // hard guard, this is just a convenience timestamp.
       if (outcome !== "failed") await markStudentOverdueReminded(s.id, now);
     }
   }
 
   return tally;
+}
+
+/**
+ * Send a one-off manual message to a student's parent (staff-initiated from the
+ * student card). The text must be an Eskiz-approved template or Eskiz will
+ * reject it — the UI drives this from the approved-template picker. Respects
+ * dry-run; each call is its own send (unique dedupeKey). Returns the outcome.
+ */
+export async function sendManualToStudent(
+  studentId: string,
+  text: string,
+): Promise<{ ok: boolean; status: "logged" | "sent" | "failed"; to: string; error?: string }> {
+  const student = await getStudentById(studentId);
+  if (!student) return { ok: false, status: "failed", to: "", error: "student_not_found" };
+  const phone = normalizeUzPhone(student.parentPhone);
+  if (!phone) return { ok: false, status: "failed", to: "", error: "no_parent_phone" };
+
+  const body = text.trim().slice(0, 500);
+  if (!body) return { ok: false, status: "failed", to: phone, error: "empty_message" };
+
+  const outcome = await deliver({
+    studentId: student.id,
+    branchId: student.branchId,
+    kind: "manual",
+    toPhone: phone,
+    body,
+    dedupeKey: `manual:${student.id}:${Date.now()}`,
+  });
+  // `null` (dedupe collision) is effectively impossible with a timestamp key.
+  const status = outcome ?? "failed";
+  return { ok: status === "sent" || status === "logged", status, to: phone };
 }

@@ -162,6 +162,13 @@
       "when": 1795000003000,
       "tag": "0022_nervous_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795000004000,
+      "tag": "0023_nostalgic_cable",
+      "breakpoints": true
     }
   ]
 }
