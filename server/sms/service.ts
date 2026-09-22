@@ -108,9 +108,9 @@ export async function notifyPaymentReceipt(paymentId: string, amountPaidNow: num
   });
   const base = { studentId: student.id, branchId: payment.branchId, kind: "payment_receipt" as const, body, dedupeKey };
 
-  const phone = normalizeUzPhone(student.parentPhone);
+  const phone = normalizeUzPhone(student.phone);
   if (student.smsOptOut) return void skip({ ...base, toPhone: phone ?? "", reason: "opted_out" });
-  if (!phone) return void skip({ ...base, toPhone: "", reason: "no_parent_phone" });
+  if (!phone) return void skip({ ...base, toPhone: "", reason: "no_phone" });
 
   await deliver({ ...base, toPhone: phone });
 }
@@ -153,7 +153,7 @@ export async function notifyOverdueParents(
     if (s.smsOptOut) continue;
     const overdueBy = daysOverdue(s.paidThroughDate, now);
     if (overdueBy == null || overdueBy < threshold) continue;
-    const phone = normalizeUzPhone(s.parentPhone);
+    const phone = normalizeUzPhone(s.phone);
     if (!phone) continue;
 
     const body = renderOverdue({ studentName: s.fullName, academyName: env.smsAcademyName });
@@ -189,8 +189,8 @@ export async function sendManualToStudent(
 ): Promise<{ ok: boolean; status: "logged" | "sent" | "failed"; to: string; error?: string }> {
   const student = await getStudentById(studentId);
   if (!student) return { ok: false, status: "failed", to: "", error: "student_not_found" };
-  const phone = normalizeUzPhone(student.parentPhone);
-  if (!phone) return { ok: false, status: "failed", to: "", error: "no_parent_phone" };
+  const phone = normalizeUzPhone(student.phone);
+  if (!phone) return { ok: false, status: "failed", to: "", error: "no_phone" };
 
   const body = text.trim().slice(0, 500);
   if (!body) return { ok: false, status: "failed", to: phone, error: "empty_message" };

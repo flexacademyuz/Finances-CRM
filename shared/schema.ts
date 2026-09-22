@@ -176,9 +176,8 @@ export const students = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
-    // The parent/guardian's phone for outbound SMS (payment receipts, overdue
-    // reminders). Kept separate from `phone` (which may be the student's own):
-    // notifications only go here. Null = no SMS contact on file.
+    // Deprecated (kept for backwards compatibility, no longer used or shown).
+    // Parent SMS now goes to `phone` — schools store the parent's number there.
     parentPhone: text("parent_phone"),
     // Parent has opted out of SMS — no message of any kind is sent to them.
     smsOptOut: boolean("sms_opt_out").notNull().default(false),
@@ -818,7 +817,6 @@ export const insertStudentSchema = createInsertSchema(students, {
 }).pick({
   fullName: true,
   phone: true,
-  parentPhone: true,
   classId: true,
   monthlyFee: true,
   enrolledAt: true,
