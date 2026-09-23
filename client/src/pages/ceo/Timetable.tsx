@@ -8,6 +8,7 @@ import type { ScheduleSlot } from "@shared/schema";
 import { buildEntries, findClashes, layoutDayEntries } from "@shared/timetable";
 import { Button, Card, Field, Modal, Select, Spinner } from "../../components/ui";
 import { ScheduleSlotsEditor, scheduleSlotsInvalid } from "../../components/ScheduleSlotsEditor";
+import { BranchSwitcher } from "../../components/BranchSwitcher";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]; // 0=Mon … 5=Sat
 const HOUR_PX = 58;
@@ -53,6 +54,7 @@ export function TimetablePage() {
       name: c.name,
       subject: c.subject,
       teacherId: c.teacherId,
+      branchId: c.branchId,
       room: c.room,
       scheduleSlots: c.scheduleSlots,
     })));
@@ -90,12 +92,15 @@ export function TimetablePage() {
         <div>
           <h1 className="text-2xl font-extrabold">{t("timetable")}</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Weekly sessions for every group. Teacher / room clashes are flagged.
+            Weekly sessions for a branch's groups. Teacher / room clashes are flagged.
           </p>
         </div>
-        <Button onClick={() => setAdding(true)}>
-          <Plus size={18} /> Add session
-        </Button>
+        <div className="flex items-center gap-2">
+          <BranchSwitcher className="rounded-btn bg-bg px-3 py-2 text-sm font-semibold ring-1 ring-border" />
+          <Button onClick={() => setAdding(true)}>
+            <Plus size={18} /> Add session
+          </Button>
+        </div>
       </div>
 
       {/* Tabs + filters */}

@@ -36,14 +36,14 @@ describe("intervalsOverlap", () => {
 
 describe("buildEntries + findClashes", () => {
   const classes: TimetableClass[] = [
-    { id: "a", name: "A", subject: "Eng", teacherId: "t1", room: "101", scheduleSlots: [{ days: [0], start: "15:00", end: "16:00" }] },
-    { id: "b", name: "B", subject: "Math", teacherId: "t1", room: "102", scheduleSlots: [{ days: [0], start: "15:30", end: "16:30" }] },
-    { id: "c", name: "C", subject: "Art", teacherId: "t2", room: "101", scheduleSlots: [{ days: [1], start: "15:00", end: "16:00" }] },
+    { id: "a", name: "A", subject: "Eng", teacherId: "t1", branchId: "br1", room: "101", scheduleSlots: [{ days: [0], start: "15:00", end: "16:00" }] },
+    { id: "b", name: "B", subject: "Math", teacherId: "t1", branchId: "br1", room: "102", scheduleSlots: [{ days: [0], start: "15:30", end: "16:30" }] },
+    { id: "c", name: "C", subject: "Art", teacherId: "t2", branchId: "br1", room: "101", scheduleSlots: [{ days: [1], start: "15:00", end: "16:00" }] },
   ];
 
   it("explodes each day of each slot into an entry", () => {
     const many = buildEntries([
-      { id: "m", name: "M", subject: null, teacherId: "t", room: null, scheduleSlots: [{ days: [0, 2, 4], start: "09:00", end: "10:00" }] },
+      { id: "m", name: "M", subject: null, teacherId: "t", branchId: "br1", room: null, scheduleSlots: [{ days: [0, 2, 4], start: "09:00", end: "10:00" }] },
     ]);
     expect(many.length).toBe(3);
   });
@@ -55,18 +55,26 @@ describe("buildEntries + findClashes", () => {
     expect(clash.has(2)).toBe(false); // C (different day)
   });
 
-  it("flags a same-room overlap on the same day", () => {
+  it("flags a same-room overlap on the same day (same branch)", () => {
     const rows: TimetableClass[] = [
-      { id: "x", name: "X", subject: "", teacherId: "t1", room: "101", scheduleSlots: [{ days: [2], start: "09:00", end: "10:00" }] },
-      { id: "y", name: "Y", subject: "", teacherId: "t2", room: "101", scheduleSlots: [{ days: [2], start: "09:30", end: "10:30" }] },
+      { id: "x", name: "X", subject: "", teacherId: "t1", branchId: "br1", room: "101", scheduleSlots: [{ days: [2], start: "09:00", end: "10:00" }] },
+      { id: "y", name: "Y", subject: "", teacherId: "t2", branchId: "br1", room: "101", scheduleSlots: [{ days: [2], start: "09:30", end: "10:30" }] },
     ];
     expect(findClashes(buildEntries(rows)).size).toBe(2);
   });
 
+  it("same room name in DIFFERENT branches is not a clash", () => {
+    const rows: TimetableClass[] = [
+      { id: "x", name: "X", subject: "", teacherId: "t1", branchId: "br1", room: "5", scheduleSlots: [{ days: [2], start: "09:00", end: "10:00" }] },
+      { id: "y", name: "Y", subject: "", teacherId: "t2", branchId: "br2", room: "5", scheduleSlots: [{ days: [2], start: "09:30", end: "10:30" }] },
+    ];
+    expect(findClashes(buildEntries(rows)).size).toBe(0);
+  });
+
   it("no clash when both teacher and room differ", () => {
     const rows: TimetableClass[] = [
-      { id: "x", name: "X", subject: "", teacherId: "t1", room: "101", scheduleSlots: [{ days: [2], start: "09:00", end: "10:00" }] },
-      { id: "y", name: "Y", subject: "", teacherId: "t2", room: "202", scheduleSlots: [{ days: [2], start: "09:30", end: "10:30" }] },
+      { id: "x", name: "X", subject: "", teacherId: "t1", branchId: "br1", room: "101", scheduleSlots: [{ days: [2], start: "09:00", end: "10:00" }] },
+      { id: "y", name: "Y", subject: "", teacherId: "t2", branchId: "br1", room: "202", scheduleSlots: [{ days: [2], start: "09:30", end: "10:30" }] },
     ];
     expect(findClashes(buildEntries(rows)).size).toBe(0);
   });

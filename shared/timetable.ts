@@ -35,6 +35,7 @@ export type TimetableEntry = {
   name: string;
   subject: string | null;
   teacherId: string;
+  branchId: string;
   room: string | null;
   day: number; // 0=Mon
   start: number; // minutes since midnight
@@ -48,6 +49,7 @@ export type TimetableClass = {
   name: string;
   subject: string | null;
   teacherId: string;
+  branchId: string;
   room: string | null;
   scheduleSlots?: ScheduleSlot[] | null;
 };
@@ -65,6 +67,7 @@ export function buildEntries(classes: TimetableClass[]): TimetableEntry[] {
           name: c.name,
           subject: c.subject,
           teacherId: c.teacherId,
+          branchId: c.branchId,
           room: c.room,
           day,
           start,
@@ -129,7 +132,9 @@ export function findClashes(entries: TimetableEntry[]): Set<number> {
       if (!intervalsOverlap(a.start, a.end, b.start, b.end)) continue;
       const sameTeacher = a.teacherId === b.teacherId;
       const room = (a.room ?? "").trim();
-      const sameRoom = room !== "" && room === (b.room ?? "").trim();
+      // Rooms are per-branch (room "5" in one branch ≠ room "5" in another), so a
+      // room clash requires the same branch; a teacher clash is global.
+      const sameRoom = room !== "" && room === (b.room ?? "").trim() && a.branchId === b.branchId;
       if (sameTeacher || sameRoom) {
         clash.add(i);
         clash.add(j);
