@@ -37,6 +37,23 @@ export type PaymentContext = {
 };
 
 /**
+ * Teacher credit actually earned on a single payment: the full-month credit
+ * scaled by the share of the month's due that this payment covers.
+ *
+ * A full payment earns the full credit — including a discounted student who pays
+ * their reduced monthly due in full (ratio 1), so the teacher's pay stays
+ * discount-independent (V2 1C). A PARTIAL payment (e.g. a leaving student who
+ * only pays part of the month) earns proportionally less: 100 000 of a 250 000
+ * month at a 125 000 full credit → 50 000. Never exceeds the full credit; safe
+ * when monthDue is 0.
+ */
+export function proratedTeacherCredit(fullCredit: number, amountPaid: number, monthDue: number): number {
+  if (!(monthDue > 0)) return +fullCredit.toFixed(2);
+  const ratio = Math.min(1, amountPaid / monthDue);
+  return +(fullCredit * ratio).toFixed(2);
+}
+
+/**
  * The *fresh* pricing for a student in a billing month, computed from their
  * CURRENT effective fee and any active discount — independent of what a past
  * payment may have snapshotted. Full tuition, the discounted month due, the

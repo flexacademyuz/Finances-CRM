@@ -4,7 +4,7 @@ import { students, payments, paymentFreezes, type PaymentEdit } from "@shared/sc
 import { monthKey, parseDate, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { getSettings, setStudentsStatus, setStudentsPaidThrough } from "../storage";
-import { freshMonthPricing } from "./payment-context";
+import { freshMonthPricing, proratedTeacherCredit } from "./payment-context";
 import { env } from "../env";
 
 export type StatusBucket = {
@@ -185,10 +185,14 @@ async function recalcPaymentRows(
   let updated = 0;
   for (const p of rows) {
     const price = await freshMonthPricing(p.studentId, p.billingMonth);
+    // The credit earned is the full-month credit prorated by how much of the due
+    // this payment actually covered — so recalculating never silently restores a
+    // partial payment to the full month's credit.
+    const paidCredit = proratedTeacherCredit(price.teacherCredit, Number(p.amount), price.monthDue);
     const near = (a: number | null, b: number) => a != null && Math.abs(a - b) <= 0.005;
     const dueOk = near(p.amountDue == null ? null : Number(p.amountDue), price.monthDue);
     const fullOk = near(p.fullTuitionAmount == null ? null : Number(p.fullTuitionAmount), price.fullTuition);
-    const creditOk = near(p.teacherCreditAmount == null ? null : Number(p.teacherCreditAmount), price.teacherCredit);
+    const creditOk = near(p.teacherCreditAmount == null ? null : Number(p.teacherCreditAmount), paidCredit);
     if (dueOk && fullOk && creditOk) continue;
 
     const entry: PaymentEdit = {
@@ -204,7 +208,7 @@ async function recalcPaymentRows(
       after: {
         amountDue: String(price.monthDue),
         fullTuitionAmount: String(price.fullTuition),
-        teacherCreditAmount: String(price.teacherCredit),
+        teacherCreditAmount: String(paidCredit),
       },
     };
     await db
@@ -212,7 +216,7 @@ async function recalcPaymentRows(
       .set({
         amountDue: String(price.monthDue),
         fullTuitionAmount: String(price.fullTuition),
-        teacherCreditAmount: String(price.teacherCredit),
+        teacherCreditAmount: String(paidCredit),
         discountId: price.discountId,
         editHistory: [...p.editHistory, entry],
       })

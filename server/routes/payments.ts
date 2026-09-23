@@ -26,7 +26,7 @@ import { monthKey, normalizeMonth, monthLabel, parseDate, toIso } from "@shared/
 import { refundSuggestion, paymentCoverWindow, isMonthSettled } from "@shared/billing";
 import { notifyPaymentRecorded } from "../bot/notifications";
 import { notifyPaymentReceipt } from "../sms/service";
-import { buildPaymentContext } from "../services/payment-context";
+import { buildPaymentContext, freshMonthPricing, proratedTeacherCredit } from "../services/payment-context";
 import { recomputeStatuses } from "../services/billing";
 
 const router = Router();
@@ -152,9 +152,11 @@ router.post(
       billingMonth = await nextUnpaidBillingMonth(student.id);
     }
 
-    // Resolve discount + teacher credit for this student/month. The accountant
-    // may override `amount`, but full tuition and teacher credit are derived
-    // server-side so the teacher's pay stays discount-independent (V2 1C).
+    // Resolve discount + teacher credit for this student/month. Full tuition and
+    // the full-month teacher credit are derived server-side (discount-independent,
+    // V2 1C), but the credit CREDITED for this payment is prorated by how much of
+    // the month's due was actually paid — so a partial payment (e.g. a leaving
+    // student) pays the teacher proportionally, not the whole month.
     const ctx = await buildPaymentContext(student.id, billingMonth);
     const payment = await recordPayment({
       studentId: student.id,
@@ -165,7 +167,7 @@ router.post(
       fullTuitionAmount: ctx.fullTuition,
       amountDue: ctx.monthDue,
       discountId: ctx.discount?.id ?? null,
-      teacherCreditAmount: ctx.teacherCredit,
+      teacherCreditAmount: proratedTeacherCredit(ctx.teacherCredit, input.amount, ctx.monthDue),
     });
 
     // A partial payment must not read as "paid": refresh status/coverage so the
@@ -193,7 +195,19 @@ router.patch(
     const existing = await getPaymentById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
     assertBranchAccess(req, existing.branchId);
-    const updated = await editPayment(req.params.id, req.authUser!.id, { amount, method }, reason);
+    // Editing the amount re-prorates the teacher credit from current pricing, so
+    // the teacher's pay tracks the corrected amount (a partial pays less).
+    let teacherCreditAmount: number | undefined;
+    if (amount !== undefined) {
+      const price = await freshMonthPricing(existing.studentId, existing.billingMonth);
+      teacherCreditAmount = proratedTeacherCredit(price.teacherCredit, amount, price.monthDue);
+    }
+    const updated = await editPayment(
+      req.params.id,
+      req.authUser!.id,
+      { amount, method, teacherCreditAmount },
+      reason,
+    );
     res.json(updated);
   }),
 );

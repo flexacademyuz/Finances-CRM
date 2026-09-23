@@ -1128,17 +1128,25 @@ export async function recordPayment(input: {
 export async function editPayment(
   id: string,
   byUserId: string,
-  patch: { amount?: number; method?: "cash" | "online" },
+  patch: { amount?: number; method?: "cash" | "online"; teacherCreditAmount?: number },
   reason: string,
 ) {
   return db.transaction(async (tx) => {
     const [current] = await tx.select().from(payments).where(eq(payments.id, id));
     if (!current) throw new Error("Payment not found");
 
-    const before = { amount: current.amount, method: current.method };
+    const before = {
+      amount: current.amount,
+      method: current.method,
+      teacherCreditAmount: current.teacherCreditAmount,
+    };
     const values: Record<string, unknown> = {};
     if (patch.amount !== undefined) values.amount = String(patch.amount);
     if (patch.method !== undefined) values.method = patch.method;
+    // Re-prorated by the caller when the amount changes, so the teacher's credit
+    // tracks the corrected amount.
+    if (patch.teacherCreditAmount !== undefined)
+      values.teacherCreditAmount = String(patch.teacherCreditAmount);
 
     const edit: PaymentEdit = {
       at: new Date().toISOString(),
@@ -1149,6 +1157,7 @@ export async function editPayment(
       after: {
         amount: values.amount ?? current.amount,
         method: values.method ?? current.method,
+        teacherCreditAmount: values.teacherCreditAmount ?? current.teacherCreditAmount,
       },
     };
     const [updated] = await tx

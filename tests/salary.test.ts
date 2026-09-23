@@ -1,6 +1,35 @@
 import { describe, it, expect } from "vitest";
 import { applySalaryRule, netSalaryOwed, suggestedPayout } from "../server/services/salary";
+import { proratedTeacherCredit } from "../server/services/payment-context";
 import { createPayoutSchema } from "../shared/schema";
+
+/**
+ * Teacher credit is prorated by the share of the month's due actually paid, so a
+ * partial payment pays the teacher proportionally — while a discounted student
+ * who pays their reduced due in full still earns the teacher full credit.
+ */
+describe("proratedTeacherCredit", () => {
+  it("full payment earns the full month credit", () => {
+    expect(proratedTeacherCredit(125_000, 250_000, 250_000)).toBe(125_000);
+  });
+
+  it("partial payment earns proportionally (100k of a 250k month → 50k)", () => {
+    expect(proratedTeacherCredit(125_000, 100_000, 250_000)).toBe(50_000);
+  });
+
+  it("stays discount-independent: paying a reduced due in full earns full credit", () => {
+    // full tuition 250k, 20% off → due 200k; teacher's full-month credit is 125k.
+    expect(proratedTeacherCredit(125_000, 200_000, 200_000)).toBe(125_000);
+  });
+
+  it("never exceeds the full credit, even on an overpayment", () => {
+    expect(proratedTeacherCredit(125_000, 300_000, 250_000)).toBe(125_000);
+  });
+
+  it("is safe when the month due is zero (no division by zero)", () => {
+    expect(proratedTeacherCredit(125_000, 0, 0)).toBe(125_000);
+  });
+});
 
 /** Teacher salary estimation rules (spec §3.4). */
 describe("applySalaryRule", () => {
