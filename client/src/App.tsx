@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Route, Switch, Redirect } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LocaleContext, type Locale, useI18n } from "./lib/i18n";
-import { detectLocale } from "./lib/telegram";
+import { detectLocale, isTelegram } from "./lib/telegram";
 import { SessionProvider, BranchProvider, type Me } from "./lib/session";
 import { accessFor } from "./lib/access";
 import { Layout } from "./components/Layout";
@@ -17,6 +17,7 @@ import { ClassesPage } from "./pages/ceo/Classes";
 import { PayrollPage } from "./pages/ceo/Payroll";
 import { UsersPage } from "./pages/ceo/Users";
 import { BranchesPage } from "./pages/ceo/Branches";
+import { TimetablePage } from "./pages/ceo/Timetable";
 import { FinancesPage } from "./pages/ceo/Finances";
 import { AnalyticsPage } from "./pages/ceo/Analytics";
 import { SmsPage } from "./pages/ceo/Sms";
@@ -150,6 +151,7 @@ function Routes({ me }: { me: Me }) {
         {a.analytics && <Route path="/analytics" component={AnalyticsPage} />}
         {a.users && <Route path="/users" component={UsersPage} />}
         {role === "ceo" && <Route path="/branches" component={BranchesPage} />}
+        {role === "ceo" && !isTelegram() && <Route path="/timetable" component={TimetablePage} />}
         {role === "ceo" && <Route path="/sms" component={SmsPage} />}
         {a.salary && <Route path="/salary" component={MySalary} />}
         <Route path="/account" component={AccountPage} />

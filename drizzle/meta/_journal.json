@@ -190,6 +190,13 @@
       "when": 1795000007000,
       "tag": "0026_today_summary_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795000008000,
+      "tag": "0027_class_schedule_slots",
+      "breakpoints": true
     }
   ]
 }

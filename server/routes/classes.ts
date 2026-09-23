@@ -8,7 +8,8 @@ import {
   writeBranch,
   assertBranchAccess,
 } from "../auth/middleware";
-import { insertClassSchema } from "@shared/schema";
+import { insertClassSchema, scheduleSlotSchema } from "@shared/schema";
+import { formatScheduleSlots } from "@shared/timetable";
 import {
   listClasses,
   getClassById,
@@ -108,7 +109,13 @@ router.post(
       teacherId: input.teacherId,
       branchId: writeBranch(req, input.branchId),
       defaultFee: input.defaultFee ?? 0,
-      schedule: input.schedule ?? null,
+      // When structured slots are given, derive the free-text summary from them so
+      // the list views (which show `schedule`) stay in sync with the timetable.
+      schedule:
+        input.scheduleSlots && input.scheduleSlots.length
+          ? formatScheduleSlots(input.scheduleSlots)
+          : input.schedule ?? null,
+      scheduleSlots: input.scheduleSlots ?? null,
       room: input.room ?? null,
       maxStudents: input.maxStudents ?? null,
       startDate: input.startDate ?? null,
@@ -128,6 +135,7 @@ router.patch(
         teacherId: z.string().uuid().optional(),
         defaultFee: z.coerce.number().nonnegative().optional(),
         schedule: z.string().nullable().optional(),
+        scheduleSlots: z.array(scheduleSlotSchema).nullable().optional(),
         room: z.string().nullable().optional(),
         maxStudents: z.coerce.number().int().positive().nullable().optional(),
         startDate: z.string().nullable().optional(),
@@ -137,6 +145,13 @@ router.patch(
     const existing = await getClassById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
     assertBranchAccess(req, existing.branchId);
+    // Keep the free-text summary in step with edited slots (cleared when none).
+    if (patch.scheduleSlots !== undefined) {
+      patch.schedule =
+        patch.scheduleSlots && patch.scheduleSlots.length
+          ? formatScheduleSlots(patch.scheduleSlots)
+          : null;
+    }
     const updated = await updateClass(req.params.id, patch);
     if (!updated) return res.status(404).json({ error: "not_found" });
     res.json(updated);

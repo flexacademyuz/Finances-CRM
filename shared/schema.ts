@@ -143,6 +143,14 @@ export const teachers = pgTable("teachers", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * One recurring weekly meeting for a group: which weekday(s) (0=Mon … 6=Sun),
+ * and the start/end time as "HH:MM" (24h, Tashkent local). A group meeting
+ * Mon/Wed/Fri 15:00–16:30 is one slot with days [0,2,4]; a group that meets at
+ * different times on different days uses several slots.
+ */
+export type ScheduleSlot = { days: number[]; start: string; end: string };
+
 /** A class has exactly one assigned teacher and a default monthly fee. */
 export const classes = pgTable("classes", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -161,6 +169,9 @@ export const classes = pgTable("classes", {
     .notNull()
     .default("0"),
   schedule: text("schedule"),
+  // Structured weekly timetable slots (drives the Расписание grid + clash checks).
+  // The free-text `schedule` above is kept as a derived human-readable summary.
+  scheduleSlots: jsonb("schedule_slots").$type<ScheduleSlot[]>(),
   // Group metadata (V2): physical room, capacity, and when the group started.
   room: text("room"),
   maxStudents: bigint("max_students", { mode: "number" }),
@@ -810,6 +821,13 @@ export const credentialsSchema = z.object({
   password: z.string().min(6).max(128),
 });
 
+/** A weekly timetable slot as accepted from the client (0=Mon … 6=Sun). */
+export const scheduleSlotSchema = z.object({
+  days: z.array(z.number().int().min(0).max(6)).min(1),
+  start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+});
+
 export const insertClassSchema = createInsertSchema(classes, {
   name: z.string().min(1),
   defaultFee: z.coerce.number().nonnegative(),
@@ -828,7 +846,10 @@ export const insertClassSchema = createInsertSchema(classes, {
   // Branch the group is created in. Optional in the body: a pinned user's branch
   // (or the CEO's selected branch) is used when omitted. Required only when an
   // all-branches user hasn't selected a single branch.
-  .extend({ branchId: z.string().uuid().optional() });
+  .extend({
+    branchId: z.string().uuid().optional(),
+    scheduleSlots: z.array(scheduleSlotSchema).optional(),
+  });
 
 export const insertStudentSchema = createInsertSchema(students, {
   fullName: z.string().min(1),

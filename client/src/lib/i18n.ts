@@ -432,6 +432,8 @@ const dict = {
   loginUsernameLabel: { en: "Login username", uz: "Kirish nomi" },
   logOut: { en: "Log out", uz: "Chiqish" },
 
+  timetable: { en: "Timetable", uz: "Dars jadvali" },
+
   // Branches (multi-location support).
   branches: { en: "Branches", uz: "Filiallar" },
   branch: { en: "Branch", uz: "Filial" },

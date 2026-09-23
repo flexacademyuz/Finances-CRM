@@ -8,6 +8,8 @@ import { useSession } from "../../lib/session";
 import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
+import type { ScheduleSlot } from "@shared/schema";
+import { ScheduleSlotsEditor } from "../../components/ScheduleSlotsEditor";
 import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner, StatTile } from "../../components/ui";
 
 /**
@@ -112,7 +114,7 @@ function GroupModal({
   const [subject, setSubject] = useState(group?.subject ?? "");
   const [teacherId, setTeacherId] = useState(group?.teacherId ?? "");
   const [defaultFee, setDefaultFee] = useState(group ? String(group.defaultFee) : "");
-  const [schedule, setSchedule] = useState(group?.schedule ?? "");
+  const [slots, setSlots] = useState<ScheduleSlot[]>(group?.scheduleSlots ?? []);
   const [room, setRoom] = useState(group?.room ?? "");
   const [maxStudents, setMaxStudents] = useState(group?.maxStudents ? String(group.maxStudents) : "");
   const [startDate, setStartDate] = useState(group?.startDate ?? "");
@@ -128,7 +130,7 @@ function GroupModal({
     subject: subject || undefined,
     teacherId,
     defaultFee: Number(defaultFee || 0),
-    schedule: schedule || undefined,
+    scheduleSlots: slots.filter((s) => s.days.length > 0),
     room: room || undefined,
     maxStudents: maxStudents ? Number(maxStudents) : undefined,
     startDate: startDate || undefined,
@@ -190,7 +192,7 @@ function GroupModal({
           </Field>
         </div>
         <Field label="Schedule">
-          <Input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="Mon/Wed 18:00" />
+          <ScheduleSlotsEditor value={slots} onChange={setSlots} />
         </Field>
         <Field label={`${t("teacher")} ${t("perStudentRate")} (UZS)`}>
           <Input

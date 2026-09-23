@@ -27,6 +27,7 @@ import {
   type Shift,
   type PayoutStudent,
   type SalaryAllocation,
+  type ScheduleSlot,
 } from "@shared/schema";
 import { monthKey, shiftMonth, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, isMonthSettled } from "@shared/billing";
@@ -420,6 +421,7 @@ export async function createClass(input: {
   branchId: string;
   defaultFee: number;
   schedule?: string | null;
+  scheduleSlots?: ScheduleSlot[] | null;
   room?: string | null;
   maxStudents?: number | null;
   startDate?: string | null;
@@ -439,6 +441,7 @@ export async function updateClass(
     teacherId: string;
     defaultFee: number;
     schedule: string | null;
+    scheduleSlots: ScheduleSlot[] | null;
     room: string | null;
     maxStudents: number | null;
     startDate: string | null;

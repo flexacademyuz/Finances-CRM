@@ -20,6 +20,7 @@ import {
   Plus,
   HandCoins,
   Building2,
+  CalendarDays,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -99,6 +100,8 @@ function buildNav(user: User): NavItem[] {
   if (a.students) items.push({ href: "/students", label: "students", icon: <GraduationCap size={18} /> });
   items.push({ href: "/leads", label: "leads", icon: <UserPlus size={18} /> });
   if (a.groups) items.push({ href: a.groupsPath, label: "groups", icon: <BookOpen size={18} /> });
+  // Timetable is a web-only planning view (CEO), not shown in the Telegram app.
+  if (a.role === "ceo" && !isTelegram()) items.push({ href: "/timetable", label: "timetable", icon: <CalendarDays size={18} /> });
   if (a.payroll) items.push({ href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={18} /> });
   if (a.payments) items.push({ href: "/payments", label: "payments", icon: <ClipboardList size={18} /> });
   if (a.awaiting) items.push({ href: "/awaiting", label: "awaiting", icon: <Clock size={18} /> });
@@ -126,7 +129,7 @@ type NavSection = "overview" | "people" | "money" | "admin" | "account";
 /** Which section each nav item belongs to (groups the sidebar/drawer). */
 const SECTION_OF: Partial<Record<StringKey, NavSection>> = {
   dashboard: "overview", myClasses: "overview", recordPayment: "overview",
-  students: "people", leads: "people", groups: "people",
+  students: "people", leads: "people", groups: "people", timetable: "people",
   payments: "money", awaiting: "money", payroll: "money",
   expenses: "money", finances: "money", analytics: "money", mySalary: "money",
   users: "admin", branches: "admin", sms: "admin",
