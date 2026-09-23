@@ -86,7 +86,13 @@ export function StudentDetail() {
             )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <StatusBadge status={billing.status} balance={billing.balance} />
+            {student.sponsored ? (
+              <span className="rounded-full bg-status-discount/15 px-2.5 py-0.5 text-xs font-semibold text-status-discount">
+                Sponsored
+              </span>
+            ) : (
+              <StatusBadge status={billing.status} balance={billing.balance} />
+            )}
             {canManage && (
               <StudentActions
                 student={{

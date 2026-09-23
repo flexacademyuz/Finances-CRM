@@ -549,11 +549,18 @@ export async function payrollMonthView(month: string = monthKey(), branchId?: st
   return { month, total: +total.toFixed(2), perTeacher };
 }
 
-/** Count of students who paid at least once (non-voided) in the given month. */
+/** Count of students who paid at least once (non-voided) in the given month.
+ *  Sponsored comps are 0-som credits, not real payments, so they're excluded. */
 export async function paidStudentCount(month: string = monthKey()): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(distinct ${payments.studentId})` })
     .from(payments)
-    .where(and(eq(payments.billingMonth, month), eq(payments.voided, false)));
+    .where(
+      and(
+        eq(payments.billingMonth, month),
+        eq(payments.voided, false),
+        eq(payments.sponsored, false),
+      ),
+    );
   return Number(row?.n ?? 0);
 }

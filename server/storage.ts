@@ -488,6 +488,7 @@ export async function listStudents(filter: StudentFilter = {}) {
       paidThroughDate: students.paidThroughDate,
       enrolledAt: students.enrolledAt,
       active: students.active,
+      sponsored: students.sponsored,
       // Money still owed across partially-paid months (0 when fully paid up).
       // Legacy rows without a recorded due contribute nothing.
       balance: sql<string>`coalesce((
@@ -544,6 +545,8 @@ export async function updateStudent(
     enrolledAt: string;
     active: boolean;
     billingStartDate: string | null;
+    sponsored: boolean;
+    sponsoredBy: string | null;
   }>,
 ) {
   const values: Record<string, unknown> = { ...patch };
@@ -1612,9 +1615,59 @@ export async function listUnpaidStudentsForSms() {
     .where(
       and(
         eq(students.active, true),
+        eq(students.sponsored, false),
         sql`${students.status} in ('awaiting_payment', 'overdue')`,
       ),
     );
+}
+
+/* ─────────────────────────── Sponsored students ────────────────────────── */
+
+/** Active sponsored ("comp") students — the academy pays their teacher for them. */
+export async function listActiveSponsoredStudents() {
+  return db
+    .select({ id: students.id, classId: students.classId, sponsoredBy: students.sponsoredBy })
+    .from(students)
+    .where(and(eq(students.active, true), eq(students.sponsored, true)));
+}
+
+/**
+ * Insert the monthly sponsored comp for a student: a 0-som payment that credits
+ * the teacher the full per-student rate. Amount and due are 0 (they owe nothing);
+ * the credit is the caller-resolved full-month rate. Tagged `sponsored` so income
+ * metrics ignore it and the dues recalculation leaves it alone. Callers dedupe on
+ * (student, month) first — one comp per student per month.
+ */
+export async function insertSponsoredComp(input: {
+  studentId: string;
+  billingMonth: string;
+  fullTuition: number;
+  teacherCredit: number;
+  recordedBy: string;
+}) {
+  const [student] = await db.select().from(students).where(eq(students.id, input.studentId));
+  if (!student) throw new Error("Student not found");
+  const [cls] = await db.select().from(classes).where(eq(classes.id, student.classId));
+  if (!cls) throw new Error("Class not found");
+  const [payment] = await db
+    .insert(payments)
+    .values({
+      studentId: student.id,
+      classId: cls.id,
+      teacherId: cls.teacherId,
+      branchId: cls.branchId,
+      amount: "0",
+      fullTuitionAmount: String(input.fullTuition),
+      amountDue: "0",
+      teacherCreditAmount: String(input.teacherCredit),
+      discountId: null,
+      method: "cash",
+      billingMonth: input.billingMonth,
+      recordedBy: input.recordedBy,
+      sponsored: true,
+    })
+    .returning();
+  return payment;
 }
 
 /**

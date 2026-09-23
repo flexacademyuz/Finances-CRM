@@ -186,7 +186,13 @@ export function StudentsPage() {
                   <div className="text-sm">{formatDate(s.enrolledAt)}</div>
                 </div>
                 <div className="flex w-[124px] shrink-0 justify-start">
-                  <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
+                  {s.sponsored ? (
+                    <span className="rounded-full bg-status-discount/15 px-2.5 py-0.5 text-xs font-semibold text-status-discount">
+                      Sponsored
+                    </span>
+                  ) : (
+                    <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
+                  )}
                 </div>
                 <ChevronRight size={18} className="hidden shrink-0 text-muted sm:block" />
               </Link>

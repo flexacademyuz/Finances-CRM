@@ -50,6 +50,7 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
     .select({
       id: students.id,
       startDate: sql<string>`coalesce(${students.billingStartDate}, ${students.enrolledAt})`,
+      sponsored: students.sponsored,
     })
     .from(students)
     .where(eq(students.active, true));
@@ -100,6 +101,14 @@ export async function recomputeStatuses(now: Date = new Date()): Promise<StatusB
   const bucket: StatusBucket = { paid: [], awaiting: [], overdue: [], frozen: [], not_due: [] };
   const paidThroughById = new Map<string, string>();
   for (const r of rows) {
+    // Sponsored (academy-paid) students never owe and are never chased: force
+    // them "paid" with a coverage date far in the future so no overdue logic or
+    // parent SMS ever fires for them. Their teacher is paid via sponsored comps.
+    if (r.sponsored) {
+      bucket.paid.push(r.id);
+      paidThroughById.set(r.id, "2999-01-01");
+      continue;
+    }
     if (!r.startDate) {
       bucket.not_due.push(r.id);
       continue;
@@ -184,6 +193,9 @@ async function recalcPaymentRows(
 ): Promise<{ updated: number; total: number }> {
   let updated = 0;
   for (const p of rows) {
+    // Sponsored comps are intentional 0-som rows carrying the full teacher rate;
+    // re-pricing them would prorate the credit to 0. Leave them as recorded.
+    if (p.sponsored) continue;
     const price = await freshMonthPricing(p.studentId, p.billingMonth);
     // The credit earned is the full-month credit prorated by how much of the due
     // this payment actually covered — so recalculating never silently restores a

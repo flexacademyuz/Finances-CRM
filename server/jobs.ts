@@ -1,6 +1,7 @@
 import { recomputeStatuses } from "./services/billing";
 import { sendAwaitingDigest, sendTodaySummary } from "./bot/notifications";
 import { notifyOverdueParents } from "./sms/service";
+import { ensureSponsoredComps } from "./services/sponsored";
 
 /**
  * Lightweight in-process scheduler. Recomputes student statuses hourly (cheap,
@@ -18,6 +19,15 @@ export function startJobs(): void {
       await recomputeStatuses();
     } catch (err) {
       console.error("[jobs] recomputeStatuses failed:", (err as Error).message);
+    }
+    // Ensure each sponsored student has this month's teacher credit. Idempotent
+    // (one comp per student per month), so running hourly just fills a new month
+    // in promptly and is otherwise a no-op.
+    try {
+      const { created } = await ensureSponsoredComps();
+      if (created) console.log(`[jobs] ensureSponsoredComps: created ${created}`);
+    } catch (err) {
+      console.error("[jobs] ensureSponsoredComps failed:", (err as Error).message);
     }
   };
   // Run shortly after boot, then hourly.

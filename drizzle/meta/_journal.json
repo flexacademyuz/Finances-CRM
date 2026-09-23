@@ -176,6 +176,13 @@
       "when": 1795000005000,
       "tag": "0024_add_sms_master_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795000006000,
+      "tag": "0025_add_sponsored_students",
+      "breakpoints": true
     }
   ]
 }

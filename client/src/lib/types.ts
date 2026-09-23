@@ -72,6 +72,8 @@ export type StudentRow = {
   paidThroughDate: string | null;
   enrolledAt: string;
   active: boolean;
+  /** Sponsored ("academy pays teacher") — pays nothing, never chased. */
+  sponsored: boolean;
   /** Money still owed across partially-paid months ("0" when fully paid up). */
   balance: string;
 };
@@ -411,6 +413,7 @@ export type StudentDetail = {
     classId: string;
     className: string | null;
     active: boolean;
+    sponsored: boolean;
   };
   billing: {
     startDate: string;

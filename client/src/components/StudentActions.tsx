@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Snowflake, Tag, ArrowLeftRight, LogOut, Pencil, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
+import { useSession } from "../lib/session";
 import { money } from "../lib/format";
 import { monthKey } from "@shared/date";
 import type { FreezeRow, DiscountRow, Class, StudentRow } from "../lib/types";
@@ -137,12 +138,15 @@ function DeleteStudentModal({ student, onClose }: { student: ActionStudent; onCl
 /** Edit a student's details, including a mistaken start (enrolment) date. */
 function EditStudentModal({ student, onClose }: { student: ActionStudent; onClose: () => void }) {
   const { t } = useI18n();
+  const { user } = useSession();
   const qc = useQueryClient();
+  const isCeo = user.role === "ceo";
   const [fullName, setFullName] = useState(student.fullName);
   const [phone, setPhone] = useState("");
   const [smsOptOut, setSmsOptOut] = useState(false);
   const [monthlyFee, setMonthlyFee] = useState("");
   const [enrolledAt, setEnrolledAt] = useState("");
+  const [sponsored, setSponsored] = useState(false);
 
   // Load the current values (phone / fee / start date aren't on ActionStudent).
   const detail = useQuery({
@@ -155,6 +159,7 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
     setSmsOptOut(detail.data.smsOptOut ?? false);
     setMonthlyFee(detail.data.monthlyFee ?? "");
     setEnrolledAt(detail.data.enrolledAt?.slice(0, 10) ?? "");
+    setSponsored(detail.data.sponsored ?? false);
   }, [detail.data]);
 
   const save = useMutation({
@@ -167,6 +172,8 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
           smsOptOut,
           monthlyFee: monthlyFee === "" ? null : Number(monthlyFee),
           enrolledAt: enrolledAt || undefined,
+          // CEO-only server-side; harmless to send otherwise (it's ignored).
+          ...(isCeo ? { sponsored } : {}),
         },
       }),
     onSuccess: () => { qc.invalidateQueries(); onClose(); },
@@ -185,6 +192,20 @@ function EditStudentModal({ student, onClose }: { student: ActionStudent; onClos
           <input type="checkbox" checked={smsOptOut} onChange={(e) => setSmsOptOut(e.target.checked)} />
           {t("smsOptOut")}
         </label>
+        {isCeo && (
+          <label className="flex items-start gap-2 rounded-btn bg-status-discount/10 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={sponsored}
+              onChange={(e) => setSponsored(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Sponsored</span> — the academy pays the teacher; this
+              student owes nothing and gets no reminders.
+            </span>
+          </label>
+        )}
         <Field label={t("fee")}>
           <Input type="number" inputMode="decimal" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} placeholder={student.effectiveFee} />
           <MoneyHint value={monthlyFee} />

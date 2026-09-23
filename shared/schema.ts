@@ -208,6 +208,12 @@ export const students = pgTable(
     // fall back to `enrolledAt`. See services/billing.
     billingStartDate: date("billing_start_date"),
     active: boolean("active").notNull().default(true),
+    // Sponsored ("comp") student: pays nothing and is never chased (no overdue,
+    // no SMS), but the academy still pays their teacher the full per-student rate
+    // every month via an auto-generated sponsored payment. `sponsoredBy` records
+    // the CEO who set it (also the actor the monthly job attributes comps to).
+    sponsored: boolean("sponsored").notNull().default(false),
+    sponsoredBy: uuid("sponsored_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -264,6 +270,10 @@ export const payments = pgTable(
       .references(() => users.id, { onDelete: "restrict" }),
     // Auto-assigned server time; never user-entered.
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Auto-generated "sponsored" comp: amount 0, but credits the teacher the full
+    // per-student rate for a sponsored (academy-paid) student. Tagged so it's kept
+    // out of income/paid-student metrics and left untouched by dues recalculation.
+    sponsored: boolean("sponsored").notNull().default(false),
     // Soft-void instead of delete (spec §7 auditability).
     voided: boolean("voided").notNull().default(false),
     voidReason: text("void_reason"),

@@ -23,6 +23,7 @@ import {
 import { parseDate, fullMonthsBetween, atMidnight, toIso } from "@shared/date";
 import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { recomputeStatuses } from "../services/billing";
+import { ensureSponsoredComps } from "../services/sponsored";
 import { notifyStudentEdited } from "../bot/notifications";
 import { env } from "../env";
 
@@ -101,6 +102,7 @@ router.get(
         classId: student.classId,
         className: cls?.name ?? null,
         active: student.active,
+        sponsored: student.sponsored,
       },
       billing: {
         startDate: anchor,
@@ -212,6 +214,9 @@ router.patch(
         // billing when the student hasn't been re-anchored by a resume.
         enrolledAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         active: z.boolean().optional(),
+        // Sponsored ("academy pays the teacher") — a financial decision, CEO-only
+        // (gated below). Non-CEO callers can't change it.
+        sponsored: z.boolean().optional(),
       })
       .parse(req.body);
 
@@ -234,10 +239,25 @@ router.patch(
       enrolledAt: existing.enrolledAt,
       active: existing.active,
     };
-    const updated = await updateStudent(req.params.id, patch);
+    // Sponsored is CEO-only: strip it from a non-CEO edit; stamp who set it so
+    // the monthly comp job knows who to attribute the credit to.
+    const isCeo = req.authUser!.role === "ceo";
+    const storagePatch: Parameters<typeof updateStudent>[1] = { ...patch };
+    if (patch.sponsored !== undefined) {
+      if (!isCeo) delete storagePatch.sponsored;
+      else if (patch.sponsored) storagePatch.sponsoredBy = req.authUser!.id;
+    }
+    const sponsoredChanged = isCeo && patch.sponsored !== undefined;
+
+    const updated = await updateStudent(req.params.id, storagePatch);
     // A class move keeps past payments with their original teacher; a start-date
-    // change shifts the billing anchor. Either way, refresh status/coverage.
-    if (patch.classId || patch.enrolledAt) await recomputeStatuses();
+    // change shifts the billing anchor; sponsoring flips the student to "paid".
+    // Any of these refresh status/coverage.
+    if (patch.classId || patch.enrolledAt || sponsoredChanged) await recomputeStatuses();
+    // Newly sponsored → give the teacher this month's credit right away.
+    if (sponsoredChanged && patch.sponsored) {
+      await ensureSponsoredComps({ byUserId: req.authUser!.id }).catch(() => undefined);
+    }
 
     // Notify the CEO whenever a teacher changes a student's details.
     if (req.authUser!.role === "teacher") {
