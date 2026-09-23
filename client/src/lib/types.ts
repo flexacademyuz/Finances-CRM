@@ -26,6 +26,7 @@ export type SmsOverview = {
     dryRun: boolean;
     sender: string;
     configured: boolean;
+    academyName: string;
     // CEO-editable settings:
     sendingEnabled: boolean;
     receiptEnabled: boolean;

@@ -11,9 +11,10 @@ import type {
   StudentDetail as StudentDetailData,
   PaymentRow,
   SmsMessage,
-  SmsTemplate,
+  SmsOverview,
   SmsSendResult,
 } from "../lib/types";
+import { renderOverdue, renderReceipt } from "@shared/sms-templates";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge, MethodTag } from "../components/ui";
 import { StudentActions } from "../components/StudentActions";
 
@@ -273,22 +274,13 @@ function smsStatusColor(status: string): string {
   }
 }
 
-/** Placeholders in a template look like [ism] or {name} — pull the unique ones. */
-function findPlaceholders(text: string): string[] {
-  const found = text.match(/\[[^\]]+\]|\{[^}]+\}/g) ?? [];
-  return Array.from(new Set(found));
-}
-
-/** Guess which placeholder is the student's name, to pre-fill it. */
-function looksLikeName(token: string): boolean {
-  return /ism|name|farzand|o'quvchi|student/i.test(token);
-}
+type ManualKind = "overdue_reminder" | "payment_receipt";
 
 /**
- * Send a manual SMS to a student's parent. Because Eskiz only delivers approved
- * wording, the operator picks one of the account's templates; any [placeholders]
- * in it become inputs (the name one is pre-filled), and the assembled text is
- * sent as-is.
+ * Send a manual SMS to a student's parent. The operator picks a message TYPE; the
+ * text is rendered from our own approved templates (shared with the server and
+ * the automatic senders), so the student's real given name is always substituted.
+ * We never send Eskiz's raw example wording, which has a fixed name baked in.
  */
 function SendSmsModal({
   studentId,
@@ -305,43 +297,41 @@ function SendSmsModal({
 }) {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [fills, setFills] = useState<Record<string, string>>({});
+  const [kind, setKind] = useState<ManualKind>("overdue_reminder");
+  const [amount, setAmount] = useState("");
   const [result, setResult] = useState<SmsSendResult | null>(null);
 
-  const templates = useQuery({
-    queryKey: ["sms-templates"],
-    queryFn: () => api<SmsTemplate[]>("/api/sms/templates"),
+  // Only used for the preview's brand prefix; the server uses its own value.
+  const overview = useQuery({
+    queryKey: ["sms"],
+    queryFn: () => api<SmsOverview>("/api/sms"),
   });
+  const academyName = overview.data?.config.academyName ?? "Flex Academy";
 
-  const selected = templates.data?.find((tpl) => tpl.id === selectedId) ?? null;
-  const placeholders = selected ? findPlaceholders(selected.text) : [];
-  const finalText = selected
-    ? placeholders.reduce((s, p) => s.split(p).join(fills[p] ?? p), selected.text)
-    : "";
-  const ready = Boolean(selected) && placeholders.every((p) => (fills[p] ?? "").trim().length > 0);
-
-  const choose = (tpl: SmsTemplate) => {
-    setSelectedId(tpl.id);
-    setResult(null);
-    // Pre-fill a name-like placeholder with the student's first name.
-    const first = studentName.trim().split(/\s+/)[0] ?? studentName;
-    const seed: Record<string, string> = {};
-    for (const p of findPlaceholders(tpl.text)) if (looksLikeName(p)) seed[p] = first;
-    setFills(seed);
-  };
+  const amountNum = Number(amount);
+  const amountValid = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum >= 0;
+  const preview =
+    kind === "payment_receipt"
+      ? renderReceipt({ studentName, amount: amountValid ? amountNum : 0 })
+      : renderOverdue({ studentName, academyName });
+  const ready = kind === "overdue_reminder" || amountValid;
 
   const send = useMutation({
     mutationFn: () =>
       api<SmsSendResult>(`/api/sms/student/${studentId}`, {
         method: "POST",
-        body: { text: finalText },
+        body: kind === "payment_receipt" ? { kind, amount: amountNum } : { kind },
       }),
     onSuccess: (r) => {
       setResult(r);
       qc.invalidateQueries({ queryKey: ["student-sms", studentId] });
     },
   });
+
+  const options: { value: ManualKind; label: string }[] = [
+    { value: "overdue_reminder", label: "Overdue reminder" },
+    { value: "payment_receipt", label: "Payment receipt" },
+  ];
 
   return (
     <Modal open onClose={onClose} title={`${t("sendSms")} — ${studentName}`}>
@@ -351,51 +341,44 @@ function SendSmsModal({
           {optedOut && <span className="text-status-overdue"> · {t("parentOptedOut")}</span>}
         </div>
 
-        {templates.isLoading && <div className="text-sm text-tg-hint">Loading templates…</div>}
-        {templates.data && templates.data.length === 0 && (
-          <div className="rounded-btn bg-status-awaiting/10 px-3 py-2 text-sm">
-            No approved templates found. Add and get a message approved in Eskiz first.
-          </div>
-        )}
-
-        {/* Template picker */}
+        {/* Message type */}
         <div className="space-y-2">
-          {(templates.data ?? []).map((tpl) => {
-            const approved = tpl.status === "service" || tpl.status === "reklama";
-            const active = tpl.id === selectedId;
-            return (
-              <button
-                key={tpl.id}
-                onClick={() => choose(tpl)}
-                className={`w-full rounded-btn border px-3 py-2 text-left text-sm transition ${
-                  active ? "border-primary bg-primary-soft" : "border-border hover:border-primary"
-                }`}
-              >
-                <div>{tpl.text}</div>
-                <div className={`mt-0.5 text-xs ${approved ? "text-status-paid" : "text-status-awaiting"}`}>
-                  {approved ? "approved" : `status: ${tpl.status}`}
-                </div>
-              </button>
-            );
-          })}
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => {
+                setKind(o.value);
+                setResult(null);
+              }}
+              className={`w-full rounded-btn border px-3 py-2 text-left text-sm transition ${
+                kind === o.value ? "border-primary bg-primary-soft" : "border-border hover:border-primary"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
 
-        {/* Fill placeholders */}
-        {placeholders.map((p) => (
-          <Field key={p} label={p}>
+        {kind === "payment_receipt" && (
+          <Field label="Amount paid (so'm)">
             <Input
-              value={fills[p] ?? ""}
-              onChange={(e) => setFills((f) => ({ ...f, [p]: e.target.value }))}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setResult(null);
+              }}
+              placeholder="350000"
             />
           </Field>
-        ))}
-
-        {selected && (
-          <div className="rounded-btn bg-tg-bg px-3 py-2 text-sm">
-            <div className="mb-1 text-xs text-tg-hint">Preview</div>
-            {finalText}
-          </div>
         )}
+
+        <div className="rounded-btn bg-tg-bg px-3 py-2 text-sm">
+          <div className="mb-1 text-xs text-tg-hint">Preview</div>
+          {preview}
+        </div>
 
         {send.isError && (
           <div className="text-sm text-status-overdue">{(send.error as Error).message}</div>

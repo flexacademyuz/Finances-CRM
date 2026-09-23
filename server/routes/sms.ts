@@ -38,6 +38,9 @@ router.get(
         dryRun: env.smsDryRun,
         sender: env.eskizSender,
         configured: Boolean(env.eskizEmail && env.eskizPassword),
+        // Brand shown to parents (leads the overdue text); used by the manual
+        // "Send SMS" preview so it renders the exact message that will go out.
+        academyName: env.smsAcademyName,
         // CEO-editable (via PATCH /api/settings):
         sendingEnabled: settings?.smsSendingEnabled ?? false,
         receiptEnabled: settings?.smsReceiptEnabled ?? true,
@@ -76,17 +79,23 @@ router.get(
 
 /**
  * POST /api/sms/student/:id — send a one-off manual SMS to a student's parent.
- * The text should be an Eskiz-approved template (the client drives this from the
- * picker); unapproved wording will be rejected by Eskiz and logged as failed.
+ * The caller picks a message TYPE (overdue reminder or payment receipt); the
+ * body is rendered server-side from our approved templates with the student's
+ * real name, so it always personalises and always matches what Eskiz approved.
  */
 router.post(
   "/sms/student/:id",
   asyncHandler(async (req, res) => {
-    const { text } = z.object({ text: z.string().min(1).max(500) }).parse(req.body);
+    const { kind, amount } = z
+      .object({
+        kind: z.enum(["overdue_reminder", "payment_receipt"]),
+        amount: z.coerce.number().nonnegative().optional(),
+      })
+      .parse(req.body);
     const student = await getStudentById(req.params.id);
     if (!student) return res.status(404).json({ error: "not_found" });
     assertBranchAccess(req, student.branchId);
-    const result = await sendManualToStudent(req.params.id, text);
+    const result = await sendManualToStudent(req.params.id, kind, { amount });
     res.json(result);
   }),
 );

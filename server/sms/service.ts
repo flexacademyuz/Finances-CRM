@@ -181,21 +181,30 @@ export async function notifyOverdueParents(
 
 /**
  * Send a one-off manual message to a student's parent (staff-initiated from the
- * student card). The text must be an Eskiz-approved template or Eskiz will
- * reject it — the UI drives this from the approved-template picker. Respects
- * dry-run; each call is its own send (unique dedupeKey). Returns the outcome.
+ * student card). The operator picks a message TYPE — an overdue reminder or a
+ * payment receipt — and we render it here from our own approved templates, so the
+ * student's real given name (and amount) is substituted exactly like the
+ * automatic senders do. We deliberately do NOT accept free text or Eskiz's raw
+ * example wording: that example has a real name baked in with no placeholder, so
+ * sending it verbatim would text every parent the same name.
+ *
+ * Respects dry-run; each call is its own send (unique dedupeKey). Not gated by
+ * the master switch — this is an explicit staff action. Returns the outcome.
  */
 export async function sendManualToStudent(
   studentId: string,
-  text: string,
+  kind: "overdue_reminder" | "payment_receipt",
+  opts: { amount?: number } = {},
 ): Promise<{ ok: boolean; status: "logged" | "sent" | "failed"; to: string; error?: string }> {
   const student = await getStudentById(studentId);
   if (!student) return { ok: false, status: "failed", to: "", error: "student_not_found" };
   const phone = normalizeUzPhone(student.phone);
   if (!phone) return { ok: false, status: "failed", to: "", error: "no_phone" };
 
-  const body = text.trim().slice(0, 500);
-  if (!body) return { ok: false, status: "failed", to: phone, error: "empty_message" };
+  const body =
+    kind === "payment_receipt"
+      ? renderReceipt({ studentName: student.fullName, amount: opts.amount ?? 0 })
+      : renderOverdue({ studentName: student.fullName, academyName: env.smsAcademyName });
 
   const outcome = await deliver({
     studentId: student.id,
