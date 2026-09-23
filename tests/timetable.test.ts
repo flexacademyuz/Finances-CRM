@@ -4,6 +4,7 @@ import {
   intervalsOverlap,
   buildEntries,
   findClashes,
+  layoutDayEntries,
   type TimetableClass,
 } from "../shared/timetable";
 
@@ -68,5 +69,38 @@ describe("buildEntries + findClashes", () => {
       { id: "y", name: "Y", subject: "", teacherId: "t2", room: "202", scheduleSlots: [{ days: [2], start: "09:30", end: "10:30" }] },
     ];
     expect(findClashes(buildEntries(rows)).size).toBe(0);
+  });
+});
+
+describe("layoutDayEntries (side-by-side columns)", () => {
+  it("non-overlapping entries each get a full-width single column", () => {
+    const r = layoutDayEntries([{ start: 480, end: 540 }, { start: 600, end: 660 }]);
+    expect(r.every((e) => e.cols === 1 && e.col === 0)).toBe(true);
+  });
+
+  it("two overlapping entries split into two columns", () => {
+    const r = layoutDayEntries([{ start: 480, end: 600 }, { start: 540, end: 660 }]);
+    expect(r.map((e) => e.cols)).toEqual([2, 2]);
+    expect(new Set(r.map((e) => e.col))).toEqual(new Set([0, 1]));
+  });
+
+  it("three mutually overlapping entries → three columns", () => {
+    const r = layoutDayEntries([
+      { start: 480, end: 600 },
+      { start: 490, end: 610 },
+      { start: 500, end: 620 },
+    ]);
+    expect(r.every((e) => e.cols === 3)).toBe(true);
+    expect(new Set(r.map((e) => e.col))).toEqual(new Set([0, 1, 2]));
+  });
+
+  it("a later, non-overlapping entry starts a fresh single-column cluster", () => {
+    const r = layoutDayEntries([
+      { start: 480, end: 540, id: "A" },
+      { start: 480, end: 540, id: "B" },
+      { start: 540, end: 600, id: "C" },
+    ] as { start: number; end: number; id: string }[]);
+    const c = r.find((e) => e.id === "C")!;
+    expect(c.cols).toBe(1);
   });
 });

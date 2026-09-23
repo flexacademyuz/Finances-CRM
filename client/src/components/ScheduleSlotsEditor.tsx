@@ -4,6 +4,11 @@ import { Input } from "./ui";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** True if any slot with days chosen has an end that isn't after its start. */
+export function scheduleSlotsInvalid(slots: ScheduleSlot[]): boolean {
+  return slots.some((s) => s.days.length > 0 && !(s.start < s.end));
+}
+
 /**
  * Edit a group's weekly timetable slots: for each slot, pick the weekday(s) and a
  * start/end time. Used in the group create/edit modal and the timetable quick-add.
@@ -61,6 +66,9 @@ export function ScheduleSlotsEditor({
           </div>
           {s.days.length === 0 && (
             <div className="text-xs text-status-awaiting">Pick at least one day.</div>
+          )}
+          {s.days.length > 0 && !(s.start < s.end) && (
+            <div className="text-xs text-status-overdue">End time must be after the start time.</div>
           )}
         </div>
       ))}

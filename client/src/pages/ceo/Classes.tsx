@@ -9,7 +9,7 @@ import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
 import type { ScheduleSlot } from "@shared/schema";
-import { ScheduleSlotsEditor } from "../../components/ScheduleSlotsEditor";
+import { ScheduleSlotsEditor, scheduleSlotsInvalid } from "../../components/ScheduleSlotsEditor";
 import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner, StatTile } from "../../components/ui";
 
 /**
@@ -209,7 +209,7 @@ function GroupModal({
         )}
         <Button
           className="w-full"
-          disabled={!name || !teacherId || save.isPending}
+          disabled={!name || !teacherId || scheduleSlotsInvalid(slots) || save.isPending}
           onClick={() => save.mutate()}
         >
           {t("save")}

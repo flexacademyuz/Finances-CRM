@@ -5,9 +5,9 @@ import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import type { Class, TeacherRow } from "../../lib/types";
 import type { ScheduleSlot } from "@shared/schema";
-import { buildEntries, findClashes } from "@shared/timetable";
+import { buildEntries, findClashes, layoutDayEntries } from "@shared/timetable";
 import { Button, Card, Field, Modal, Select, Spinner } from "../../components/ui";
-import { ScheduleSlotsEditor } from "../../components/ScheduleSlotsEditor";
+import { ScheduleSlotsEditor, scheduleSlotsInvalid } from "../../components/ScheduleSlotsEditor";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]; // 0=Mon … 5=Sat
 const HOUR_PX = 58;
@@ -178,36 +178,42 @@ export function TimetablePage() {
                       style={{ top: ((m - rangeStart) / 60) * HOUR_PX }}
                     />
                   ))}
-                  {shown
-                    .filter((e) => e.day === day)
-                    .map((e, i) => {
-                      const top = ((e.start - rangeStart) / 60) * HOUR_PX;
-                      const height = Math.max(24, ((e.end - e.start) / 60) * HOUR_PX - 3);
-                      const bg = colorFor(e.subject || e.name);
-                      return (
-                        <div
-                          key={`${e.classId}-${i}`}
-                          className="absolute left-1 right-1 overflow-hidden rounded-lg px-2 py-1 text-white shadow-sm"
-                          style={{
-                            top,
-                            height,
-                            background: bg,
-                            outline: e.clash ? "2px solid #ef4444" : "none",
-                            outlineOffset: e.clash ? "1px" : undefined,
-                          }}
-                          title={`${e.name}${e.room ? ` · ${e.room}` : ""} · ${teacherName(e.teacherId)} · ${e.startLabel}–${e.endLabel}${e.clash ? " · CLASH" : ""}`}
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="truncate text-xs font-bold leading-tight">{e.name}</span>
-                            {e.clash && <AlertTriangle size={12} className="mt-0.5 shrink-0" />}
-                          </div>
-                          <div className="text-[11px] font-medium opacity-90">{e.startLabel}</div>
-                          {height > 46 && e.room && (
-                            <div className="truncate text-[10px] opacity-80">{e.room}</div>
-                          )}
+                  {layoutDayEntries(shown.filter((e) => e.day === day)).map((e, i) => {
+                    const invalid = e.end <= e.start; // end not after start
+                    const top = ((e.start - rangeStart) / 60) * HOUR_PX;
+                    const height = invalid ? 34 : Math.max(34, ((e.end - e.start) / 60) * HOUR_PX - 3);
+                    const widthPct = 100 / e.cols;
+                    const leftPct = e.col * widthPct;
+                    const bg = colorFor(e.subject || e.name);
+                    const flag = e.clash || invalid;
+                    return (
+                      <div
+                        key={`${e.classId}-${i}`}
+                        className="absolute overflow-hidden rounded-lg px-2 py-1 text-white shadow-sm"
+                        style={{
+                          top,
+                          height,
+                          left: `calc(${leftPct}% + 2px)`,
+                          width: `calc(${widthPct}% - 4px)`,
+                          background: bg,
+                          outline: flag ? `2px solid ${invalid ? "#f59e0b" : "#ef4444"}` : "none",
+                          outlineOffset: flag ? "1px" : undefined,
+                        }}
+                        title={`${e.name}${e.room ? ` · ${e.room}` : ""} · ${teacherName(e.teacherId)} · ${e.startLabel}–${e.endLabel}${invalid ? " · INVALID (end ≤ start)" : e.clash ? " · CLASH" : ""}`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="truncate text-xs font-bold leading-tight">{e.name}</span>
+                          {flag && <AlertTriangle size={12} className="mt-0.5 shrink-0" />}
                         </div>
-                      );
-                    })}
+                        <div className="text-[10px] font-medium opacity-90">
+                          {e.startLabel}–{invalid ? "?" : e.endLabel}
+                        </div>
+                        {height > 54 && e.room && (
+                          <div className="truncate text-[10px] opacity-80">{e.room}</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -274,7 +280,11 @@ function AddSessionModal({
           </Field>
         )}
         {save.isError && <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>}
-        <Button className="w-full" disabled={!classId || save.isPending} onClick={() => save.mutate()}>
+        <Button
+          className="w-full"
+          disabled={!classId || scheduleSlotsInvalid(slots) || save.isPending}
+          onClick={() => save.mutate()}
+        >
           {t("save")}
         </Button>
       </div>

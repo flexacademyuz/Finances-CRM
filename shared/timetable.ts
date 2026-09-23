@@ -79,6 +79,43 @@ export function buildEntries(classes: TimetableClass[]): TimetableEntry[] {
 }
 
 /**
+ * Lay a single day's entries into side-by-side columns so overlapping sessions
+ * sit next to each other instead of hiding behind one another. Returns each entry
+ * with its column index and the number of columns in its overlap cluster, so a
+ * renderer can set width = 1/cols and left = col/cols.
+ */
+export function layoutDayEntries<T extends { start: number; end: number }>(
+  entries: T[],
+): (T & { col: number; cols: number })[] {
+  const sorted = entries
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => a.e.start - b.e.start || a.e.end - b.e.end || a.i - b.i);
+  const out: (T & { col: number; cols: number })[] = [];
+  let cluster: { e: T; col: number }[] = [];
+  let clusterEnd = -Infinity;
+
+  const flush = () => {
+    const cols = cluster.reduce((m, c) => Math.max(m, c.col + 1), 0) || 1;
+    for (const c of cluster) out.push({ ...c.e, col: c.col, cols });
+    cluster = [];
+    clusterEnd = -Infinity;
+  };
+
+  for (const { e } of sorted) {
+    // A gap (this entry starts at/after everything so far) ends the cluster.
+    if (cluster.length && e.start >= clusterEnd) flush();
+    const colEnd: number[] = [];
+    for (const c of cluster) colEnd[c.col] = Math.max(colEnd[c.col] ?? -Infinity, c.e.end);
+    let col = 0;
+    while (colEnd[col] !== undefined && colEnd[col] > e.start) col++;
+    cluster.push({ e, col });
+    clusterEnd = Math.max(clusterEnd, e.end);
+  }
+  flush();
+  return out;
+}
+
+/**
  * Indices of entries that clash: same weekday, overlapping time, AND the same
  * teacher OR the same (non-empty) room — i.e. a teacher or a room double-booked.
  */
