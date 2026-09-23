@@ -1,0 +1,2 @@
+ALTER TABLE "settings" ADD COLUMN "today_summary_enabled" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "settings" ADD COLUMN "today_summary_hours" text DEFAULT '12,15,19,0' NOT NULL;

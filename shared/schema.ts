@@ -455,6 +455,11 @@ export const settings = pgTable("settings", {
   smsReceiptEnabled: boolean("sms_receipt_enabled").notNull().default(true),
   smsOverdueEnabled: boolean("sms_overdue_enabled").notNull().default(true),
   smsOverdueDays: bigint("sms_overdue_days", { mode: "number" }).notNull().default(10),
+  // "Today so far" Telegram summaries: master on/off, and the Tashkent local
+  // hours (0–23, comma-separated) to send at. Hour 0 (midnight) is the
+  // end-of-day close. See server/jobs.ts + bot/notifications.sendTodaySummary.
+  todaySummaryEnabled: boolean("today_summary_enabled").notNull().default(true),
+  todaySummaryHours: text("today_summary_hours").notNull().default("12,15,19,0"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -939,6 +944,27 @@ export const settingsSchema = z.object({
   smsOverdueEnabled: z.boolean().optional(),
   // 0–120 days past due before the overdue reminder fires.
   smsOverdueDays: z.coerce.number().int().min(0).max(120).optional(),
+  todaySummaryEnabled: z.boolean().optional(),
+  // Comma-separated Tashkent hours (0–23); normalised: bad tokens dropped,
+  // deduped, sorted. An empty result means "no scheduled sends".
+  todaySummaryHours: z
+    .string()
+    .max(120)
+    .transform((s) =>
+      Array.from(
+        new Set(
+          s
+            .split(",")
+            .map((x) => x.trim())
+            .filter((x) => x !== "") // Number("") is 0 — drop blanks first
+            .map(Number)
+            .filter((n) => Number.isInteger(n) && n >= 0 && n <= 23),
+        ),
+      )
+        .sort((a, b) => a - b)
+        .join(","),
+    )
+    .optional(),
 });
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;

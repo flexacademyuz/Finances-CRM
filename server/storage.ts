@@ -1520,6 +1520,8 @@ export async function updateSettings(patch: {
   smsReceiptEnabled?: boolean;
   smsOverdueEnabled?: boolean;
   smsOverdueDays?: number;
+  todaySummaryEnabled?: boolean;
+  todaySummaryHours?: string;
 }) {
   const [s] = await db
     .update(settings)

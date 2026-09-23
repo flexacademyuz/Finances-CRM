@@ -19,6 +19,15 @@ export type SmsMessage = {
   createdAt: string;
 };
 
+/** App settings row, as returned by GET /api/settings (subset used by the UI). */
+export type AppSettings = {
+  gracePeriodDays: number;
+  currency: string;
+  todaySummaryEnabled: boolean;
+  /** Comma-separated Tashkent hours (0–23) the "Today so far" summary sends at. */
+  todaySummaryHours: string;
+};
+
 /** SMS feature status + recent log, as returned by GET /api/sms. */
 export type SmsOverview = {
   config: {

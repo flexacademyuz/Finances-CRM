@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Building2, Calculator } from "lucide-react";
+import { Plus, Pencil, Building2, Calculator, Clock } from "lucide-react";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import type { Branch } from "../../lib/types";
-import type { PaymentGroupStatus } from "../../lib/types";
+import type { PaymentGroupStatus, AppSettings } from "../../lib/types";
 import { Button, Card, Field, Input, Modal, Spinner } from "../../components/ui";
 
 /**
@@ -33,6 +33,8 @@ export function BranchesPage() {
       </div>
 
 
+      <TodaySummarySettings />
+
       {branches.isLoading ? (
         <Spinner />
       ) : (
@@ -57,6 +59,111 @@ export function BranchesPage() {
         />
       )}
     </div>
+  );
+}
+
+/** Pretty-print "12,15,19,0" as "12:00, 15:00, 19:00, 00:00". */
+function formatHours(raw: string): string {
+  const nums = raw
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => x !== "")
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 23);
+  if (!nums.length) return "—";
+  return Array.from(new Set(nums))
+    .sort((a, b) => a - b)
+    .map((h) => `${String(h).padStart(2, "0")}:00`)
+    .join(", ");
+}
+
+/**
+ * Global "Today so far" summary controls: switch the scheduled Telegram summaries
+ * on/off and set the Tashkent hours they send at. Applies to every branch group
+ * and every finance-staff DM.
+ */
+function TodaySummarySettings() {
+  const qc = useQueryClient();
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => api<AppSettings>("/api/settings") });
+
+  const [enabled, setEnabled] = useState(true);
+  const [hours, setHours] = useState("12,15,19,0");
+  useEffect(() => {
+    if (!settings.data) return;
+    setEnabled(settings.data.todaySummaryEnabled);
+    setHours(settings.data.todaySummaryHours);
+  }, [settings.data]);
+
+  const save = useMutation({
+    mutationFn: (patch: Partial<AppSettings>) => api("/api/settings", { method: "PATCH", body: patch }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+
+  const toggle = (next: boolean) => {
+    setEnabled(next);
+    save.mutate({ todaySummaryEnabled: next });
+  };
+
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+            <Clock size={18} />
+          </span>
+          <div className="min-w-0">
+            <div className="font-semibold">"Today so far" summaries</div>
+            <div className="text-xs text-muted">
+              Telegram totals sent to each branch group and to finance staff.
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          disabled={save.isPending || settings.isLoading}
+          onClick={() => toggle(!enabled)}
+          className={`relative h-7 w-12 shrink-0 rounded-full ring-1 transition-colors ${
+            enabled ? "bg-status-paid ring-status-paid/30" : "bg-border ring-border"
+          } disabled:opacity-50`}
+        >
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${
+              enabled ? "left-[22px]" : "left-0.5"
+            }`}
+          />
+        </button>
+      </div>
+
+      {enabled && (
+        <>
+          <Field label="Send at (Tashkent time)">
+            <Input
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              placeholder="12, 15, 19, 0"
+              inputMode="numeric"
+            />
+          </Field>
+          <p className="text-xs text-muted">
+            Comma-separated hours, 0–23. 0 = midnight (closes the day). Currently:{" "}
+            <span className="font-medium">{formatHours(hours)}</span>.
+          </p>
+          {save.isError && (
+            <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>
+          )}
+          {save.isSuccess && <div className="text-sm text-status-paid">Saved.</div>}
+          <Button
+            className="w-full"
+            disabled={save.isPending}
+            onClick={() => save.mutate({ todaySummaryHours: hours })}
+          >
+            Save times
+          </Button>
+        </>
+      )}
+    </Card>
   );
 }
 

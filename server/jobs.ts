@@ -2,6 +2,19 @@ import { recomputeStatuses } from "./services/billing";
 import { sendAwaitingDigest, sendTodaySummary } from "./bot/notifications";
 import { notifyOverdueParents } from "./sms/service";
 import { ensureSponsoredComps } from "./services/sponsored";
+import { getSettings } from "./storage";
+
+/** Parse the stored "12,15,19,0" into a set of valid Tashkent hours (0–23). */
+function parseSummaryHours(raw: string | null | undefined): Set<number> {
+  const set = new Set<number>();
+  for (const tok of (raw ?? "").split(",")) {
+    const trimmed = tok.trim();
+    if (trimmed === "") continue; // Number("") is 0 — skip blanks
+    const n = Number(trimmed);
+    if (Number.isInteger(n) && n >= 0 && n <= 23) set.add(n);
+  }
+  return set;
+}
 
 /**
  * Lightweight in-process scheduler. Recomputes student statuses hourly (cheap,
@@ -67,25 +80,30 @@ export function startJobs(): void {
     }
   }, HOUR);
 
-  // "Today so far" summary at Tashkent (UTC+5) 12:00, 15:00, 19:00, and 00:00 —
-  // i.e. UTC 07:00, 10:00, 14:00, 19:00. The midnight run (UTC 19) closes out the
-  // day that just ended. Fires once per checkpoint per day.
-  const SUMMARY_HOURS_UTC = new Map<number, boolean>([
-    [7, false], // 12:00 Tashkent
-    [10, false], // 15:00
-    [14, false], // 19:00
-    [19, true], // 00:00 (end of day)
-  ]);
+  // "Today so far" summaries, at CEO-configured Tashkent (UTC+5, no DST) hours.
+  // Master switch + the hours are settings, editable on the Branches screen. Hour
+  // 0 (midnight) closes out the day that just ended. Fires once per hour per
+  // Tashkent day. Uzbekistan has no daylight saving, so +5 is always correct.
   const firedSummary = new Set<string>();
   setInterval(async () => {
     const now = new Date();
-    const hour = now.getUTCHours();
-    if (!SUMMARY_HOURS_UTC.has(hour)) return;
-    const key = `${now.toISOString().slice(0, 10)}-${hour}`;
+    const tashkentMs = now.getTime() + 5 * HOUR;
+    const tashkentHour = new Date(tashkentMs).getUTCHours();
+    const tashkentDay = new Date(tashkentMs).toISOString().slice(0, 10);
+    const key = `${tashkentDay}-${tashkentHour}`;
     if (firedSummary.has(key)) return;
+    let settings;
+    try {
+      settings = await getSettings();
+    } catch (err) {
+      console.error("[jobs] sendTodaySummary settings load failed:", (err as Error).message);
+      return;
+    }
+    if (!settings?.todaySummaryEnabled) return;
+    if (!parseSummaryHours(settings.todaySummaryHours).has(tashkentHour)) return;
     firedSummary.add(key);
     try {
-      await sendTodaySummary(SUMMARY_HOURS_UTC.get(hour));
+      await sendTodaySummary(tashkentHour === 0); // midnight = end-of-day close
     } catch (err) {
       console.error("[jobs] sendTodaySummary failed:", (err as Error).message);
     }
