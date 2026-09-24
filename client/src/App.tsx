@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LocaleContext, type Locale, useI18n } from "./lib/i18n";
 import { detectLocale, isTelegram } from "./lib/telegram";
@@ -34,6 +34,8 @@ import { MyClasses } from "./pages/teacher/MyClasses";
 import { MySalary } from "./pages/teacher/MySalary";
 // Everyone
 import { AccountPage } from "./pages/Account";
+// Public
+import { Landing } from "./pages/Landing";
 
 function Gate({ err }: { err: ApiError }) {
   const { t } = useI18n();
@@ -125,6 +127,14 @@ function Gate({ err }: { err: ApiError }) {
   );
 }
 
+/** Logged-out web visitors get the marketing page; its "Log in" leads to /login.
+ *  Telegram users and pending/other auth states go straight to the gate. */
+function PublicGate({ err }: { err: ApiError }) {
+  const [loc] = useLocation();
+  if (!isTelegram() && err?.status === 401 && loc !== "/login") return <Landing />;
+  return <Gate err={err} />;
+}
+
 function Routes({ me }: { me: Me }) {
   const role = me.user.role;
   const a = accessFor(me.user);
@@ -163,11 +173,20 @@ function Routes({ me }: { me: Me }) {
 
 export function App() {
   const [locale, setLocale] = useState<Locale>(detectLocale());
+  const [loc] = useLocation();
+  // /welcome always shows the public landing page, even when signed in.
+  if (loc === "/welcome") {
+    return (
+      <LocaleContext.Provider value={{ locale, setLocale }}>
+        <Landing />
+      </LocaleContext.Provider>
+    );
+  }
   return (
     <LocaleContext.Provider value={{ locale, setLocale }}>
       <SessionProvider
         renderLoading={() => <Spinner />}
-        renderGate={(err) => <Gate err={err} />}
+        renderGate={(err) => <PublicGate err={err} />}
       >
         {(me) => (
           <BranchProvider me={me}>
