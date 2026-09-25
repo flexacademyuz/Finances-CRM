@@ -418,6 +418,22 @@ const dict = {
     uz: "So'rov yuborildi. Rahbar tasdiqlagach kirish huquqiga ega bo'lasiz.",
   },
   awaitingApproval: { en: "Your access request is awaiting approval.", uz: "So'rovingiz tasdiqlanishini kutmoqda." },
+  welcomeTo: { en: "Welcome to", uz: "Xush kelibsiz" },
+  loginNote: {
+    en: "Sign in with the username and password your academy gave you.",
+    uz: "Akademiya bergan foydalanuvchi nomi va parol bilan kiring.",
+  },
+  financesCrm: { en: "Finances CRM", uz: "Moliya CRM" },
+  loginTitle: { en: "Log in to your account", uz: "Hisobingizga kiring" },
+  signupTitle: { en: "Request an account", uz: "Hisob so'rash" },
+  loginBlurb: {
+    en: "Payments, salaries, groups and reports for your academy — in one place, on the web and in Telegram.",
+    uz: "To'lovlar, maoshlar, guruhlar va hisobotlar — barchasi bir joyda, vebda va Telegramda.",
+  },
+  enterFullName: { en: "Enter your full name", uz: "To'liq ismingizni kiriting" },
+  enterUsername: { en: "Enter your username", uz: "Foydalanuvchi nomini kiriting" },
+  enterPassword: { en: "Enter your password", uz: "Parolni kiriting" },
+  backToSite: { en: "Back to site", uz: "Saytga qaytish" },
   myAccount: { en: "My account", uz: "Mening hisobim" },
   accountRecoveryNote: {
     en: "Set a username & password so you can recover access if you switch Telegram accounts.",

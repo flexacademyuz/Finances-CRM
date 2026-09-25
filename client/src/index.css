@@ -75,6 +75,17 @@ body {
     @apply border-0 text-white shadow-tactile hover:brightness-[1.03] active:translate-y-[3px] active:shadow-tactile-press;
     background: var(--primary);
   }
+  /* Login screen pill buttons (filled gradient + outline). */
+  .lg-btn {
+    @apply inline-flex min-w-[140px] items-center justify-center rounded-pill px-7 py-2.5 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .lg-btn-primary {
+    @apply text-white shadow-[0_10px_20px_-8px_rgba(52,87,245,0.6)] hover:brightness-110;
+    background: var(--brand-gradient);
+  }
+  .lg-btn-outline {
+    @apply border-2 border-border bg-surface text-muted hover:border-primary hover:text-primary;
+  }
   .btn-ghost {
     @apply border border-border bg-surface text-text hover:border-primary hover:bg-primary-soft hover:text-primary active:scale-[0.98];
   }

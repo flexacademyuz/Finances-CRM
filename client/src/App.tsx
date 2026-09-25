@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { Route, Switch, Redirect, useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LocaleContext, type Locale, useI18n } from "./lib/i18n";
+import { LocaleContext, type Locale } from "./lib/i18n";
 import { detectLocale, isTelegram } from "./lib/telegram";
 import { SessionProvider, BranchProvider, type Me } from "./lib/session";
 import { accessFor } from "./lib/access";
 import { Layout } from "./components/Layout";
-import { Button, Card, Field, Input, Spinner } from "./components/ui";
-import { api, type ApiError } from "./lib/api";
-import { setToken } from "./lib/auth";
+import { Spinner } from "./components/ui";
+import type { ApiError } from "./lib/api";
 
 // CEO pages
 import { CeoDashboard } from "./pages/ceo/Dashboard";
@@ -36,103 +34,14 @@ import { MySalary } from "./pages/teacher/MySalary";
 import { AccountPage } from "./pages/Account";
 // Public
 import { Landing } from "./pages/Landing";
-
-function Gate({ err }: { err: ApiError }) {
-  const { t } = useI18n();
-  const qc = useQueryClient();
-  const pending = err?.status === 403 && err?.code === "pending";
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [sent, setSent] = useState(false);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-
-  const login = useMutation({
-    mutationFn: () => api<{ token?: string }>("/api/auth/login", { method: "POST", body: { username, password } }),
-    onSuccess: (data) => {
-      // Browser session: keep the token so the API is authenticated on reload.
-      if (data?.token) setToken(data.token);
-      qc.invalidateQueries();
-    },
-  });
-  const signup = useMutation({
-    mutationFn: () => api("/api/auth/signup", { method: "POST", body: { fullName, username, password } }),
-    onSuccess: () => setSent(true),
-  });
-
-  const shell = (children: React.ReactNode) => (
-    <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
-      <div className="text-4xl">🔒</div>
-      <div className="text-lg font-bold">{t("appName")}</div>
-      {children}
-    </div>
-  );
-
-  if (pending) return shell(<p className="text-sm text-tg-hint">{t("awaitingApproval")}</p>);
-  if (sent) return shell(<p className="text-sm text-status-paid">{t("requestSent")}</p>);
-
-  return shell(
-    <Card className="w-full space-y-3 text-left">
-      <div className="flex gap-1 rounded-full bg-bg p-1 ring-1 ring-border">
-        {(["login", "signup"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium transition ${
-              mode === m ? "bg-primary text-white" : "text-muted"
-            }`}
-          >
-            {m === "login" ? t("login") : t("requestAccess")}
-          </button>
-        ))}
-      </div>
-      <p className="text-xs text-tg-hint">{mode === "login" ? t("loginToRecover") : t("requestAccessNote")}</p>
-
-      {mode === "signup" && (
-        <Field label={t("fullName")}>
-          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </Field>
-      )}
-      <Field label={t("username")}>
-        <Input value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="none" />
-      </Field>
-      <Field label={t("password")}>
-        <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </Field>
-
-      {(login.isError || signup.isError) && (
-        <div className="text-sm text-status-overdue">
-          {((mode === "login" ? login.error : signup.error) as Error).message}
-        </div>
-      )}
-
-      {mode === "login" ? (
-        <Button
-          className="w-full"
-          disabled={!username || !password || login.isPending}
-          onClick={() => login.mutate()}
-        >
-          {t("login")}
-        </Button>
-      ) : (
-        <Button
-          className="w-full"
-          disabled={!fullName || !username || !password || signup.isPending}
-          onClick={() => signup.mutate()}
-        >
-          {t("requestAccess")}
-        </Button>
-      )}
-    </Card>,
-  );
-}
+import { LoginPage } from "./pages/Login";
 
 /** Logged-out web visitors get the marketing page; its "Log in" leads to /login.
  *  Telegram users and pending/other auth states go straight to the gate. */
 function PublicGate({ err }: { err: ApiError }) {
   const [loc] = useLocation();
   if (!isTelegram() && err?.status === 401 && loc !== "/login") return <Landing />;
-  return <Gate err={err} />;
+  return <LoginPage err={err} />;
 }
 
 function Routes({ me }: { me: Me }) {
