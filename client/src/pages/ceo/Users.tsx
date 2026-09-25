@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, ShieldCheck, Eye } from "lucide-react";
 import { api } from "../../lib/api";
+import { startImpersonating } from "../../lib/impersonation";
 import { useI18n } from "../../lib/i18n";
 import { useBranch } from "../../lib/session";
 import { money } from "../../lib/format";
@@ -88,6 +89,16 @@ export function UsersPage() {
                       onClick={() => setPermsFor(u)}
                     >
                       <ShieldCheck size={16} />
+                    </button>
+                  )}
+                  {u.role !== "ceo" && u.active && (
+                    <button
+                      className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+                      title={t("impersonate")}
+                      aria-label={t("impersonate")}
+                      onClick={() => startImpersonating(u.id)}
+                    >
+                      <Eye size={16} />
                     </button>
                   )}
                 </div>

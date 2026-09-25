@@ -431,6 +431,13 @@ const dict = {
   setLoginCreds: { en: "Set login", uz: "Kirish o'rnatish" },
   loginUsernameLabel: { en: "Login username", uz: "Kirish nomi" },
   logOut: { en: "Log out", uz: "Chiqish" },
+  impersonate: { en: "View as this user", uz: "Shu foydalanuvchi sifatida ko'rish" },
+  viewingAs: { en: "Viewing as", uz: "Ko'rinish:" },
+  impersonateNote: {
+    en: "Actions you take are real and recorded as this user.",
+    uz: "Amallaringiz haqiqiy va shu foydalanuvchi nomidan yoziladi.",
+  },
+  stopImpersonating: { en: "Back to my account", uz: "Hisobimga qaytish" },
 
   timetable: { en: "Timetable", uz: "Dars jadvali" },
 

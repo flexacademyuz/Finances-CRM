@@ -59,6 +59,9 @@ router.get(
       user: sanitize(req.authUser as User),
       teacherId: req.teacherId ?? null,
       branches: await listBranches(),
+      impersonator: req.impersonator
+        ? { id: req.impersonator.id, fullName: req.impersonator.fullName }
+        : null,
     });
   }),
 );
@@ -71,6 +74,12 @@ router.get(
 router.patch(
   "/me/credentials",
   asyncHandler(async (req, res) => {
+    if (req.impersonator) {
+      return res.status(403).json({
+        error: "forbidden",
+        message: "Can't change another user's login while impersonating them.",
+      });
+    }
     const { username, password } = credentialsSchema.parse(req.body);
     const taken = await getUserByLoginUsername(username);
     if (taken && taken.id !== req.authUser!.id) {

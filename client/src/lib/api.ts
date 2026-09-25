@@ -1,6 +1,7 @@
 import { getInitData } from "./telegram";
 import { getToken } from "./auth";
 import { getSelectedBranch } from "./branch";
+import { getImpersonatedUserId, stopImpersonating } from "./impersonation";
 
 /**
  * Choose the auth header: Telegram initData when running inside Telegram, else a
@@ -11,6 +12,12 @@ function authHeader(): string {
   if (initData) return `tma ${initData}`;
   const token = getToken();
   return token ? `Bearer ${token}` : "";
+}
+
+/** CEO "view as user" header, when impersonating. */
+function impersonationHeader(): Record<string, string> {
+  const id = getImpersonatedUserId();
+  return id ? { "X-Impersonate-User": id } : {};
 }
 
 export class ApiError extends Error {
@@ -46,6 +53,7 @@ export async function api<T = unknown>(
       "Content-Type": "application/json",
       Authorization: authHeader(),
       ...(branch ? { "X-Branch-Id": branch } : {}),
+      ...impersonationHeader(),
     },
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
   });
@@ -59,6 +67,10 @@ export async function api<T = unknown>(
       message = data.message ?? message;
     } catch {
       /* non-JSON error */
+    }
+    // The impersonated user was disabled/removed: drop back to the CEO session.
+    if (code === "impersonation_invalid") {
+      stopImpersonating();
     }
     throw new ApiError(res.status, code, message);
   }
@@ -75,7 +87,11 @@ export async function downloadCsv(path: string, filename: string, query?: Record
   if (query) for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v);
   const branch = getSelectedBranch();
   const res = await fetch(url.toString(), {
-    headers: { Authorization: authHeader(), ...(branch ? { "X-Branch-Id": branch } : {}) },
+    headers: {
+      Authorization: authHeader(),
+      ...(branch ? { "X-Branch-Id": branch } : {}),
+      ...impersonationHeader(),
+    },
   });
   const blob = await res.blob();
   const a = document.createElement("a");

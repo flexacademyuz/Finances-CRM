@@ -22,6 +22,7 @@ import {
   Building2,
   CalendarDays,
   LogOut,
+  Eye,
   ChevronLeft,
   ChevronRight,
   X,
@@ -34,6 +35,7 @@ import { accessFor } from "../lib/access";
 import { can } from "@shared/permissions";
 import { haptic, isTelegram } from "../lib/telegram";
 import { clearToken } from "../lib/auth";
+import { stopImpersonating } from "../lib/impersonation";
 
 type NavItem = { href: string; label: StringKey; icon: ReactNode };
 type BottomItem = NavItem & { center?: boolean };
@@ -285,7 +287,7 @@ function DesktopSidebar({
 
 export function Layout({ role, children }: { role: Role; children: ReactNode }) {
   const { t, locale, setLocale } = useI18n();
-  const { user } = useSession();
+  const { user, impersonator } = useSession();
   const [location] = useLocation();
   const [drawer, setDrawer] = useState(false);
   // Desktop sidebar collapse state ("half-closed"), remembered across sessions.
@@ -360,6 +362,22 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
             {initials(user.fullName)}
           </div>
         </header>
+
+        {impersonator && (
+          <div className="sticky top-16 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warning/40 bg-warning/15 px-4 py-2 text-sm">
+            <Eye size={16} className="shrink-0 text-warning" />
+            <span className="font-semibold">
+              {t("viewingAs")} {user.fullName} · {t(user.role)}
+            </span>
+            <span className="text-xs text-muted">{t("impersonateNote")}</span>
+            <button
+              onClick={stopImpersonating}
+              className="ml-auto rounded-btn bg-surface px-3 py-1 text-xs font-semibold ring-1 ring-border hover:bg-bg"
+            >
+              {t("stopImpersonating")}
+            </button>
+          </div>
+        )}
 
         {/* Extra bottom padding on mobile so the tab bar never covers content.
             A tighter max width keeps the content column contained and glamorous

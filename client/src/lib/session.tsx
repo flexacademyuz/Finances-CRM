@@ -4,7 +4,13 @@ import { api, ApiError } from "./api";
 import type { User, Branch } from "@shared/schema";
 import { getSelectedBranch, setSelectedBranch } from "./branch";
 
-export type Me = { user: User; teacherId: string | null; branches: Branch[] };
+export type Me = {
+  user: User;
+  teacherId: string | null;
+  branches: Branch[];
+  /** The real CEO when they're viewing the app as `user`; null otherwise. */
+  impersonator: { id: string; fullName: string } | null;
+};
 
 const SessionContext = createContext<Me | null>(null);
 

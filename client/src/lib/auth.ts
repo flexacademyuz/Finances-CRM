@@ -3,6 +3,8 @@
  * with username/password and keeps a bearer token here; inside Telegram, initData
  * is used instead and no token is needed.
  */
+import { clearImpersonation } from "./impersonation";
+
 const KEY = "flex_session_token";
 
 export function getToken(): string | null {
@@ -22,6 +24,7 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
+  clearImpersonation();
   try {
     localStorage.removeItem(KEY);
   } catch {

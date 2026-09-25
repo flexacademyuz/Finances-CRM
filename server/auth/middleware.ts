@@ -15,6 +15,9 @@ declare global {
       // The set of branches this user may access. An empty array = "all
       // branches" (full access). One or more ids = exactly those branches.
       userBranches?: string[];
+      // Set when a CEO is viewing the app as another user (X-Impersonate-User).
+      // `authUser` is then the impersonated user; this is the real CEO.
+      impersonator?: User;
     }
   }
 }
@@ -80,6 +83,28 @@ async function finishAuth(
   if (!user.active) {
     return res.status(403).json({ error: "inactive", message: "Account disabled." });
   }
+
+  // CEO impersonation: act as another (approved, active, non-CEO) user so the CEO
+  // can see and test exactly what that user sees. Everything downstream — role,
+  // permissions, branch scoping, teacherId — follows the impersonated user.
+  const impersonateId = req.header("x-impersonate-user");
+  if (impersonateId && user.role === "ceo" && impersonateId !== user.id) {
+    const target = UUID_RE.test(impersonateId) ? await getUserById(impersonateId) : undefined;
+    if (!target || !target.approved || !target.active || target.role === "ceo") {
+      return res.status(403).json({
+        error: "impersonation_invalid",
+        message: "That user can't be impersonated (missing, disabled, or a CEO).",
+      });
+    }
+    if (req.method !== "GET") {
+      console.log(
+        `[impersonate] ${user.fullName} (${user.id}) as ${target.fullName} (${target.id}): ${req.method} ${req.originalUrl}`,
+      );
+    }
+    req.impersonator = user;
+    user = target;
+  }
+
   req.authUser = user;
   req.userBranches = user.branchIds ?? [];
   if (user.role === "teacher") {
@@ -88,6 +113,8 @@ async function finishAuth(
   }
   next();
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The branches the caller may access (empty = all branches / full access). */
 function allowedBranches(req: Request): string[] {
