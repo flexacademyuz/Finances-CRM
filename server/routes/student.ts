@@ -8,11 +8,19 @@
  * student can never read another student's data by changing an id.
  */
 import { Router } from "express";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { asyncHandler } from "./helpers";
 import { authenticateStudent, forbidPreviewWrites } from "../auth/student";
 import { db } from "../db";
-import { payments, studentNotificationPrefs, studentScores, attendanceRecords } from "@shared/schema";
+import {
+  payments,
+  studentNotificationPrefs,
+  studentScores,
+  attendanceRecords,
+  students,
+  classes,
+  notifications,
+} from "@shared/schema";
 import { studentPrefsSchema } from "@shared/schema";
 import { analyzeScores, scorePercent } from "@shared/scores";
 import { NOTIFICATION_PREF_GROUPS, NOTIFICATION_TYPES } from "@shared/notifications";
@@ -90,10 +98,36 @@ async function profile(req: import("express").Request) {
   };
 }
 
+/**
+ * The groups this Telegram account can switch between (one student record per
+ * group), each with its unread count. In preview it's just the viewed record.
+ */
+async function profilesFor(req: import("express").Request) {
+  const ids = req.studentAccounts?.length ? req.studentAccounts.map((a) => a.studentId) : [req.student!.id];
+  const rows = await db
+    .select({
+      studentId: students.id,
+      fullName: students.fullName,
+      active: students.active,
+      groupName: classes.name,
+      subject: classes.subject,
+      unread: sql<number>`(select count(*)::int from ${notifications} n where n.student_id = ${students.id} and n.read_at is null)`,
+    })
+    .from(students)
+    .innerJoin(classes, eq(students.classId, classes.id))
+    .where(inArray(students.id, ids));
+  // Keep the link order (first linked first).
+  return ids.map((id) => rows.find((r) => r.studentId === id)).filter(Boolean).map((r) => ({ ...r!, unread: Number(r!.unread) }));
+}
+
 router.get(
   "/me",
   asyncHandler(async (req, res) => {
-    res.json({ ...(await profile(req)), unread: await unreadCount(req.student!.id) });
+    res.json({
+      ...(await profile(req)),
+      unread: await unreadCount(req.student!.id),
+      profiles: await profilesFor(req),
+    });
   }),
 );
 
@@ -368,13 +402,13 @@ router.put(
   }),
 );
 
-/** Disconnect this Telegram account from the student (log out). */
+/** Disconnect this Telegram account from all its linked groups (log out). */
 router.post(
   "/unlink",
   asyncHandler(async (req, res) => {
-    if (!req.studentAccount) return res.status(400).json({ error: "no_account" });
-    await unlinkAccount(req.studentAccount, { type: "student" });
-    res.json({ ok: true });
+    if (!req.studentAccounts?.length) return res.status(400).json({ error: "no_account" });
+    for (const acc of req.studentAccounts) await unlinkAccount(acc, { type: "student" });
+    res.json({ ok: true, unlinked: req.studentAccounts.length });
   }),
 );
 

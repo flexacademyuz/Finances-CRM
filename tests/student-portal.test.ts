@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { createScoreSchema } from "@shared/schema";
 import { summarize, summaryFromCounts, currentStreak, shouldWarnAttendance } from "@shared/attendance";
 import { analyzeScores, scorePercent, isScoreCategory } from "@shared/scores";
 import {
@@ -102,6 +103,21 @@ describe("notification templates", () => {
     expect(html).not.toContain("<script>");
   });
 
+  it("contains no emoji in any notification, in either language", () => {
+    const params = { amount: 1, currency: "UZS", title: "T", body: "B", group: "G", status: "present", date: "2026-09-28" };
+    const emoji = /\p{Extended_Pictographic}/u;
+    for (const type of Object.keys(NOTIFICATION_TYPES)) {
+      for (const l of ["en", "uz"] as const) {
+        expect(renderTelegram(type, params, l, "IELTS")).not.toMatch(emoji);
+      }
+    }
+  });
+
+  it("adds the group as an italic line when given", () => {
+    const html = renderTelegram("debt_reminder", { balance: 5 }, "en", "Math <9A>");
+    expect(html.split("\n")[1]).toBe("<i>Math &lt;9A&gt;</i>");
+  });
+
   it("uses Uzbek month names", () => {
     expect(fmtDay("2026-10-05", "uz")).toBe("5-oktabr");
     expect(fmtDay("2026-10-05", "en")).toBe("5 Oct");
@@ -180,8 +196,7 @@ describe("lesson schedule (Tashkent)", () => {
 });
 
 describe("input validation", () => {
-  it("only accepts http(s) attachment links (no javascript: URLs)", async () => {
-    const { createScoreSchema } = await import("@shared/schema");
+  it("only accepts http(s) attachment links (no javascript: URLs)", () => {
     const base = { studentId: "00000000-0000-4000-8000-000000000001", category: "quiz", title: "Q", maxScore: 10, score: 5, scoreDate: "2026-09-01" };
     expect(createScoreSchema.safeParse({ ...base, attachmentUrl: "javascript:alert(1)" }).success).toBe(false);
     expect(createScoreSchema.safeParse({ ...base, attachmentUrl: "https://drive.example.com/x" }).success).toBe(true);

@@ -201,13 +201,13 @@ export function RecordPayment() {
                   : "bg-tg-secondary-bg text-tg-hint"
               }`}
             >
-              {preview.data.isAdvance ? `⏩ ${t("advancePayment")} — ` : ""}
+              {preview.data.isAdvance ? `${t("advancePayment")} — ` : ""}
               {t("coversMonth")}: <span className="font-semibold">{preview.data.billingMonthLabel}</span>
             </div>
           )}
           {preview.data?.frozen && (
             <div className="rounded-lg bg-status-frozen/15 px-3 py-2 text-xs text-status-frozen">
-              🔵 {t("frozenThisMonth")}.
+              {t("frozenThisMonth")}.
             </div>
           )}
           {preview.data && preview.data.paidSoFar > 0 && preview.data.remaining > 0 && (
@@ -225,7 +225,7 @@ export function RecordPayment() {
           {preview.data?.discount && (
             <div className="space-y-1 rounded-lg bg-status-discount/10 px-3 py-2 text-xs">
               <div className="font-semibold text-status-discount">
-                🏷️ {preview.data.discount.label} {t("discount")}
+                {preview.data.discount.label} {t("discount")}
               </div>
               <div className="text-tg-hint">
                 {t("fullTuition")}: {money(preview.data.fullTuition)} → {t("afterDiscount")}:{" "}

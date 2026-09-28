@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
-import { Award, TrendingUp, TrendingDown, MessageSquareQuote, Paperclip, ChevronRight } from "lucide-react";
+import { Award, TrendingUp, TrendingDown, MessageSquareQuote, Paperclip, ChevronRight, Target } from "lucide-react";
 import { categoryLabel } from "@shared/scores";
 import { fmtDay } from "@shared/notifications";
 import { Modal } from "../../components/ui";
@@ -66,12 +66,12 @@ export function ProgressPage() {
       {a.strongest && a.weakest && (
         <div className="grid grid-cols-2 gap-3">
           <PCard className="!p-3.5">
-            <div className="text-xs font-semibold text-status-paid">💪 {t("strongest")}</div>
+            <div className="inline-flex items-center gap-1 text-xs font-semibold text-status-paid"><TrendingUp size={13} /> {t("strongest")}</div>
             <div className="mt-1 truncate font-bold">{categoryLabel(a.strongest.category, locale)}</div>
             <div className="figure text-sm text-muted">{a.strongest.average}%</div>
           </PCard>
           <PCard className="!p-3.5">
-            <div className="text-xs font-semibold text-warning">🎯 {t("needsWork")}</div>
+            <div className="inline-flex items-center gap-1 text-xs font-semibold text-warning"><Target size={13} /> {t("needsWork")}</div>
             <div className="mt-1 truncate font-bold">{categoryLabel(a.weakest.category, locale)}</div>
             <div className="figure text-sm text-muted">{a.weakest.average}%</div>
           </PCard>

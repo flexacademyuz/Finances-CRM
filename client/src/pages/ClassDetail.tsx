@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Plus, Check, Minus, ChevronRight } from "lucide-react";
+import { ArrowLeft, Plus, Check, Minus, ChevronRight, Snowflake } from "lucide-react";
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
@@ -236,8 +236,8 @@ function PaidCell({ state }: { state: "paid" | "partial" | "unpaid" | "frozen" }
     );
   if (state === "frozen")
     return (
-      <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-frozen/15 text-status-frozen">
-        🔵
+      <span title="Frozen" className="inline-grid h-6 w-6 place-items-center rounded-full bg-status-frozen/15 text-status-frozen">
+        <Snowflake size={13} />
       </span>
     );
   return (

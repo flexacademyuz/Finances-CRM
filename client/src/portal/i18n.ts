@@ -94,6 +94,13 @@ const dict = {
   seeAll: { en: "See all", uz: "Hammasi" },
   newCount: { en: "{n} new", uz: "{n} ta yangi" },
   open: { en: "Open", uz: "Ochish" },
+  newBadge: { en: "New", uz: "Yangi" },
+  previewReadNote: {
+    en: "Preview: opening notifications here doesn't mark them read for the student.",
+    uz: "Ko'rish rejimi: bu yerda ochilgan xabarlar o'quvchi uchun o'qilgan deb belgilanmaydi.",
+  },
+  myGroups: { en: "My groups", uz: "Guruhlarim" },
+  connected: { en: "Connected", uz: "Ulangan" },
 
   // profile
   enrolled: { en: "Enrolled", uz: "Qabul qilingan" },

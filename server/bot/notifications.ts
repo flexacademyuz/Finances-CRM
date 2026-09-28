@@ -57,11 +57,11 @@ function formatDateTime(d: Date): string {
  * Notify that a payment was recorded — posted to the configured Telegram group
  * (if any) and DM'd to every CEO/Accountant. Message:
  *
- *   ✅ Payment recorded
- *   💵 350 000 UZS · cash
- *   👤 Muattar Abdullajonova
- *   👨‍🏫 Teacher Name — Group Name
- *   🗓 15 Sep 2026, 14:32
+ *   Payment recorded
+ *   Amount: 350 000 UZS · cash
+ *   Student: Muattar Abdullajonova
+ *   Teacher: Teacher Name — Group Name
+ *   Date: 15 Sep 2026, 14:32
  *
  * A partial payment adds a line showing the balance still owed for the month.
  */
@@ -83,17 +83,17 @@ export async function notifyPaymentRecorded(paymentId: string): Promise<void> {
   const remaining = due != null ? Math.max(due - amount, 0) : 0;
 
   const lines = [
-    `✅ <b>Payment recorded</b>`,
+    `<b>Payment recorded</b>`,
     ``,
-    `💵 <b>${money(amount, settings?.currency)}</b> · ${payment.method}`,
-    `👤 ${student?.fullName ?? "—"}`,
-    `👨‍🏫 ${teacherUser?.fullName ?? "—"} — ${cls?.name ?? "—"}`,
-    `🏢 ${branch?.name ?? "—"}`,
-    `🗓 ${formatDateTime(new Date(payment.createdAt))}`,
+    `Amount: <b>${money(amount, settings?.currency)}</b> · ${payment.method}`,
+    `Student: ${student?.fullName ?? "—"}`,
+    `Teacher: ${teacherUser?.fullName ?? "—"} — ${cls?.name ?? "—"}`,
+    `Branch: ${branch?.name ?? "—"}`,
+    `Date: ${formatDateTime(new Date(payment.createdAt))}`,
   ];
   if (remaining > 0) {
     lines.push(
-      `⚠️ Partial — <b>${money(remaining, settings?.currency)}</b> balance remaining (of ${money(due!, settings?.currency)})`,
+      `Partial — <b>${money(remaining, settings?.currency)}</b> balance remaining (of ${money(due!, settings?.currency)})`,
     );
   }
   const text = lines.join("\n");
@@ -184,15 +184,15 @@ export async function notifyStudentEdited(
   if (changes.length === 0) return; // nothing actually changed
 
   const text = [
-    `✏️ <b>Student updated by teacher</b>`,
+    `<b>Student updated by teacher</b>`,
     ``,
-    `👤 ${student.fullName}`,
-    `👨‍🏫 ${editor?.fullName ?? "—"}`,
-    `🏢 ${branch?.name ?? "—"}`,
+    `Student: ${student.fullName}`,
+    `Teacher: ${editor?.fullName ?? "—"}`,
+    `Branch: ${branch?.name ?? "—"}`,
     ``,
     ...changes,
     ``,
-    `🗓 ${formatDateTime(new Date())}`,
+    `Date: ${formatDateTime(new Date())}`,
   ].join("\n");
 
   const all = await listUsers();
@@ -251,7 +251,7 @@ export async function buildTodaySummary(dateStr: string, branchId?: string, bran
     getSettings(),
   ]);
   const currency = settings?.currency;
-  const header = `📊 <b>Today so far</b>${branchName ? ` · ${branchName}` : ""} — ${dayLabel(dateStr)}`;
+  const header = `<b>Today so far</b>${branchName ? ` · ${branchName}` : ""} — ${dayLabel(dateStr)}`;
   if (rows.length === 0) {
     return `${header}\n\nNo payments recorded yet.`;
   }
@@ -269,14 +269,14 @@ export async function buildTodaySummary(dateStr: string, branchId?: string, bran
     } else {
       detail = money(sum, currency);
     }
-    return `👨‍🏫 ${r.teacherName}: ${detail}`;
+    return `${r.teacherName}: ${detail}`;
   });
   return [
     header,
     ``,
     ...lines,
     `━━━━━━━━━━`,
-    `💰 <b>TOTAL: ${money(total, currency)}</b>`,
+    `<b>TOTAL: ${money(total, currency)}</b>`,
   ].join("\n");
 }
 
@@ -340,9 +340,9 @@ export async function sendAwaitingDigest(): Promise<void> {
   const awaiting = rows.filter((r) => r.status === "awaiting_payment").length;
   if (overdue === 0 && awaiting === 0) return;
   const text =
-    `📋 <b>Payment status digest</b> — ${monthLabel(monthKey())}\n` +
-    `⏳ Awaiting payment: <b>${awaiting}</b>\n` +
-    `⚠️ Overdue: <b>${overdue}</b>\n` +
+    `<b>Payment status digest</b> — ${monthLabel(monthKey())}\n` +
+    `Awaiting payment: <b>${awaiting}</b>\n` +
+    `Overdue: <b>${overdue}</b>\n` +
     `Open the Mini App to review the list.`;
   const staff = await financeStaff();
   await Promise.all(staff.map((s) => sendMessage(s.telegramId, text)));
@@ -361,7 +361,7 @@ export async function finalizeAndNotifySalaries(month: string = monthKey()): Pro
     const [u] = await db.select().from(users).where(eq(users.id, t.userId));
     if (!u || u.telegramId == null) continue; // web-only teacher has no Telegram to notify
     const text =
-      `💰 <b>Estimated salary finalized</b> — ${monthLabel(month)}\n` +
+      `<b>Estimated salary finalized</b> — ${monthLabel(month)}\n` +
       `Collected: ${money(Number(snap.collectedTotal), settings?.currency)}\n` +
       `Paid students: ${snap.paidStudents}\n` +
       `Estimated salary: <b>${money(Number(snap.estimatedSalary), settings?.currency)}</b>`;

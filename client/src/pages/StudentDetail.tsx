@@ -113,12 +113,12 @@ export function StudentDetail() {
           <div className="flex flex-wrap gap-2 pt-1">
             {discounts.map((d) => (
               <span key={d.id} className="rounded-full bg-status-discount/10 px-2.5 py-0.5 text-xs font-semibold text-status-discount">
-                🏷️ {d.discountType === "percentage" ? `${d.discountValue}%` : money(d.discountValue)} off
+                {d.discountType === "percentage" ? `${d.discountValue}%` : money(d.discountValue)} off
               </span>
             ))}
             {freezes.map((f) => (
               <span key={f.id} className="rounded-full bg-status-frozen/10 px-2.5 py-0.5 text-xs font-semibold text-status-frozen">
-                🔵 {formatDate(f.freezeFrom, locale)} → {f.freezeTo ? formatDate(f.freezeTo, locale) : t("untilLifted")}
+                {t("frozen")}: {formatDate(f.freezeFrom, locale)} → {f.freezeTo ? formatDate(f.freezeTo, locale) : t("untilLifted")}
               </span>
             ))}
           </div>
@@ -402,10 +402,10 @@ function SendSmsModal({
             }`}
           >
             {result.status === "sent"
-              ? `✅ Sent to ${result.to}`
+              ? `Sent to ${result.to}`
               : result.status === "logged"
                 ? `Logged (dry-run) for ${result.to} — not actually sent`
-                : `❌ Failed: ${result.error ?? "error"}`}
+                : `Failed: ${result.error ?? "error"}`}
           </div>
         )}
 

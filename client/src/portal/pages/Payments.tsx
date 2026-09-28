@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Receipt, CalendarClock, Tag, Snowflake, ChevronRight } from "lucide-react";
+import { Receipt, CalendarClock, Tag, Snowflake, ChevronRight, Check } from "lucide-react";
 import { fmtDay } from "@shared/notifications";
 import { Modal } from "../../components/ui";
 import { papi, amountDueNow, type Billing, type Discount, type Freeze, type PaymentItem, type PaymentDetail } from "../api";
@@ -35,7 +35,7 @@ export function PaymentsPage() {
       {/* Current status */}
       <PCard className="!p-5">
         {me.student.sponsored ? (
-          <div className="text-sm font-semibold text-status-paid">✓ {t("sponsored")}</div>
+          <div className="inline-flex items-center gap-1.5 text-sm font-semibold text-status-paid"><Check size={16} /> {t("sponsored")}</div>
         ) : (
           <>
             <div className="flex items-start justify-between gap-2">

@@ -5,12 +5,20 @@
  */
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Route, Switch, Link, useLocation, Redirect } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Home, Wallet, TrendingUp, CalendarCheck, Bell, Eye, Link2, X } from "lucide-react";
 import type { ApiError } from "../lib/api";
 import { haptic, tg, isTelegram } from "../lib/telegram";
 import { initials, avatarColor } from "../lib/format";
-import { papi, initPreviewFromUrl, previewStudentId, exitPreview, type Me } from "./api";
+import {
+  papi,
+  initPreviewFromUrl,
+  previewStudentId,
+  exitPreview,
+  selectedProfile,
+  setSelectedProfile,
+  type Me,
+} from "./api";
 import { usePT, type PKey } from "./i18n";
 import { PageSkeleton, ErrorState } from "./ui";
 import { HomePage } from "./pages/Home";
@@ -48,6 +56,14 @@ export function PortalApp() {
     }
   }, [me.data, locale, setLocale]);
 
+  // A remembered group that's no longer linked: forget it and load the default.
+  useEffect(() => {
+    if ((me.error as ApiError | null)?.code === "profile_not_linked" && selectedProfile()) {
+      setSelectedProfile(null);
+      void me.refetch();
+    }
+  }, [me.error, me]);
+
   if (me.isLoading) {
     return (
       <Frame>
@@ -60,6 +76,16 @@ export function PortalApp() {
 
   if (me.error || !me.data) {
     const err = me.error as ApiError | null;
+    // A remembered group that's no longer linked (recovered in the effect above).
+    if (err?.code === "profile_not_linked") {
+      return (
+        <Frame>
+          <div className="pt-4">
+            <PageSkeleton />
+          </div>
+        </Frame>
+      );
+    }
     if (err?.code === "not_linked") return <NotLinked />;
     if (err?.status === 401 && !isTelegram() && !previewStudentId()) {
       return (
@@ -92,6 +118,7 @@ export function PortalApp() {
           </div>
         )}
         <Header me={me.data} />
+        <GroupSwitcher me={me.data} />
         <main className="pb-28 pt-2">
           <Switch>
             <Route path="/" component={HomePage} />
@@ -163,6 +190,48 @@ function Header({ me }: { me: Me }) {
         {initials(me.student.fullName)}
       </Link>
     </header>
+  );
+}
+
+/**
+ * For a student in several groups (one record per group): switch which group
+ * the whole app shows. A dot marks groups with unread notifications.
+ */
+function GroupSwitcher({ me }: { me: Me }) {
+  const qc = useQueryClient();
+  const { t } = usePT();
+  if (me.profiles.length < 2) return null;
+  const choose = (id: string) => {
+    if (id === me.student.id) return;
+    haptic("light");
+    setSelectedProfile(id);
+    // Everything on screen belongs to the previous group — reload it all.
+    void qc.resetQueries({ queryKey: ["portal"] });
+  };
+  return (
+    <div className="mt-2" role="tablist" aria-label={t("myGroups")}>
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {me.profiles.map((p) => {
+          const active = p.studentId === me.student.id;
+          return (
+            <button
+              key={p.studentId}
+              role="tab"
+              aria-selected={active}
+              onClick={() => choose(p.studentId)}
+              className={`relative shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${
+                active ? "bg-primary text-white shadow-brand" : "bg-surface text-muted ring-1 ring-border"
+              }`}
+            >
+              {p.subject || p.groupName}
+              {!active && p.unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-bg" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

@@ -14,7 +14,7 @@ import crypto from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { studentLinkCodes, studentTelegramAccounts, students, type StudentTelegramAccount } from "@shared/schema";
-import { LINK_CODE_ALPHABET, LINK_CODE_LENGTH, normalizeLinkCode } from "@shared/linking";
+import { LINK_CODE_ALPHABET, LINK_CODE_LENGTH, normalizeLinkCode, phonesMatch } from "@shared/linking";
 import { getUserByTelegramId } from "../storage";
 import { audit } from "./audit";
 import { emit } from "../events";
@@ -29,7 +29,7 @@ export class LinkError extends Error {
     public code:
       | "staff_account"
       | "already_linked"
-      | "linked_elsewhere"
+      | "too_many_groups"
       | "too_many_accounts"
       | "invalid_code"
       | "student_inactive"
@@ -109,12 +109,43 @@ export type TelegramIdentity = {
   languageCode?: string | null;
 };
 
-export async function getAccountByTelegramId(telegramUserId: number) {
-  const [a] = await db
+/** Every student record (group) this Telegram account is linked to, oldest first. */
+export async function getAccountsByTelegramId(telegramUserId: number) {
+  return db
     .select()
     .from(studentTelegramAccounts)
-    .where(eq(studentTelegramAccounts.telegramUserId, telegramUserId));
-  return a ?? null;
+    .where(eq(studentTelegramAccounts.telegramUserId, telegramUserId))
+    .orderBy(studentTelegramAccounts.createdAt);
+}
+
+/** The first linked record (for "is this Telegram user a student at all?"). */
+export async function getAccountByTelegramId(telegramUserId: number) {
+  return (await getAccountsByTelegramId(telegramUserId))[0] ?? null;
+}
+
+/** Student records one Telegram account may hold (one per group studied). */
+export const MAX_GROUPS_PER_TELEGRAM = 6;
+
+/**
+ * The same person's records in OTHER groups: active students with the same
+ * full name and the same phone. A student in English + Math is two records;
+ * once one is verified, the other is the same verified person, so it's linked
+ * too (a parent's shared phone never matches a sibling — names differ).
+ */
+export async function sameStudentOtherGroups(studentId: string) {
+  const [me] = await db.select().from(students).where(eq(students.id, studentId));
+  if (!me?.phone) return [];
+  const namesake = await db
+    .select()
+    .from(students)
+    .where(
+      and(
+        eq(students.active, true),
+        sql`lower(regexp_replace(trim(${students.fullName}), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(${me.fullName}), '\\s+', ' ', 'g'))`,
+        sql`${students.id} <> ${me.id}`,
+      ),
+    );
+  return namesake.filter((s) => phonesMatch(s.phone, me.phone));
 }
 
 export async function listAccountsForStudent(studentId: string) {
@@ -137,10 +168,11 @@ export async function linkAccount(
   const [student] = await db.select().from(students).where(eq(students.id, studentId));
   if (!student || !student.active) throw new LinkError("student_inactive", "This student is not active.");
 
-  const existing = await getAccountByTelegramId(tg.id);
-  if (existing) {
-    if (existing.studentId === studentId) return existing;
-    throw new LinkError("linked_elsewhere", "This Telegram account is already linked to another student.");
+  const mine = await getAccountsByTelegramId(tg.id);
+  const already = mine.find((a) => a.studentId === studentId);
+  if (already) return already;
+  if (mine.length >= MAX_GROUPS_PER_TELEGRAM) {
+    throw new LinkError("too_many_groups", "This Telegram account is already linked to the maximum number of groups.");
   }
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -164,9 +196,10 @@ export async function linkAccount(
       })
       .returning();
   } catch (err) {
-    // Unique violation: a concurrent link of the same Telegram account won.
+    // Unique violation: a concurrent request already linked this same pair.
     if ((err as { code?: string }).code === "23505") {
-      throw new LinkError("linked_elsewhere", "This Telegram account is already linked.");
+      const race = (await getAccountsByTelegramId(tg.id)).find((a) => a.studentId === studentId);
+      if (race) return race;
     }
     throw err;
   }
@@ -182,6 +215,28 @@ export async function linkAccount(
   });
   emit("student.linked", { studentId, telegramAccountId: account.id });
   return account;
+}
+
+/**
+ * Link a verified record AND the same person's records in their other groups.
+ * Returns every record now linked from this verification.
+ */
+export async function linkWithOtherGroups(
+  studentId: string,
+  tg: TelegramIdentity,
+  method: "phone" | "code",
+): Promise<StudentTelegramAccount[]> {
+  const first = await linkAccount(studentId, tg, method);
+  const linked = [first];
+  for (const other of await sameStudentOtherGroups(studentId)) {
+    try {
+      linked.push(await linkAccount(other.id, tg, method));
+    } catch (err) {
+      // e.g. that record already has 3 accounts — the main link still stands.
+      console.warn("[link] skipped other group:", (err as Error).message);
+    }
+  }
+  return linked;
 }
 
 /**
@@ -218,7 +273,7 @@ export async function redeemLinkCode(rawCode: string, tg: TelegramIdentity, expe
     throw new LinkError("invalid_code", "That code is invalid or has expired.");
   }
   try {
-    return await linkAccount(row.studentId, tg, "code");
+    return (await linkWithOtherGroups(row.studentId, tg, "code"))[0];
   } catch (err) {
     await db
       .update(studentLinkCodes)

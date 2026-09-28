@@ -101,7 +101,7 @@ export function CeoDashboard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">
-            {t("greeting")} {firstName}, <span className="align-middle">👋</span>
+            {t("greeting")} {firstName},
           </h1>
           <p className="mt-0.5 text-sm text-muted">{t("dashboardSubtitle")}</p>
         </div>

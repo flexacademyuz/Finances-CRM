@@ -72,7 +72,7 @@ export function ProfilePage() {
           <Row label={t("enrolled")} value={fmtDay(s.enrolledAt, locale) + ` ${s.enrolledAt.slice(0, 4)}`} />
           {s.phone && <Row label={t("phone")} value={s.phone} />}
           {me.account && (
-            <Row label={t("telegram")} value={me.account.username ? `@${me.account.username}` : "✓"} />
+            <Row label={t("telegram")} value={me.account.username ? `@${me.account.username}` : t("connected")} />
           )}
         </dl>
       </PCard>
@@ -108,8 +108,8 @@ export function ProfilePage() {
           if (!readOnly) save.mutate({ disabled, language: l });
         }}
         options={[
-          { value: "uz", label: "🇺🇿 O'zbekcha" },
-          { value: "en", label: "🇬🇧 English" },
+          { value: "uz", label: "O'zbekcha" },
+          { value: "en", label: "English" },
         ]}
       />
 

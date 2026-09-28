@@ -83,8 +83,8 @@ router.get(
       db
         .select({
           students: sql<number>`count(distinct ${studentTelegramAccounts.studentId})::int`,
-          accounts: sql<number>`count(*)::int`,
-          blocked: sql<number>`count(*) filter (where ${studentTelegramAccounts.botBlocked})::int`,
+          accounts: sql<number>`count(distinct ${studentTelegramAccounts.telegramUserId})::int`,
+          blocked: sql<number>`count(distinct ${studentTelegramAccounts.telegramUserId}) filter (where ${studentTelegramAccounts.botBlocked})::int`,
         })
         .from(studentTelegramAccounts)
         .innerJoin(students, eq(studentTelegramAccounts.studentId, students.id))

@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { SCORE_CATEGORIES, categoryLabel, scorePercent } from "@shared/scores";
 import { tashkentDate } from "@shared/lesson-schedule";
 import { api } from "../lib/api";
@@ -186,7 +186,7 @@ function BulkScoreModal({ classId, roster, onClose }: { classId: string; roster:
                   className={`rounded-lg px-2 py-1 text-xs font-semibold ${comments[s.id] ? "bg-primary-soft text-primary" : "bg-bg text-muted"}`}
                   onClick={() => setCommentFor(s.id)}
                 >
-                  💬
+                  <MessageSquare size={14} />
                 </button>
                 <input
                   type="number"

@@ -47,7 +47,7 @@ async function main() {
   const boot = await bootstrap();
   if (boot.ceoCreated)
     console.log(
-      `👑 Seeded first CEO (${env.seedCeoUsername ? `login "${env.seedCeoUsername}"` : `Telegram ID ${env.seedCeoTelegramId}`}).`,
+      `Seeded first CEO (${env.seedCeoUsername ? `login "${env.seedCeoUsername}"` : `Telegram ID ${env.seedCeoTelegramId}`}).`,
     );
   else console.log(`• CEO seed skipped: ${boot.ceoSkipped}.`);
 
@@ -71,16 +71,16 @@ async function main() {
       bot.start().catch((err) => {
         console.error("[bot] failed to start (API keeps running):", (err as Error).message);
       });
-      console.log("🤖 Bot started (long polling).");
+      console.log("Bot started (long polling).");
     } catch (err) {
       console.error("[bot] startup error (API keeps running):", (err as Error).message);
     }
   }
 
   app.listen(env.port, () => {
-    console.log(`🚀 Flex Academy Finances API v2.0.0 listening on :${env.port}`);
+    console.log(`Flex Academy Finances API v2.0.0 listening on :${env.port}`);
     if (env.devAuthBypass) {
-      console.warn(`⚠️  DEV_AUTH_BYPASS enabled — authenticating as ${env.devTelegramId}`);
+      console.warn(`WARNING: DEV_AUTH_BYPASS enabled — authenticating as ${env.devTelegramId}`);
     }
   });
 }

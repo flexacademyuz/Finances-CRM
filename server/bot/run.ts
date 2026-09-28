@@ -13,9 +13,9 @@ async function main() {
   }
   configureBot();
   await configureMenuButton();
-  console.log("🤖 Flex Academy Finances bot starting (long polling)...");
+  console.log("Flex Academy Finances bot starting (long polling)...");
   if (!env.webAppUrl) {
-    console.warn("⚠️  WEB_APP_URL is empty — the 'Open' button will be hidden.");
+    console.warn("WARNING: WEB_APP_URL is empty — the 'Open' button will be hidden.");
   }
   await bot.start();
 }

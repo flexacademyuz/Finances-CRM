@@ -41,6 +41,23 @@ export const PREF_GROUP_LABELS: Record<PrefGroup, { en: string; uz: string }> = 
 };
 
 type P = Record<string, unknown>;
+
+export type NotificationIcon =
+  | "wallet"
+  | "pencil"
+  | "clock"
+  | "alert"
+  | "tag"
+  | "snowflake"
+  | "check"
+  | "award"
+  | "calendar"
+  | "trophy"
+  | "bell"
+  | "ban"
+  | "users"
+  | "megaphone"
+  | "shield";
 type Rendered = { title: string; body: string };
 
 type TypeDef = {
@@ -48,8 +65,8 @@ type TypeDef = {
   prefGroup: PrefGroup | null;
   /** Mandatory types are always delivered regardless of student prefs. */
   mandatory?: boolean;
-  /** Shown before the title (in-app icon hint + Telegram prefix). */
-  emoji: string;
+  /** Icon name the portal draws with its icon set (no emoji). */
+  icon: NotificationIcon;
   /** Visual tone for the portal badge. */
   tone: "success" | "danger" | "warning" | "info" | "neutral";
   render: (p: P, l: Locale) => Rendered;
@@ -94,7 +111,7 @@ export const NOTIFICATION_TYPES = {
   payment_recorded: {
     category: "financial",
     prefGroup: "payment_confirmations",
-    emoji: "🟢",
+    icon: "wallet",
     tone: "success",
     render: (p, l) => {
       const amount = fmtMoney(p.amount, p.currency);
@@ -113,7 +130,7 @@ export const NOTIFICATION_TYPES = {
   payment_corrected: {
     category: "financial",
     prefGroup: "payment_confirmations",
-    emoji: "✏️",
+    icon: "pencil",
     tone: "info",
     render: (p, l) =>
       l === "uz"
@@ -123,7 +140,7 @@ export const NOTIFICATION_TYPES = {
   payment_due_soon: {
     category: "financial",
     prefGroup: "payment_reminders",
-    emoji: "⏳",
+    icon: "clock",
     tone: "warning",
     render: (p, l) => {
       const n = Number(p.days ?? 0);
@@ -137,7 +154,7 @@ export const NOTIFICATION_TYPES = {
     category: "financial",
     prefGroup: "payment_reminders",
     mandatory: true,
-    emoji: "🔴",
+    icon: "alert",
     tone: "danger",
     render: (p, l) => {
       const amt = p.amount != null ? fmtMoney(p.amount, p.currency) : "";
@@ -150,7 +167,7 @@ export const NOTIFICATION_TYPES = {
     category: "financial",
     prefGroup: "payment_reminders",
     mandatory: true,
-    emoji: "⚠️",
+    icon: "alert",
     tone: "danger",
     render: (p, l) =>
       l === "uz"
@@ -160,7 +177,7 @@ export const NOTIFICATION_TYPES = {
   discount_applied: {
     category: "financial",
     prefGroup: "billing_updates",
-    emoji: "🏷️",
+    icon: "tag",
     tone: "success",
     render: (p, l) => {
       const v = p.discountType === "percentage" ? `${s(p.value)}%` : fmtMoney(p.value, p.currency);
@@ -173,7 +190,7 @@ export const NOTIFICATION_TYPES = {
   discount_expiring: {
     category: "financial",
     prefGroup: "billing_updates",
-    emoji: "⌛",
+    icon: "clock",
     tone: "warning",
     render: (p, l) =>
       l === "uz"
@@ -183,7 +200,7 @@ export const NOTIFICATION_TYPES = {
   freeze_started: {
     category: "financial",
     prefGroup: "billing_updates",
-    emoji: "❄️",
+    icon: "snowflake",
     tone: "info",
     render: (p, l) => {
       const to = p.to ? fmtDay(p.to, l) : null;
@@ -195,7 +212,7 @@ export const NOTIFICATION_TYPES = {
   freeze_ending: {
     category: "financial",
     prefGroup: "billing_updates",
-    emoji: "❄️",
+    icon: "snowflake",
     tone: "warning",
     render: (p, l) =>
       l === "uz"
@@ -205,7 +222,7 @@ export const NOTIFICATION_TYPES = {
   freeze_ended: {
     category: "financial",
     prefGroup: "billing_updates",
-    emoji: "✅",
+    icon: "check",
     tone: "info",
     render: (_p, l) =>
       l === "uz"
@@ -217,7 +234,7 @@ export const NOTIFICATION_TYPES = {
   score_added: {
     category: "academic",
     prefGroup: "scores",
-    emoji: "📝",
+    icon: "award",
     tone: "info",
     render: (p, l) => {
       const head = `${s(p.title)} (${categoryLabel(s(p.category), l)})`;
@@ -231,7 +248,7 @@ export const NOTIFICATION_TYPES = {
   score_updated: {
     category: "academic",
     prefGroup: "scores",
-    emoji: "📝",
+    icon: "award",
     tone: "info",
     render: (p, l) => {
       const c = p.comment ? `\n\n${l === "uz" ? "O'qituvchi izohi" : "Teacher comment"}: "${s(p.comment)}"` : "";
@@ -245,7 +262,7 @@ export const NOTIFICATION_TYPES = {
   attendance_marked: {
     category: "attendance",
     prefGroup: "attendance",
-    emoji: "📚",
+    icon: "calendar",
     tone: "neutral",
     render: (p, l) => {
       const st = attLabel(p.status, l);
@@ -258,7 +275,7 @@ export const NOTIFICATION_TYPES = {
   attendance_warning: {
     category: "attendance",
     prefGroup: "attendance",
-    emoji: "⚠️",
+    icon: "alert",
     tone: "warning",
     render: (p, l) =>
       l === "uz"
@@ -268,7 +285,7 @@ export const NOTIFICATION_TYPES = {
   attendance_milestone: {
     category: "attendance",
     prefGroup: "attendance",
-    emoji: "🏆",
+    icon: "trophy",
     tone: "success",
     render: (p, l) =>
       l === "uz"
@@ -280,7 +297,7 @@ export const NOTIFICATION_TYPES = {
   lesson_reminder: {
     category: "schedule",
     prefGroup: "class_reminders",
-    emoji: "⏰",
+    icon: "bell",
     tone: "info",
     render: (p, l) => {
       const soon = Number(p.hours ?? 0) <= 3;
@@ -298,7 +315,7 @@ export const NOTIFICATION_TYPES = {
   lesson_cancelled: {
     category: "schedule",
     prefGroup: "schedule_changes",
-    emoji: "🚫",
+    icon: "ban",
     tone: "warning",
     render: (p, l) =>
       l === "uz"
@@ -308,7 +325,7 @@ export const NOTIFICATION_TYPES = {
   schedule_changed: {
     category: "schedule",
     prefGroup: "schedule_changes",
-    emoji: "📅",
+    icon: "calendar",
     tone: "info",
     render: (p, l) => {
       const lines: string[] = [];
@@ -323,7 +340,7 @@ export const NOTIFICATION_TYPES = {
   group_changed: {
     category: "schedule",
     prefGroup: "schedule_changes",
-    emoji: "🔀",
+    icon: "users",
     tone: "info",
     render: (p, l) =>
       l === "uz"
@@ -335,7 +352,7 @@ export const NOTIFICATION_TYPES = {
   announcement: {
     category: "general",
     prefGroup: "announcements",
-    emoji: "📣",
+    icon: "megaphone",
     tone: "info",
     render: (p) => ({ title: s(p.title), body: s(p.body) }),
   },
@@ -343,7 +360,7 @@ export const NOTIFICATION_TYPES = {
     category: "general",
     prefGroup: null,
     mandatory: true,
-    emoji: "🔐",
+    icon: "shield",
     tone: "success",
     render: (p, l) =>
       l === "uz"
@@ -363,10 +380,10 @@ export function notificationDef(type: string): TypeDef | undefined {
 }
 
 /** Render a stored notification in a language (unknown types degrade safely). */
-export function renderNotification(type: string, params: P, locale: Locale): Rendered & { emoji: string; tone: TypeDef["tone"] } {
+export function renderNotification(type: string, params: P, locale: Locale): Rendered & { icon: NotificationIcon; tone: TypeDef["tone"] } {
   const def = notificationDef(type);
-  if (!def) return { title: type, body: "", emoji: "🔔", tone: "neutral" };
-  return { ...def.render(params ?? {}, locale), emoji: def.emoji, tone: def.tone };
+  if (!def) return { title: type, body: "", icon: "bell", tone: "neutral" };
+  return { ...def.render(params ?? {}, locale), icon: def.icon, tone: def.tone };
 }
 
 /** Escape text for Telegram's HTML parse mode. */
@@ -374,10 +391,14 @@ export function escapeHtml(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Telegram HTML message for a notification: bold title, then the body. */
-export function renderTelegram(type: string, params: P, locale: Locale): string {
+/**
+ * Telegram HTML message for a notification: bold title, an optional italic
+ * context line (the group, for students linked to several groups), then the body.
+ */
+export function renderTelegram(type: string, params: P, locale: Locale, context?: string | null): string {
   const r = renderNotification(type, params, locale);
-  return `${r.emoji} <b>${escapeHtml(r.title)}</b>\n\n${escapeHtml(r.body)}`;
+  const ctx = context ? `\n<i>${escapeHtml(context)}</i>` : "";
+  return `<b>${escapeHtml(r.title)}</b>${ctx}\n\n${escapeHtml(r.body)}`;
 }
 
 /**

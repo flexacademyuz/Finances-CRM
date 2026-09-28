@@ -2,10 +2,12 @@
  * Student side of the companion bot: link a Telegram account to a CRM student.
  *
  *   /start → (language) → branch? → choose group → choose name → verify:
- *        • 📱 share my phone  (Telegram contact; must be the sender's OWN
+ *        • share my phone  (Telegram contact; must be the sender's OWN
  *          contact and match the phone on file for that student), or
- *        • 🔑 enter a code    (one-time code staff generated on the profile)
- *   → linked: Telegram user id ↔ student, permanently (until unlinked).
+ *        • enter a code    (one-time code staff generated on the profile)
+ *   → linked: Telegram user id ↔ student record, until unlinked. A student in
+ *     several groups (one record per group) links each group; the same
+ *     person's other groups (same name + phone) are linked automatically.
  *
  * Deep link: t.me/<bot>?start=link_<CODE> redeems a code in one tap.
  * Picking a name alone never grants access — verification is mandatory.
@@ -22,7 +24,8 @@ import {
   LinkError,
   assertNotRateLimited,
   getAccountByTelegramId,
-  linkAccount,
+  getAccountsByTelegramId,
+  linkWithOtherGroups,
   markReachable,
   recordFailure,
   redeemLinkCode,
@@ -39,80 +42,82 @@ const PAGE = 8;
 
 const T = {
   welcome: {
-    uz: "👋 <b>Flex Academy</b> botiga xush kelibsiz!\n\nTo'lovlar, davomat, baholar va dars jadvalingizni shu yerda kuzatib borasiz. Avval hisobingizni ulaymiz.",
-    en: "👋 Welcome to <b>Flex Academy</b>!\n\nHere you can follow your payments, attendance, scores and class schedule. First, let's connect your account.",
+    uz: "<b>Flex Academy</b> botiga xush kelibsiz!\n\nTo'lovlar, davomat, baholar va dars jadvalingizni shu yerda kuzatib borasiz. Avval hisobingizni ulaymiz.",
+    en: "Welcome to <b>Flex Academy</b>!\n\nHere you can follow your payments, attendance, scores and class schedule. First, let's connect your account.",
   },
-  chooseBranch: { uz: "🏢 Filialingizni tanlang:", en: "🏢 Choose your branch:" },
-  chooseGroup: { uz: "📚 Guruhingizni tanlang:", en: "📚 Choose your group:" },
-  chooseName: { uz: "👤 Ismingizni tanlang:", en: "👤 Choose your name:" },
+  chooseBranch: { uz: "Filialingizni tanlang:", en: "Choose your branch:" },
+  chooseGroup: { uz: "Guruhingizni tanlang:", en: "Choose your group:" },
+  chooseName: { uz: "Ismingizni tanlang:", en: "Choose your name:" },
   noGroups: { uz: "Hozircha faol guruhlar yo'q.", en: "There are no active groups yet." },
   noStudents: { uz: "Bu guruhda o'quvchilar yo'q.", en: "This group has no students." },
   verifyHow: {
-    uz: "🔐 <b>{name}</b> — bu sizmisiz?\n\nXavfsizlik uchun tasdiqlang:\n• telefon raqamingizni yuboring (markazdagi raqam bilan mos kelishi kerak), yoki\n• administrator/o'qituvchi bergan kodni kiriting.",
-    en: "🔐 <b>{name}</b> — is this you?\n\nFor your security, please verify:\n• share your phone number (it must match the number the academy has on file), or\n• enter the code your administrator/teacher gave you.",
+    uz: "<b>{name}</b> — bu sizmisiz?\n\nXavfsizlik uchun tasdiqlang:\n• telefon raqamingizni yuboring (markazdagi raqam bilan mos kelishi kerak), yoki\n• administrator/o'qituvchi bergan kodni kiriting.",
+    en: "<b>{name}</b> — is this you?\n\nFor your security, please verify:\n• share your phone number (it must match the number the academy has on file), or\n• enter the code your administrator/teacher gave you.",
   },
-  btnPhone: { uz: "📱 Telefon raqamni yuborish", en: "📱 Share my phone number" },
-  btnCode: { uz: "🔑 Kodim bor", en: "🔑 I have a code" },
-  btnHaveCode: { uz: "🔑 Menda kod bor", en: "🔑 I already have a code" },
-  btnStart: { uz: "▶️ Boshlash", en: "▶️ Get started" },
-  btnBack: { uz: "⬅️ Orqaga", en: "⬅️ Back" },
-  btnOpen: { uz: "📱 Kabinetni ochish", en: "📱 Open my portal" },
+  btnPhone: { uz: "Telefon raqamni yuborish", en: "Share my phone number" },
+  btnCode: { uz: "Kodim bor", en: "I have a code" },
+  btnHaveCode: { uz: "Menda kod bor", en: "I already have a code" },
+  btnStart: { uz: "Boshlash", en: "Get started" },
+  btnBack: { uz: "Orqaga", en: "Back" },
+  btnOpen: { uz: "Kabinetni ochish", en: "Open my portal" },
+  btnAddGroup: { uz: "Yana bir guruh qo'shish", en: "Add another group" },
   sharePrompt: {
     uz: "Pastdagi tugmani bosib, <b>o'zingizning</b> raqamingizni yuboring.",
     en: "Tap the button below to share <b>your own</b> phone number.",
   },
   codePrompt: {
-    uz: "🔑 Kodni yuboring (masalan: <code>K7M2-Q9XP</code>).",
-    en: "🔑 Send your code (for example: <code>K7M2-Q9XP</code>).",
+    uz: "Kodni yuboring (masalan: <code>K7M2-Q9XP</code>).",
+    en: "Send your code (for example: <code>K7M2-Q9XP</code>).",
   },
   notOwnContact: {
     uz: "Iltimos, tugma orqali o'zingizning kontaktingizni yuboring.",
     en: "Please share your own contact using the button.",
   },
   phoneMismatch: {
-    uz: "❌ Bu raqam markazdagi ma'lumotlarga mos kelmadi.\nAdministrator yoki o'qituvchidan ulanish kodini so'rang va «🔑 Kodim bor» tugmasini bosing.",
-    en: "❌ This number doesn't match the academy's records.\nAsk your administrator or teacher for a link code, then tap “🔑 I have a code”.",
+    uz: "Bu raqam markazdagi ma'lumotlarga mos kelmadi.\nAdministrator yoki o'qituvchidan ulanish kodini so'rang va «Kodim bor» tugmasini bosing.",
+    en: "This number doesn't match the academy's records.\nAsk your administrator or teacher for a link code, then tap “I have a code”.",
   },
   noPhoneOnFile: {
     uz: "Bu o'quvchi uchun telefon raqami kiritilmagan. Administrator/o'qituvchidan ulanish kodini so'rang.",
     en: "There's no phone number on file for this student. Ask your administrator/teacher for a link code.",
   },
   linked: {
-    uz: "✅ Tayyor! Siz <b>{name}</b> sifatida ulandingiz.\n\nKabinetingizni ochish uchun pastdagi tugmani bosing. Yangiliklarni shu yerda xabar qilib boramiz.",
-    en: "✅ All set! You're connected as <b>{name}</b>.\n\nTap below to open your portal. We'll send your updates right here.",
+    uz: "Tayyor! Siz <b>{name}</b> sifatida ulandingiz.\n\nGuruhlaringiz:\n{groups}\n\nKabinetingizni ochish uchun pastdagi tugmani bosing. Yangiliklarni shu yerda xabar qilib boramiz. Boshqa guruhda ham o'qisangiz, «Yana bir guruh qo'shish» ni bosing.",
+    en: "All set! You're connected as <b>{name}</b>.\n\nYour groups:\n{groups}\n\nTap below to open your portal — we'll send your updates right here. If you study in another group too, tap “Add another group”.",
   },
   welcomeBack: {
-    uz: "👋 Salom, <b>{name}</b>!\nKabinetingizni ochish uchun pastdagi tugmani bosing.",
-    en: "👋 Hi, <b>{name}</b>!\nTap below to open your portal.",
+    uz: "Salom, <b>{name}</b>!\n\nGuruhlaringiz:\n{groups}\n\nKabinetingizni ochish uchun pastdagi tugmani bosing.",
+    en: "Hi, <b>{name}</b>!\n\nYour groups:\n{groups}\n\nTap below to open your portal.",
   },
   staffAccount: {
     uz: "Bu Telegram hisobi xodimga tegishli. O'quvchi sifatida ulanish uchun boshqa hisobdan foydalaning.",
     en: "This Telegram account belongs to a staff member. Use a different account to connect as a student.",
   },
-  linkedElsewhere: {
-    uz: "Bu Telegram hisobi allaqachon boshqa o'quvchiga ulangan. Avval /unlink buyrug'i bilan uzing.",
-    en: "This Telegram account is already linked to another student. Use /unlink first.",
+  tooManyGroups: {
+    uz: "Bu Telegram hisobiga ulanishi mumkin bo'lgan guruhlar soni to'lgan. Administratorga murojaat qiling.",
+    en: "This Telegram account is already linked to the maximum number of groups. Please contact the academy.",
   },
   tooMany: {
     uz: "Bu o'quvchiga ulanishi mumkin bo'lgan hisoblar soni to'lgan. Administratorga murojaat qiling.",
     en: "This student already has the maximum number of linked accounts. Please contact the academy.",
   },
-  invalidCode: { uz: "❌ Kod noto'g'ri yoki muddati o'tgan.", en: "❌ That code is invalid or has expired." },
+  invalidCode: { uz: "Kod noto'g'ri yoki muddati o'tgan.", en: "That code is invalid or has expired." },
   rateLimited: {
-    uz: "⏳ Juda ko'p urinish. 30 daqiqadan so'ng qayta urinib ko'ring.",
-    en: "⏳ Too many attempts. Please try again in 30 minutes.",
+    uz: "Juda ko'p urinish. 30 daqiqadan so'ng qayta urinib ko'ring.",
+    en: "Too many attempts. Please try again in 30 minutes.",
   },
   inactive: { uz: "Bu o'quvchi faol emas.", en: "This student is not active." },
   expired: { uz: "Sessiya tugadi. /start ni bosing.", en: "Session expired. Press /start." },
   unlinkConfirm: {
-    uz: "Telegram hisobingizni o'quvchi profilidan uzmoqchimisiz? Bildirishnomalar to'xtaydi.",
-    en: "Disconnect this Telegram account from the student profile? You'll stop receiving updates.",
+    uz: "Telegram hisobingizni barcha guruhlardan uzmoqchimisiz? Bildirishnomalar to'xtaydi.",
+    en: "Disconnect this Telegram account from all your groups? You'll stop receiving updates.",
   },
   btnYesUnlink: { uz: "Ha, uzish", en: "Yes, disconnect" },
   unlinked: { uz: "Hisob uzildi. Qayta ulanish uchun /start.", en: "Disconnected. Press /start to connect again." },
   notLinked: { uz: "Siz hali ulanmagansiz. /start ni bosing.", en: "You're not connected yet. Press /start." },
-  langSet: { uz: "Til: O'zbekcha 🇺🇿", en: "Language: English 🇬🇧" },
+  langSet: { uz: "Til: O'zbekcha", en: "Language: English" },
   orCode: { uz: "Yoki kod orqali tasdiqlang:", en: "Or verify with a code:" },
+  error: { uz: "Xatolik yuz berdi. /start ni bosing.", en: "Something went wrong. Press /start." },
 } satisfies Record<string, Record<Lang, string>>;
 
 const tr = (k: keyof typeof T, l: Lang, vars: Record<string, string> = {}) =>
@@ -159,9 +164,28 @@ function identity(ctx: Context, lang: Lang): TelegramIdentity {
   };
 }
 
-function openKeyboard(lang: Lang): InlineKeyboard | undefined {
+/** "Open my portal" + "Add another group" (for students in several groups). */
+function linkedKeyboard(lang: Lang): InlineKeyboard {
   const url = portalUrl();
-  return url ? new InlineKeyboard().webApp(tr("btnOpen", lang), url) : undefined;
+  const kb = new InlineKeyboard();
+  if (url) kb.webApp(tr("btnOpen", lang), url).row();
+  return kb.text(tr("btnAddGroup", lang), "st:begin");
+}
+
+/** "• IELTS 18:00\n• Math 9A" — every group this Telegram account is linked to. */
+async function linkedGroupsText(tgId: number): Promise<{ name: string; groups: string }> {
+  const accounts = await getAccountsByTelegramId(tgId);
+  if (accounts.length === 0) return { name: "", groups: "" };
+  const rows = await db
+    .select({ id: students.id, fullName: students.fullName, group: classes.name })
+    .from(students)
+    .innerJoin(classes, eq(students.classId, classes.id))
+    .where(sql`${students.id} in (${sql.join(accounts.map((a) => sql`${a.studentId}`), sql`, `)})`);
+  const first = rows.find((x) => x.id === accounts[0].studentId);
+  return {
+    name: givenName(first?.fullName ?? ""),
+    groups: rows.map((x) => `• ${esc(x.group)}`).join("\n"),
+  };
 }
 
 /* ─────────────────────────────── lists ─────────────────────────────── */
@@ -199,9 +223,9 @@ async function studentsPage(classId: string, page: number) {
 function pager(kb: InlineKeyboard, prefix: string, page: number, total: number) {
   const pages = Math.ceil(total / PAGE);
   if (pages <= 1) return;
-  if (page > 0) kb.text("◀️", `${prefix}:${page - 1}`);
+  if (page > 0) kb.text("‹", `${prefix}:${page - 1}`);
   kb.text(`${page + 1}/${pages}`, "st:noop");
-  if (page < pages - 1) kb.text("▶️", `${prefix}:${page + 1}`);
+  if (page < pages - 1) kb.text("›", `${prefix}:${page + 1}`);
   kb.row();
 }
 
@@ -215,8 +239,8 @@ async function showStart(ctx: Context, lang: Lang, edit = false) {
     .row()
     .text(tr("btnHaveCode", lang), "st:code")
     .row()
-    .text("🇺🇿 O'zbekcha", "st:lang:uz")
-    .text("🇬🇧 English", "st:lang:en");
+    .text("O'zbekcha", "st:lang:uz")
+    .text("English", "st:lang:en");
   const text = tr("welcome", lang);
   if (edit) await ctx.editMessageText(text, { parse_mode: "HTML", reply_markup: kb }).catch(() => undefined);
   else await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
@@ -262,14 +286,14 @@ async function showStudents(ctx: Context, lang: Lang, classId: string, page: num
   await ctx.editMessageText(tr("chooseName", lang), { reply_markup: kb }).catch(() => undefined);
 }
 
-/** Successful link: greet in the chosen language and offer the portal. */
-async function onLinked(ctx: Context, lang: Lang, studentId: string) {
+/** Successful link: list every linked group and offer the portal. */
+async function onLinked(ctx: Context, lang: Lang) {
   pending.delete(ctx.from!.id);
   await setAccountLanguage(ctx.from!.id, lang);
-  const s = await getStudentById(studentId);
-  await ctx.reply(tr("linked", lang, { name: esc(givenName(s?.fullName ?? "")) }), {
+  const { name, groups } = await linkedGroupsText(ctx.from!.id);
+  await ctx.reply(tr("linked", lang, { name: esc(name), groups }), {
     parse_mode: "HTML",
-    reply_markup: openKeyboard(lang) ?? { remove_keyboard: true },
+    reply_markup: linkedKeyboard(lang),
   });
 }
 
@@ -278,8 +302,8 @@ async function explainLinkError(ctx: Context, lang: Lang, err: unknown) {
     const key =
       err.code === "staff_account"
         ? "staffAccount"
-        : err.code === "linked_elsewhere"
-          ? "linkedElsewhere"
+        : err.code === "too_many_groups"
+          ? "tooManyGroups"
           : err.code === "too_many_accounts"
             ? "tooMany"
             : err.code === "rate_limited"
@@ -291,7 +315,7 @@ async function explainLinkError(ctx: Context, lang: Lang, err: unknown) {
     return;
   }
   console.error("[bot] link error:", (err as Error).message);
-  await ctx.reply("⚠️ Error. /start");
+  await ctx.reply(tr("error", lang));
 }
 
 /* ─────────────────────────────── handlers ─────────────────────────────── */
@@ -309,8 +333,8 @@ export async function handleStudentStart(ctx: Context, payload: string): Promise
   if (payload.startsWith("link_")) {
     const code = payload.slice(5);
     try {
-      const acc = await redeemLinkCode(code, identity(ctx, lang));
-      await onLinked(ctx, lang, acc.studentId);
+      await redeemLinkCode(code, identity(ctx, lang));
+      await onLinked(ctx, lang);
     } catch (err) {
       await explainLinkError(ctx, lang, err);
     }
@@ -320,11 +344,12 @@ export async function handleStudentStart(ctx: Context, payload: string): Promise
   const account = await getAccountByTelegramId(tgId);
   if (account) {
     await markReachable(tgId); // they're talking to us again → unblock pushes
-    const s = await getStudentById(account.studentId);
     const l: Lang = account.languageCode === "en" ? "en" : "uz";
-    await ctx.reply(tr("welcomeBack", l, { name: esc(givenName(s?.fullName ?? "")) }), {
+    setState(tgId, { lang: l, studentId: undefined, mode: undefined });
+    const { name, groups } = await linkedGroupsText(tgId);
+    await ctx.reply(tr("welcomeBack", l, { name: esc(name), groups }), {
       parse_mode: "HTML",
-      reply_markup: openKeyboard(l),
+      reply_markup: linkedKeyboard(l),
     });
     return true;
   }
@@ -410,8 +435,7 @@ export function registerStudentBot(bot: Bot): void {
     }
 
     if (data === "st:unlink:yes") {
-      const acc = await getAccountByTelegramId(tgId);
-      if (acc) await unlinkAccount(acc, { type: "student" });
+      for (const acc of await getAccountsByTelegramId(tgId)) await unlinkAccount(acc, { type: "student" });
       await ctx.editMessageText(tr("unlinked", lang)).catch(() => undefined);
       return;
     }
@@ -446,8 +470,8 @@ export function registerStudentBot(bot: Bot): void {
         });
         return;
       }
-      await linkAccount(s.id, identity(ctx, lang), "phone");
-      await onLinked(ctx, lang, s.id);
+      await linkWithOtherGroups(s.id, identity(ctx, lang), "phone");
+      await onLinked(ctx, lang);
     } catch (err) {
       await explainLinkError(ctx, lang, err);
     }
@@ -464,8 +488,8 @@ export function registerStudentBot(bot: Bot): void {
     if (await getUserByTelegramId(tgId)) return next();
     const lang = p?.lang ?? detectLang(ctx);
     try {
-      const acc = await redeemLinkCode(text, identity(ctx, lang), p?.studentId);
-      await onLinked(ctx, lang, acc.studentId);
+      await redeemLinkCode(text, identity(ctx, lang), p?.studentId);
+      await onLinked(ctx, lang);
     } catch (err) {
       await explainLinkError(ctx, lang, err);
     }

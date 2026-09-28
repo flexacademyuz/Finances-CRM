@@ -877,9 +877,10 @@ export const studentScores = pgTable(
 /* ──────────────────── Student portal: Telegram linking ──────────────────── */
 
 /**
- * A verified link from a Telegram account to a CRM student. The Telegram user
- * id is unique (one Telegram account ↔ one student); a student may have a few
- * linked accounts (their own + a parent's). Created only by the bot after phone
+ * A verified link from a Telegram account to a CRM student record. Unique per
+ * (Telegram user, student): one Telegram account can hold several records (a
+ * student in two groups), and a record can have a few linked accounts (their
+ * own + a parent's). Created only by the bot after phone
  * or one-time-code verification — never from client-supplied ids.
  */
 export const studentTelegramAccounts = pgTable(
@@ -889,7 +890,9 @@ export const studentTelegramAccounts = pgTable(
     studentId: uuid("student_id")
       .notNull()
       .references(() => students.id, { onDelete: "cascade" }),
-    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull().unique(),
+    // One Telegram account may link to several student records — a student
+    // studying in two groups (e.g. English + Math) has one record per group.
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull(),
     telegramUsername: text("telegram_username"),
     firstName: text("first_name"),
     // "uz" | "en" — the language notifications are rendered in for this chat.
@@ -903,7 +906,11 @@ export const studentTelegramAccounts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ byStudent: index("student_tg_student_idx").on(t.studentId) }),
+  (t) => ({
+    byStudent: index("student_tg_student_idx").on(t.studentId),
+    byTelegramUser: index("student_tg_user_idx").on(t.telegramUserId),
+    uniqUserStudent: uniqueIndex("student_tg_user_student_uniq").on(t.telegramUserId, t.studentId),
+  }),
 );
 
 /**

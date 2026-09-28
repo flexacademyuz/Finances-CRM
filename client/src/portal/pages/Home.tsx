@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Clock, MapPin, User, Wallet, CalendarCheck, Award, Bell, Snowflake, Tag } from "lucide-react";
+import { ChevronRight, Clock, MapPin, User, Wallet, CalendarCheck, Award, Bell, Snowflake, Tag, Ban, Check } from "lucide-react";
 import { renderNotification } from "@shared/notifications";
 import { categoryLabel } from "@shared/scores";
 import { papi, amountDueNow, type Dashboard } from "../api";
@@ -18,6 +18,7 @@ import {
   relTime,
   BillingStatusPill,
   ATT_COLOR,
+  NotifIcon,
 } from "../ui";
 import { fmtDay } from "@shared/notifications";
 
@@ -47,7 +48,7 @@ export function HomePage() {
         <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-16 right-10 h-32 w-32 rounded-full bg-white/10" />
         <div className="relative">
-          <div className="text-2xl font-extrabold tracking-tight">👋 {t("hello", { name: d.student.givenName })}</div>
+          <div className="text-2xl font-extrabold tracking-tight">{t("hello", { name: d.student.givenName })}</div>
           {g && (
             <>
               <div className="mt-2 text-lg font-bold">{g.name}</div>
@@ -68,8 +69,8 @@ export function HomePage() {
                 {nextLabel ? `${t("nextClass")}: ${nextLabel}` : t("noUpcoming")}
               </div>
               {g.upcomingCancellations.length > 0 && (
-                <div className="mt-2 text-xs font-semibold text-white/90">
-                  🚫 {t("cancelledOn", { date: g.upcomingCancellations.map((c) => fmtDay(c.date, locale)).join(", ") })}
+                <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-white/90">
+                  <Ban size={13} /> {t("cancelledOn", { date: g.upcomingCancellations.map((c) => fmtDay(c.date, locale)).join(", ") })}
                 </div>
               )}
             </>
@@ -88,7 +89,7 @@ export function HomePage() {
               {t("payment")}
             </div>
             {d.student.sponsored ? (
-              <div className="mt-3 text-sm font-semibold text-status-paid">✓ {t("allPaid")}</div>
+              <div className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-status-paid"><Check size={15} /> {t("allPaid")}</div>
             ) : due > 0 ? (
               <>
                 <div className={`figure mt-2 text-lg font-extrabold leading-tight ${b.status === "overdue" ? "text-status-overdue" : "text-text"}`}>
@@ -100,7 +101,7 @@ export function HomePage() {
               </>
             ) : (
               <>
-                <div className="mt-2 text-sm font-bold text-status-paid">✓ {t("allPaid")}</div>
+                <div className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-status-paid"><Check size={15} /> {t("allPaid")}</div>
                 <div className="mt-1 text-xs text-muted">
                   {t("nextPayment")}: <span className="font-semibold text-text">{fmtDay(b.nextDueDate, locale)}</span>
                 </div>
@@ -227,7 +228,7 @@ export function HomePage() {
             return (
               <Link key={n.id} href="/notifications" className="block">
                 <PCard className="flex gap-3 !p-3.5">
-                  <span className="text-xl leading-none">{r.emoji}</span>
+                  <NotifIcon icon={r.icon} tone={r.tone} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-bold">{r.title}</span>

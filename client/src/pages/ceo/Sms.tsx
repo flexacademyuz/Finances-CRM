@@ -237,12 +237,12 @@ export function SmsPage() {
               <>Preview only — would send to <b>{result.to}</b>: “{result.message}”</>
             ) : result.ok ? (
               <>
-                ✅ Sent to <b>{result.to}</b>
+                Sent to <b>{result.to}</b>
                 {result.providerMessageId ? ` (id ${result.providerMessageId})` : ""}. Check the
                 phone.
               </>
             ) : (
-              <>❌ Failed to send to {result.to}: {result.error}</>
+              <>Failed to send to {result.to}: {result.error}</>
             )}
           </div>
         )}

@@ -35,7 +35,15 @@ export function portalUrl(path = ""): string | null {
   return `${env.webAppUrl.replace(/\/+$/, "")}/portal${path}`;
 }
 
-type Claimed = NotificationDelivery & { type: string; params: Record<string, unknown>; languageCode: string | null };
+type Claimed = NotificationDelivery & {
+  type: string;
+  params: Record<string, unknown>;
+  languageCode: string | null;
+  studentId: string;
+  groupName: string | null;
+  /** The recipient's Telegram is linked to more than one group. */
+  multiGroup: boolean;
+};
 
 async function claimBatch(limit: number): Promise<Claimed[]> {
   const res = await db.execute(sql`
@@ -53,7 +61,10 @@ async function claimBatch(limit: number): Promise<Claimed[]> {
       from due, notifications n, student_telegram_accounts a
      where d.id = due.id and n.id = d.notification_id and a.id = d.telegram_account_id
     returning d.id, d.notification_id as "notificationId", d.telegram_account_id as "telegramAccountId",
-              d.chat_id as "chatId", d.attempts, n.type, n.params, a.language_code as "languageCode"
+              d.chat_id as "chatId", d.attempts, n.type, n.params, a.language_code as "languageCode",
+              n.student_id as "studentId",
+              (select c.name from students s join classes c on c.id = s.class_id where s.id = n.student_id) as "groupName",
+              (select count(*) from student_telegram_accounts x where x.telegram_user_id = a.telegram_user_id) > 1 as "multiGroup"
   `);
   return (res.rows as Claimed[]).map((r) => ({ ...r, chatId: Number(r.chatId), attempts: Number(r.attempts) }));
 }
@@ -71,10 +82,12 @@ async function deliverOne(d: Claimed): Promise<void> {
     return;
   }
   const locale: Locale = d.languageCode === "uz" ? "uz" : "en";
-  const text = renderTelegram(d.type, d.params ?? {}, locale);
-  const url = portalUrl("/notifications");
+  // Several groups on one Telegram → say which group this is about, and open
+  // the app on that group.
+  const text = renderTelegram(d.type, d.params ?? {}, locale, d.multiGroup ? d.groupName : null);
+  const url = portalUrl(`/notifications?profile=${d.studentId}`);
   const reply_markup = url
-    ? new InlineKeyboard().webApp(locale === "uz" ? "📱 Ilovani ochish" : "📱 Open app", url)
+    ? new InlineKeyboard().webApp(locale === "uz" ? "Ilovani ochish" : "Open app", url)
     : undefined;
   try {
     await bot.api.sendMessage(d.chatId, text, { parse_mode: "HTML", reply_markup });

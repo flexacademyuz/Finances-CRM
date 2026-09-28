@@ -17,7 +17,7 @@ import { verifyInitData } from "./telegram";
 import { verifyToken } from "./token";
 import { env } from "../env";
 import { getStudentById, getUserById, getUserByTelegramId } from "../storage";
-import { getAccountByTelegramId } from "../services/telegram-link";
+import { getAccountsByTelegramId } from "../services/telegram-link";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -25,6 +25,8 @@ declare global {
     interface Request {
       student?: Student;
       studentAccount?: StudentTelegramAccount | null;
+      /** All records (groups) the Telegram user is linked to (empty in preview). */
+      studentAccounts?: StudentTelegramAccount[];
       /** Set when a staff member is previewing the portal (read-only). */
       portalPreviewBy?: User;
     }
@@ -71,6 +73,7 @@ export async function authenticateStudent(req: Request, res: Response, next: Nex
       }
       req.student = student;
       req.studentAccount = null;
+      req.studentAccounts = [];
       req.portalPreviewBy = staff;
       return next();
     }
@@ -82,13 +85,22 @@ export async function authenticateStudent(req: Request, res: Response, next: Nex
     } else {
       telegramId = verifyInitData(initDataFrom(req), env.botToken, env.initDataMaxAgeSeconds).user.id;
     }
-    const account = await getAccountByTelegramId(telegramId);
-    if (!account) {
+    const accounts = await getAccountsByTelegramId(telegramId);
+    if (accounts.length === 0) {
       return res.status(403).json({
         error: "not_linked",
         message: "Your Telegram account isn't linked to a student yet. Open the bot and press /start.",
       });
     }
+    // A student in several groups has one record per group. The app picks one
+    // with X-Student-Id — honoured ONLY if it's one of this Telegram account's
+    // own verified records; anything else is refused, never silently swapped.
+    const wanted = req.header("x-student-id");
+    const account = wanted ? accounts.find((a) => a.studentId === wanted) : accounts[0];
+    if (!account) {
+      return res.status(403).json({ error: "profile_not_linked", message: "That group isn't linked to your account." });
+    }
+    req.studentAccounts = accounts;
     const student = await getStudentById(account.studentId);
     if (!student) return res.status(403).json({ error: "not_linked", message: "Student record not found." });
     req.student = student;

@@ -205,7 +205,7 @@ export function AttendanceAnalyticsPage() {
               </span>
             </div>
             {d.warnings.length === 0 ? (
-              <Card className="text-sm text-muted">✓ {t("noWarnings")}</Card>
+              <Card className="text-sm text-muted">{t("noWarnings")}</Card>
             ) : (
               <div className="grid gap-2 md:grid-cols-2">
                 {d.warnings.map((s) => (

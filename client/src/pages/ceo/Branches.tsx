@@ -241,7 +241,7 @@ function BranchCard({ branch, onEdit }: { branch: Branch; onEdit: () => void }) 
 
       {/* Telegram payment-notification group for this branch. */}
       <div className="rounded-lg border border-border px-3 py-2">
-        <div className="text-xs font-semibold text-muted">📣 {t("paymentNotifications")}</div>
+        <div className="text-xs font-semibold text-muted">{t("paymentNotifications")}</div>
         {group.isLoading ? (
           <div className="py-1"><Spinner /></div>
         ) : group.data?.linked ? (

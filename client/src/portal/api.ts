@@ -10,14 +10,43 @@ import type { ScoreAnalytics } from "@shared/scores";
 import type { AttendanceStatus, ScheduleSlot, StudentStatus } from "@shared/schema";
 
 const PREVIEW_KEY = "portalPreviewStudent";
+const PROFILE_KEY = "portalProfile";
+const UUID = /^[0-9a-f-]{36}$/i;
 
-/** Capture ?as=<id> once, then remember it for this tab. */
+/**
+ * Capture ?as=<id> (staff preview) and ?profile=<id> (which group to open —
+ * Telegram "Open app" buttons carry it) once, then remember them.
+ */
 export function initPreviewFromUrl(): void {
   try {
-    const as = new URLSearchParams(window.location.search).get("as");
-    if (as && /^[0-9a-f-]{36}$/i.test(as)) sessionStorage.setItem(PREVIEW_KEY, as);
+    const q = new URLSearchParams(window.location.search);
+    const as = q.get("as");
+    if (as && UUID.test(as)) sessionStorage.setItem(PREVIEW_KEY, as);
+    const profile = q.get("profile");
+    if (profile && UUID.test(profile)) localStorage.setItem(PROFILE_KEY, profile);
   } catch {
-    /* storage off: preview just won't persist */
+    /* storage off: preview / group choice just won't persist */
+  }
+}
+
+/**
+ * The student record (group) the app is showing, for students linked to
+ * several groups. The server only honours it if it's one of theirs.
+ */
+export function selectedProfile(): string | null {
+  try {
+    return localStorage.getItem(PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setSelectedProfile(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(PROFILE_KEY, id);
+    else localStorage.removeItem(PROFILE_KEY);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -41,7 +70,11 @@ export function exitPreview(): void {
 
 export function papi<T>(path: string, opts: { method?: string; body?: unknown; query?: Record<string, string | undefined> } = {}) {
   const pid = previewStudentId();
-  return api<T>(`/api/student${path}`, { ...opts, headers: pid ? { "X-Portal-Student": pid } : undefined });
+  const profile = pid ? null : selectedProfile();
+  const headers: Record<string, string> = {};
+  if (pid) headers["X-Portal-Student"] = pid;
+  if (profile) headers["X-Student-Id"] = profile;
+  return api<T>(`/api/student${path}`, { ...opts, headers });
 }
 
 /* ─────────────────────────────── types ─────────────────────────────── */
@@ -72,6 +105,17 @@ export type Me = {
   group: Group | null;
   account: { username: string | null; languageCode: string | null; verifiedAt: string } | null;
   preview: { by: string } | null;
+  unread: number;
+  /** Every group (student record) this Telegram account can switch between. */
+  profiles: Profile[];
+};
+
+export type Profile = {
+  studentId: string;
+  fullName: string;
+  active: boolean;
+  groupName: string;
+  subject: string | null;
   unread: number;
 };
 

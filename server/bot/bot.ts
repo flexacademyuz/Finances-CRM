@@ -24,14 +24,14 @@ export function configureBot(): void {
     const known = tgId ? await getUserByTelegramId(tgId) : undefined;
 
     const openButton = env.webAppUrl
-      ? new InlineKeyboard().webApp("💼 Open Flex Academy Finances", env.webAppUrl)
+      ? new InlineKeyboard().webApp("Open Flex Academy Finances", env.webAppUrl)
       : undefined;
 
     if (!known) {
       // Not staff → the student flow (link / welcome back / deep-link code).
       if (await handleStudentStart(ctx, String(ctx.match ?? "").trim())) return;
       await ctx.reply(
-        "👋 Welcome to <b>Flex Academy Finances</b>.\n\n" +
+        "Welcome to <b>Flex Academy Finances</b>.\n\n" +
           "Your Telegram account isn't registered yet. Please ask the CEO to add you " +
           `(they'll need your Telegram ID: <code>${tgId}</code>).`,
         { parse_mode: "HTML" },
@@ -87,7 +87,7 @@ export function configureBot(): void {
     }
     const kb = new InlineKeyboard();
     for (const b of branches) kb.text(b.name, `link_branch:${b.id}`).row();
-    await ctx.reply("🏢 Which branch should post its payments in this group?", { reply_markup: kb });
+    await ctx.reply("Which branch should post its payments in this group?", { reply_markup: kb });
   });
 
   // Branch picker callback from /here: link this chat to the chosen branch.
@@ -111,7 +111,7 @@ export function configureBot(): void {
     await setBranchPaymentGroupChatId(branchId, String(chat.id));
     await ctx.answerCallbackQuery();
     await ctx.editMessageText(
-      `✅ Linked. Every payment recorded in <b>${branch.name}</b> will now be posted in this group.\n` +
+      `Linked. Every payment recorded in <b>${branch.name}</b> will now be posted in this group.\n` +
         "Run /unlink here to stop.",
       { parse_mode: "HTML" },
     );
@@ -133,7 +133,7 @@ export function configureBot(): void {
       return;
     }
     await setBranchPaymentGroupChatId(branch.id, null);
-    await ctx.reply(`🛑 Payment notifications for <b>${branch.name}</b> in this group are turned off.`, {
+    await ctx.reply(`Payment notifications for <b>${branch.name}</b> in this group are turned off.`, {
       parse_mode: "HTML",
     });
   });
@@ -144,7 +144,7 @@ export function configureBot(): void {
     const chatType = ctx.chat?.type;
     if ((chatType === "group" || chatType === "supergroup") && (status === "member" || status === "administrator")) {
       await ctx.reply(
-        "👋 Thanks for adding me. A CEO can run /here in this group to start posting recorded payments.",
+        "Thanks for adding me. A CEO can run /here in this group to start posting recorded payments.",
       ).catch(() => undefined);
     }
   });

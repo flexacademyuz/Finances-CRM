@@ -342,7 +342,7 @@ function FreezeModal({ student, onClose }: { student: ActionStudent; onClose: ()
             {active.map((f) => (
               <div key={f.id} className="flex items-center justify-between">
                 <span className="text-status-frozen">
-                  🔵 {f.freezeFrom} → {f.freezeTo ?? t("untilLifted")} · {f.reason}
+                  {t("frozen")}: {f.freezeFrom} → {f.freezeTo ?? t("untilLifted")} · {f.reason}
                 </span>
                 <button className="text-tg-link" onClick={() => lift.mutate(f.id)}>
                   {t("liftFreeze")}
@@ -437,7 +437,7 @@ function DiscountModal({ student, onClose }: { student: ActionStudent; onClose: 
             {activeDiscounts.map((d) => (
               <div key={d.id} className="flex items-center justify-between">
                 <span className="text-status-discount">
-                  🏷️ {d.discountType === "percentage" ? `${d.discountValue}%` : money(d.discountValue)} · {d.reason}
+                  {d.discountType === "percentage" ? `${d.discountValue}%` : money(d.discountValue)} · {d.reason}
                 </span>
                 <button className="text-tg-link" onClick={() => remove.mutate(d.id)}>
                   {t("remove")}

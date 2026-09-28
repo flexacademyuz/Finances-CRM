@@ -1,0 +1,3 @@
+ALTER TABLE "student_telegram_accounts" DROP CONSTRAINT IF EXISTS "student_telegram_accounts_telegram_user_id_unique";--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "student_tg_user_idx" ON "student_telegram_accounts" USING btree ("telegram_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "student_tg_user_student_uniq" ON "student_telegram_accounts" USING btree ("telegram_user_id","student_id");

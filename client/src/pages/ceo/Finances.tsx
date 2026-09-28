@@ -110,7 +110,7 @@ export function FinancesPage() {
         </table>
       </div>
       {!data.payrollScoped && (
-        <p className="text-xs text-tg-hint">ℹ️ {t("payrollCompanyWide")}</p>
+        <p className="text-xs text-tg-hint">{t("payrollCompanyWide")}</p>
       )}
     </div>
   );

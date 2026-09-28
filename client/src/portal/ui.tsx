@@ -1,9 +1,29 @@
 /** Small, mobile-first building blocks for the student portal. */
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { AlertCircle, CheckCircle2, Clock, Snowflake, CircleDollarSign, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Snowflake,
+  CircleDollarSign,
+  RefreshCw,
+  Wallet,
+  Pencil,
+  Tag,
+  Check,
+  Award,
+  CalendarCheck,
+  Trophy,
+  Bell,
+  Ban,
+  Users,
+  Megaphone,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 import type { AttendanceStatus, StudentStatus } from "@shared/schema";
-import { fmtDay } from "@shared/notifications";
+import { fmtDay, type NotificationIcon } from "@shared/notifications";
 import { usePT, type PKey } from "./i18n";
 
 /* ───────────────────────────── formatting ───────────────────────────── */
@@ -124,14 +144,6 @@ export const ATT_COLOR: Record<AttendanceStatus, string> = {
   left_early: "#7b5cf5",
 };
 
-const ATT_EMOJI: Record<AttendanceStatus, string> = {
-  present: "🟢",
-  absent: "🔴",
-  late: "🟡",
-  excused: "🔵",
-  left_early: "🟣",
-};
-
 export function AttendancePill({ status }: { status: AttendanceStatus }) {
   const { t } = usePT();
   const c = ATT_COLOR[status];
@@ -145,8 +157,6 @@ export function AttendancePill({ status }: { status: AttendanceStatus }) {
     </span>
   );
 }
-
-export const attEmoji = (s: AttendanceStatus) => ATT_EMOJI[s];
 
 export function BillingStatusPill({ status, partial }: { status: StudentStatus; partial?: boolean }) {
   const { t } = usePT();
@@ -231,5 +241,46 @@ export function Meter({ label, value, sub }: { label: string; value: number; sub
         <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${v}%`, background: "#3457f5" }} />
       </div>
     </div>
+  );
+}
+
+/* ───────────────────────────── notification icon ───────────────────────────── */
+
+const ICONS: Record<NotificationIcon, LucideIcon> = {
+  wallet: Wallet,
+  pencil: Pencil,
+  clock: Clock,
+  alert: AlertCircle,
+  tag: Tag,
+  snowflake: Snowflake,
+  check: Check,
+  award: Award,
+  calendar: CalendarCheck,
+  trophy: Trophy,
+  bell: Bell,
+  ban: Ban,
+  users: Users,
+  megaphone: Megaphone,
+  shield: ShieldCheck,
+};
+
+const TONE_CLS: Record<string, string> = {
+  success: "bg-status-paid/15 text-status-paid",
+  danger: "bg-status-overdue/15 text-status-overdue",
+  warning: "bg-warning/15 text-warning",
+  info: "bg-primary-soft text-primary",
+  neutral: "bg-bg text-muted",
+};
+
+/** A notification's icon in a tinted disc (colour follows its tone). */
+export function NotifIcon({ icon, tone, size = 40 }: { icon: NotificationIcon; tone: string; size?: number }) {
+  const Icon = ICONS[icon] ?? Bell;
+  return (
+    <span
+      className={twMerge("grid shrink-0 place-items-center rounded-full", TONE_CLS[tone] ?? TONE_CLS.neutral)}
+      style={{ width: size, height: size }}
+    >
+      <Icon size={Math.round(size * 0.45)} />
+    </span>
   );
 }

@@ -212,7 +212,7 @@ function MonthDetail({
         <div className="mb-2 text-xs text-tg-hint">{t("justifyNote")}</div>
         {s.estimatedSalary === 0 && students.length > 0 && (
           <div className="mb-2 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-            ⚠️ {t("salaryRateUnset")}
+            {t("salaryRateUnset")}
           </div>
         )}
         {students.length ? (
@@ -333,7 +333,7 @@ function PayMonthModal({
 
         {detail.estimatedSalary === 0 && detail.students.length > 0 && (
           <div className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
-            ⚠️ {t("salaryRateUnset")}
+            {t("salaryRateUnset")}
           </div>
         )}
 

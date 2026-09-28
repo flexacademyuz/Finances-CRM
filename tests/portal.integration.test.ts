@@ -591,10 +591,58 @@ describe("telegram linking", () => {
     expect(me.body.student.id).toBe(S.carol);
   });
 
-  it("refuses staff accounts and double links", async () => {
+  it("refuses staff accounts", async () => {
     const link = await import("../server/services/telegram-link");
     await expect(link.linkAccount(S.alice, { id: 1003 }, "phone")).rejects.toMatchObject({ code: "staff_account" });
-    await expect(link.linkAccount(S.alice, { id: 6001 }, "phone")).rejects.toMatchObject({ code: "linked_elsewhere" });
+  });
+
+  it("one Telegram account can hold several groups and switch between them", async () => {
+    const link = await import("../server/services/telegram-link");
+    // Telegram 6001 (Carol, SAT) also verifies a second record → two groups.
+    await link.linkAccount(S.alice, { id: 6001 }, "code");
+    const me = await call("/api/student/me", { auth: asStudent(6001) });
+    expect(me.body.profiles.map((p: Json) => p.groupName).sort()).toEqual(["IELTS 18:00", "SAT"]);
+    // Default = first linked; X-Student-Id switches to another OWN record.
+    expect(me.body.student.id).toBe(S.carol);
+    const switched = await call("/api/student/me", { auth: asStudent(6001), headers: { "X-Student-Id": S.alice } });
+    expect(switched.body.student.id).toBe(S.alice);
+    // …but never to a record this Telegram account isn't linked to.
+    const other = await call("/api/student/payments", { auth: asStudent(6001), headers: { "X-Student-Id": S.bob } });
+    expect(other.status).toBe(403);
+    expect(other.body.error).toBe("profile_not_linked");
+    // Linking the same record twice is a no-op, not a duplicate.
+    const again = await link.linkAccount(S.alice, { id: 6001 }, "code");
+    expect(again.studentId).toBe(S.alice);
+  });
+
+  it("messages say which group they are about when linked to several", async () => {
+    tg.sent.length = 0;
+    const { createNotification } = await import("../server/notifications/service");
+    await createNotification({ studentId: S.carol, type: "debt_reminder", params: { balance: 10, currency: "UZS" } });
+    const { processQueue } = await import("../server/notifications/queue");
+    const msg = await waitFor(async () => {
+      await processQueue(1000);
+      return tg.sent.find((m) => m.chatId === 6001);
+    });
+    expect(msg.text).toContain("<i>SAT</i>");
+  });
+
+  it("verifying one group also links the same person's other groups", async () => {
+    const storage = await import("../server/storage");
+    const link = await import("../server/services/telegram-link");
+    const cls = await storage.getClassById(S.classB);
+    // Alice also studies SAT: a second record with the same name + phone.
+    const aliceSat = await storage.createStudent({
+      fullName: "Rahimov  Alice",
+      phone: "901112233",
+      classId: cls!.id,
+      branchId: cls!.branchId,
+      enrolledAt: "2026-01-10",
+    });
+    const linked = await link.linkWithOtherGroups(S.alice, { id: 8001 }, "phone");
+    expect(linked.map((a) => a.studentId).sort()).toEqual([S.alice, aliceSat.id].sort());
+    // Bob shares nothing with Alice → not linked along.
+    expect(linked.some((a) => a.studentId === S.bob)).toBe(false);
   });
 
   it("rate-limits repeated wrong codes", async () => {

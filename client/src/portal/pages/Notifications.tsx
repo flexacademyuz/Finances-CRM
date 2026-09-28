@@ -1,24 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { BellOff, CheckCheck, ChevronRight } from "lucide-react";
+import { BellOff, ChevronRight, Eye } from "lucide-react";
 import { renderNotification } from "@shared/notifications";
-import { Segmented } from "../../components/ui";
-import { haptic } from "../../lib/telegram";
 import { papi, type Notification } from "../api";
 import { usePT } from "../i18n";
 import { useMe } from "../PortalApp";
-import { PageSkeleton, ErrorState, EmptyState, relTime } from "../ui";
+import { PageSkeleton, ErrorState, EmptyState, NotifIcon, relTime } from "../ui";
 
 type Page = { items: Notification[]; nextCursor: string | null; unread: number };
-
-const TONE: Record<string, string> = {
-  success: "bg-status-paid/15",
-  danger: "bg-status-overdue/15",
-  warning: "bg-warning/15",
-  info: "bg-primary-soft",
-  neutral: "bg-bg",
-};
 
 /** Where a notification's "Open" goes inside the portal. */
 function target(n: Notification): string | null {
@@ -34,92 +24,99 @@ function target(n: Notification): string | null {
   }
 }
 
+/**
+ * Notification centre. Opening it marks everything read (so the badges clear),
+ * while the items that were new on this visit keep a "New" highlight until the
+ * student leaves the page. In staff preview nothing is written to the
+ * student's data — read state is only tracked on screen.
+ */
 export function NotificationsPage() {
   const { t, locale } = usePT();
   const me = useMe();
   const qc = useQueryClient();
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<"all" | "unread">("all");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const readOnly = !!me.preview;
+  const [fresh, setFresh] = useState<Set<string> | null>(null);
+  const markedOnOpen = useRef(false);
+  const preview = !!me.preview;
 
   const q = useInfiniteQuery({
-    queryKey: ["portal", "notifications", tab],
-    queryFn: ({ pageParam }) =>
-      papi<Page>("/notifications", { query: { cursor: pageParam ?? undefined, unread: tab === "unread" ? "1" : undefined } }),
+    queryKey: ["portal", "notifications"],
+    queryFn: ({ pageParam }) => papi<Page>("/notifications", { query: { cursor: pageParam ?? undefined } }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
 
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["portal"] });
-  };
-  const markOne = useMutation({
-    mutationFn: (id: string) => papi(`/notifications/${id}/read`, { method: "POST" }),
-    onSuccess: refresh,
-  });
-  const markAll = useMutation({
+  const readAll = useMutation({
     mutationFn: () => papi("/notifications/read-all", { method: "POST" }),
     onSuccess: () => {
-      haptic("success");
-      refresh();
+      // Clear the bell / tab badges and the Home preview dots.
+      void qc.invalidateQueries({ queryKey: ["portal", "me"] });
+      void qc.invalidateQueries({ queryKey: ["portal", "dashboard"] });
     },
   });
 
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
-  const unread = q.data?.pages[0]?.unread ?? me.unread;
+
+  // First load: remember what was unread, then mark it all read.
+  useEffect(() => {
+    if (!q.data || fresh) return;
+    const unread = new Set(items.filter((n) => !n.readAt).map((n) => n.id));
+    setFresh(unread);
+    if (unread.size > 0 && !preview && !markedOnOpen.current) {
+      markedOnOpen.current = true;
+      readAll.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.data]);
+
+  // Older pages loaded later may hold unread items too.
+  useEffect(() => {
+    if (!fresh || preview) return;
+    const more = items.filter((n) => !n.readAt && !fresh.has(n.id));
+    if (more.length) {
+      setFresh(new Set([...fresh, ...more.map((n) => n.id)]));
+      readAll.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.data?.pages.length]);
+
+  if (q.isLoading) return <PageSkeleton />;
+  if (q.error) return <ErrorState onRetry={() => q.refetch()} />;
 
   return (
     <div className="space-y-3 animate-slide-up">
-      <div className="flex items-center justify-between gap-2">
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "all", label: t("all") },
-            { value: "unread", label: `${t("unread")}${unread ? ` · ${unread}` : ""}` },
-          ]}
-        />
-        {unread > 0 && !readOnly && (
-          <button
-            onClick={() => markAll.mutate()}
-            disabled={markAll.isPending}
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-primary"
-          >
-            <CheckCheck size={16} /> {t("markAllRead")}
-          </button>
-        )}
-      </div>
+      {preview && (
+        <div className="flex items-start gap-2 rounded-2xl bg-warning/10 px-3 py-2 text-xs font-semibold text-warning">
+          <Eye size={14} className="mt-0.5 shrink-0" />
+          {t("previewReadNote")}
+        </div>
+      )}
 
-      {q.isLoading ? (
-        <PageSkeleton />
-      ) : q.error ? (
-        <ErrorState onRetry={() => q.refetch()} />
-      ) : items.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState icon={<BellOff size={24} />} title={t("noNotifications")} />
       ) : (
         <div className="space-y-2">
           {items.map((n) => {
             const r = renderNotification(n.type, n.params, locale);
+            const isNew = fresh?.has(n.id) ?? !n.readAt;
             const isOpen = expanded === n.id;
             const to = target(n);
             return (
               <div
                 key={n.id}
-                className={`rounded-[20px] bg-surface shadow-card ring-1 transition ${n.readAt ? "ring-dark/[0.04]" : "ring-primary/25"}`}
+                className={`rounded-[20px] bg-surface shadow-card ring-1 transition ${isNew ? "ring-primary/30" : "ring-dark/[0.04]"}`}
               >
-                <button
-                  className="flex w-full gap-3 p-3.5 text-left"
-                  onClick={() => {
-                    setExpanded(isOpen ? null : n.id);
-                    if (!n.readAt && !readOnly) markOne.mutate(n.id);
-                  }}
-                >
-                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg ${TONE[r.tone]}`}>{r.emoji}</span>
+                <button className="flex w-full gap-3 p-3.5 text-left" onClick={() => setExpanded(isOpen ? null : n.id)}>
+                  <NotifIcon icon={r.icon} tone={r.tone} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <span className={`font-bold ${n.readAt ? "" : "text-text"}`}>{r.title}</span>
-                      {!n.readAt && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />}
+                      <span className="font-bold">{r.title}</span>
+                      {isNew && (
+                        <span className="mt-0.5 shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                          {t("newBadge")}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] font-medium text-muted">{relTime(n.createdAt, t, locale)}</div>
                     <p className={`mt-1 whitespace-pre-line text-sm text-text/80 ${isOpen ? "" : "line-clamp-2"}`}>{r.body}</p>

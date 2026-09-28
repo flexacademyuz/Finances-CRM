@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, CheckCheck, MoreHorizontal, Ban, RotateCcw, Lock, History } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCheck, MoreHorizontal, Ban, RotateCcw, Lock, History, Check } from "lucide-react";
 import type { AttendanceStatus } from "@shared/schema";
 import { summarize } from "@shared/attendance";
 import { addDaysIso, tashkentDate } from "@shared/lesson-schedule";
@@ -164,7 +164,7 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
         <Spinner />
       ) : data.lesson?.status === "cancelled" ? (
         <Card className="space-y-2 text-center">
-          <div className="text-lg font-bold text-status-overdue">🚫 {t("lessonCancelled")}</div>
+          <div className="flex items-center justify-center gap-2 text-lg font-bold text-status-overdue"><Ban size={18} /> {t("lessonCancelled")}</div>
           {data.lesson.cancelReason && <div className="text-sm text-muted">{data.lesson.cancelReason}</div>}
           {data.canEdit && (
             <Button variant="ghost" onClick={() => restore.mutate()} disabled={restore.isPending}>
@@ -280,7 +280,7 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
               </Button>
             </div>
           )}
-          {save.isSuccess && !dirty && <div className="text-center text-sm font-semibold text-status-paid">✓ {t("attendanceSaved")}</div>}
+          {save.isSuccess && !dirty && <div className="flex items-center justify-center gap-1 text-sm font-semibold text-status-paid"><Check size={15} /> {t("attendanceSaved")}</div>}
         </>
       )}
 

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users, Send, CheckCircle2, AlertTriangle, Megaphone, PlayCircle, Save, BellRing } from "lucide-react";
+import { Users, Send, CheckCircle2, AlertTriangle, Megaphone, PlayCircle, Save, BellRing, Bot } from "lucide-react";
 import { NOTIFICATION_TYPES, renderNotification } from "@shared/notifications";
 import type { StudentPortalSettings } from "@shared/schema";
 import { api } from "../../lib/api";
@@ -58,7 +58,7 @@ export function StudentPortalAdminPage() {
 
       {/* Setup */}
       <Card className="space-y-2">
-        <div className="text-base font-bold">🤖 {t("botSetup")}</div>
+        <div className="flex items-center gap-2 text-base font-bold"><Bot size={17} className="text-primary" /> {t("botSetup")}</div>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
           <li>
             {t("botSetup1")} {o?.botUsername && <a className="font-semibold text-primary" href={`https://t.me/${o.botUsername}`} target="_blank" rel="noreferrer">@{o.botUsername}</a>}
@@ -73,7 +73,7 @@ export function StudentPortalAdminPage() {
             </Button>
             {run.data && (
               <span className="text-xs text-muted">
-                ✓ {run.data.reminders} {t("reminders").toLowerCase()} · {Object.values(run.data.daily).reduce((a, b) => a + b, 0)} {t("billingNotices")} · {run.data.delivered} {t("sent").toLowerCase()}
+                {t("done")}: {run.data.reminders} {t("reminders").toLowerCase()} · {Object.values(run.data.daily).reduce((a, b) => a + b, 0)} {t("billingNotices")} · {run.data.delivered} {t("sent").toLowerCase()}
               </span>
             )}
           </div>
@@ -96,7 +96,7 @@ export function StudentPortalAdminPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">
-                    {p.studentName} · {renderNotification(p.type, {}, locale).emoji} {p.type}
+                    {p.studentName} · {p.type.replace(/_/g, " ")}
                   </div>
                   <div className="truncate text-xs text-muted">{p.lastError}</div>
                 </div>
@@ -150,12 +150,12 @@ function AnnouncementComposer() {
             {fullAccess &&
               branches.map((b) => (
                 <option key={b.id} value={`branch:${b.id}`}>
-                  🏢 {b.name}
+                  {t("branch")}: {b.name}
                 </option>
               ))}
             {(classes.data ?? []).map((c) => (
               <option key={c.id} value={`class:${c.id}`}>
-                📚 {c.name}
+                {t("groups")}: {c.name}
               </option>
             ))}
           </Select>
@@ -178,7 +178,7 @@ function AnnouncementComposer() {
         </Field>
         {kind === "important" && <p className="text-xs text-warning">{t("importantNote")}</p>}
         {send.isError && <div className="text-sm text-status-overdue">{(send.error as Error).message}</div>}
-        {send.data && <div className="text-sm font-semibold text-status-paid">✓ {t("sentTo").replace("{n}", String(send.data.notified))}</div>}
+        {send.data && <div className="text-sm font-semibold text-status-paid">{t("sentTo").replace("{n}", String(send.data.notified))}</div>}
         <Button className="w-full" disabled={!title.trim() || !body.trim() || send.isPending} onClick={() => send.mutate()}>
           <Send size={15} /> {t("send")}
         </Button>
@@ -186,8 +186,12 @@ function AnnouncementComposer() {
           <div key={a.id} className="border-t border-border pt-2 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate font-semibold">
-                {a.kind === "important" ? "❗ " : a.kind === "holiday" ? "🎉 " : ""}
                 {a.title}
+                {a.kind !== "general" && (
+                  <span className="ml-1.5 rounded-pill bg-bg px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted">
+                    {a.kind === "important" ? t("kindImportant") : t("kindHoliday")}
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-xs text-muted">{formatDate(a.createdAt, locale)}</span>
             </div>
@@ -274,7 +278,7 @@ function SettingsCard({ readOnly }: { readOnly: boolean }) {
                     onChange={() => set("disabledTypes", on ? [...s.disabledTypes, ty] : s.disabledTypes.filter((x) => x !== ty))}
                   />
                   <span>
-                    {r.emoji} {ty.replace(/_/g, " ")}
+                    {r.title || ty.replace(/_/g, " ")}
                   </span>
                 </label>
               );
@@ -284,7 +288,7 @@ function SettingsCard({ readOnly }: { readOnly: boolean }) {
         {save.isError && <div className="text-sm text-status-overdue">{(save.error as Error).message}</div>}
         {!readOnly && (
           <Button className="w-full" disabled={save.isPending} onClick={() => save.mutate()}>
-            <Save size={15} /> {save.isSuccess ? `✓ ${t("saved")}` : t("save")}
+            <Save size={15} /> {save.isSuccess ? t("saved") : t("save")}
           </Button>
         )}
       </Card>
