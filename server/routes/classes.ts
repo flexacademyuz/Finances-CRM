@@ -9,6 +9,7 @@ import {
   assertBranchAccess,
 } from "../auth/middleware";
 import { insertClassSchema, scheduleSlotSchema } from "@shared/schema";
+import { LEVEL_CODES } from "@shared/learning/types";
 import { formatScheduleSlots } from "@shared/timetable";
 import {
   listClasses,
@@ -120,6 +121,7 @@ router.post(
       room: input.room ?? null,
       maxStudents: input.maxStudents ?? null,
       startDate: input.startDate ?? null,
+      learningLevel: input.learningLevel ?? null,
     });
     res.status(201).json(created);
   }),
@@ -140,6 +142,7 @@ router.patch(
         room: z.string().nullable().optional(),
         maxStudents: z.coerce.number().int().positive().nullable().optional(),
         startDate: z.string().nullable().optional(),
+        learningLevel: z.enum(LEVEL_CODES).nullable().optional(),
         active: z.boolean().optional(),
       })
       .parse(req.body);

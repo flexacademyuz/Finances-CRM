@@ -17,6 +17,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { LEVEL_CODES } from "./learning/types";
 
 /* ────────────────────────────── Enums ────────────────────────────── */
 
@@ -196,6 +197,10 @@ export const classes = pgTable("classes", {
   room: text("room"),
   maxStudents: bigint("max_students", { mode: "number" }),
   startDate: date("start_date"),
+  // Course level (CEFR code, see shared/learning/types LEARNING_LEVELS). Decides
+  // which vocabulary set the group's students study. Null = not set (students
+  // then get the lowest published level).
+  learningLevel: text("learning_level"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -1435,6 +1440,8 @@ export const insertClassSchema = createInsertSchema(classes, {
   .extend({
     branchId: z.string().uuid().optional(),
     scheduleSlots: z.array(scheduleSlotSchema).optional(),
+    // Course level (CEFR code); see shared/learning/types LEARNING_LEVELS.
+    learningLevel: z.enum(LEVEL_CODES).nullable().optional(),
   });
 
 export const insertStudentSchema = createInsertSchema(students, {

@@ -6,11 +6,12 @@ import type { ReactNode } from "react";
 import { PCard, PageSkeleton, ErrorState } from "../ui";
 import { lapi, type Stage } from "./api";
 import { useLT } from "./i18n";
-import { StageBar, StageLegend } from "./ui";
-import type { VocabSettings } from "@shared/learning/types";
+import { StageBar, StageLegend, useLearnHome } from "./ui";
+import { levelLabel, type VocabSettings } from "@shared/learning/types";
 
 export function StagePage() {
-  const { t } = useLT();
+  const { t, locale } = useLT();
+  const home = useLearnHome();
   const [, params] = useRoute("/learn/stage/:id");
   const id = params?.id ?? "";
   const q = useQuery({
@@ -32,7 +33,10 @@ export function StagePage() {
       <PCard>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted">{t("vocabulary")}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {t("vocabulary")}
+              {home.data?.resource.level ? ` · ${levelLabel(home.data.resource.level, locale)}` : ""}
+            </div>
             <h1 className="text-2xl font-extrabold tracking-tight">{t("stage", { n: s.position })}</h1>
             <div className="mt-0.5 text-sm text-muted">
               {s.total} {t("words")}

@@ -1,12 +1,12 @@
 /** Building blocks shared by the learning screens (mobile-first). */
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Flame, Library, Play, Sparkles, Target, Trophy, X, Check, type LucideIcon } from "lucide-react";
-import type { WordStatus } from "@shared/learning/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen, Flame, Library, Play, Sparkles, Target, Trophy, X, Check, GraduationCap, type LucideIcon } from "lucide-react";
+import { levelLabel, type WordStatus } from "@shared/learning/types";
 import { ACHIEVEMENTS, type AchievementCode } from "@shared/learning/gamification";
 import { haptic } from "../../lib/telegram";
-import { lapi, type LearnHome, type Stage } from "./api";
+import { lapi, setSelectedSet, type LearnHome, type Stage } from "./api";
 import { useLT } from "./i18n";
 
 export const STATUS_COLOR: Record<WordStatus, string> = {
@@ -74,7 +74,7 @@ export function StatusPill({ status }: { status: WordStatus }) {
  * portal Home and at the top of Learn.
  */
 export function TodayCard({ compact = false }: { compact?: boolean }) {
-  const { t } = useLT();
+  const { t, locale } = useLT();
   const [, go] = useLocation();
   const q = useLearnHome();
   if (q.isLoading) return <div className="h-40 animate-pulse rounded-[22px] bg-dark/[0.06]" />;
@@ -91,8 +91,11 @@ export function TodayCard({ compact = false }: { compact?: boolean }) {
       <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/10" />
       <div className="relative">
         <div className="flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-2 text-sm font-bold text-white/90">
-            <BookOpen size={16} /> {t("todaysPractice")}
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 text-sm font-bold text-white/90">
+              <BookOpen size={16} /> {t("todaysPractice")}
+            </div>
+            {d.resource.level && <div className="mt-0.5 text-xs font-semibold text-white/75">{levelLabel(d.resource.level, locale)}</div>}
           </div>
           <div className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold">
             <Flame size={13} /> {d.streak > 0 ? t("dayStreak", { n: d.streak }) : t("noStreak")}
@@ -127,6 +130,51 @@ export function TodayCard({ compact = false }: { compact?: boolean }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The student's course level ("Beginner · A1"). Students whose groups are at
+ * several levels get a switcher; everything below follows the chosen level.
+ */
+export function LevelBar() {
+  const { locale } = useLT();
+  const qc = useQueryClient();
+  const q = useLearnHome();
+  if (!q.data) return null;
+  const { levels, resource } = q.data;
+  const choose = (id: string) => {
+    if (id === resource.id) return;
+    haptic("light");
+    setSelectedSet(id);
+    void qc.resetQueries({ queryKey: ["portal", "learn"] });
+  };
+  if (levels.length < 2) {
+    return (
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-xs font-bold text-primary shadow-card ring-1 ring-dark/[0.04]">
+        <GraduationCap size={14} /> {levelLabel(resource.level, locale)}
+      </div>
+    );
+  }
+  return (
+    <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist">
+      {levels.map((l) => {
+        const active = l.resourceId === resource.id;
+        return (
+          <button
+            key={l.resourceId}
+            role="tab"
+            aria-selected={active}
+            onClick={() => choose(l.resourceId)}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-bold transition ${
+              active ? "bg-primary text-white shadow-brand" : "bg-surface text-muted ring-1 ring-border"
+            }`}
+          >
+            <GraduationCap size={15} /> {levelLabel(l.level, locale)}
+          </button>
+        );
+      })}
     </div>
   );
 }

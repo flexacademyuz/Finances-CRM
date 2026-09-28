@@ -9,6 +9,7 @@ import { can } from "@shared/permissions";
 import { money } from "../../lib/format";
 import type { Class, TeacherRow } from "../../lib/types";
 import type { ScheduleSlot } from "@shared/schema";
+import { LEARNING_LEVELS, levelLabel } from "@shared/learning/types";
 import { ScheduleSlotsEditor, scheduleSlotsInvalid } from "../../components/ScheduleSlotsEditor";
 import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner, StatTile } from "../../components/ui";
 
@@ -17,7 +18,7 @@ import { Button, Card, Empty, Field, Input, MoneyHint, Modal, Select, Spinner, S
  * and edit any group; only the CEO deletes/archives (V2 Change 1A).
  */
 export function ClassesPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useSession();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Class | null | "new">(null);
@@ -73,6 +74,7 @@ export function ClassesPage() {
                   <span className="block truncate font-semibold">{c.name}</span>
                   <span className="block truncate text-xs text-tg-hint">{teacherName(c.teacherId)}</span>
                 </span>
+                {c.learningLevel && <span className="badge-pill w-fit">{levelLabel(c.learningLevel, locale)}</span>}
                 <span className="flex items-center justify-between gap-1 text-xs">
                   <span className="font-medium text-tg-text">{money(c.defaultFee)}</span>
                   {c.room && <span className="text-tg-hint">{c.room}</span>}
@@ -108,7 +110,7 @@ function GroupModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const editing = !!group;
   const [name, setName] = useState(group?.name ?? "");
   const [subject, setSubject] = useState(group?.subject ?? "");
@@ -118,6 +120,8 @@ function GroupModal({
   const [room, setRoom] = useState(group?.room ?? "");
   const [maxStudents, setMaxStudents] = useState(group?.maxStudents ? String(group.maxStudents) : "");
   const [startDate, setStartDate] = useState(group?.startDate ?? "");
+  // Course level: decides which vocabulary set the group's students study.
+  const [learningLevel, setLearningLevel] = useState(group?.learningLevel ?? "");
   // Load the group's current fixed per-student teacher rate so the box shows it
   // (the API now returns it on the class). Blank = no rate set.
   const [perStudentRate, setPerStudentRate] = useState(
@@ -134,6 +138,7 @@ function GroupModal({
     room: room || undefined,
     maxStudents: maxStudents ? Number(maxStudents) : undefined,
     startDate: startDate || undefined,
+    learningLevel: learningLevel || null,
   });
 
   const save = useMutation({
@@ -165,6 +170,21 @@ function GroupModal({
         </Field>
         <Field label="Subject / level">
           <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+        </Field>
+        <Field label={locale === "uz" ? "Daraja (lug'at)" : "Level (vocabulary)"}>
+          <Select value={learningLevel} onChange={(e) => setLearningLevel(e.target.value)}>
+            <option value="">{locale === "uz" ? "— tanlanmagan —" : "— not set —"}</option>
+            {LEARNING_LEVELS.map((l) => (
+              <option key={l.code} value={l.code}>
+                {levelLabel(l.code, locale)}
+              </option>
+            ))}
+          </Select>
+          <span className="mt-1 block text-xs text-tg-hint">
+            {locale === "uz"
+              ? "O'quvchilar Telegram ilovasida shu darajadagi so'zlarni o'rganadi."
+              : "Students of this group study this level's vocabulary in the Telegram app."}
+          </span>
         </Field>
         <Field label={t("teacher")}>
           <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>

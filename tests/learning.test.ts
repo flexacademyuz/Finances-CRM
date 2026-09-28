@@ -16,7 +16,8 @@ import {
   type VocabLite,
 } from "@shared/learning/exercises";
 import { answerMatches, displayWord, exampleFitsWord, meaningsOverlap, normalizeAnswer, senses } from "@shared/learning/text";
-import { EXERCISE_TYPES, resolveVocabSettings } from "@shared/learning/types";
+import { EXERCISE_TYPES, isLearningLevel, levelLabel, levelRank, resolveVocabSettings } from "@shared/learning/types";
+import { buildElementaryA2, NEW_SENSES } from "../server/learning/content/elementary-a2";
 import { achievementsFor, currentStreak, longestStreak } from "@shared/learning/gamification";
 
 const { items, report } = buildBeginner900();
@@ -61,6 +62,38 @@ describe("beginner-900 import normalization", () => {
 
   it("is deterministic (same input → identical output)", () => {
     expect(buildBeginner900().items).toEqual(items);
+  });
+});
+
+describe("elementary (A2) content", () => {
+  const a2 = buildElementaryA2();
+  const a1Words = new Set(items.map((i) => i.word.toLowerCase()));
+
+  it("yields 700 items in 7 stages of 100, all with a valid example", () => {
+    expect(a2.report).toMatchObject({ items: 700, stages: 7, droppedOverlap: [], duplicatesDropped: [], badExamples: [] });
+    for (const it of a2.items) expect(exampleFitsWord(it.example, it.word), it.word).toBe(true);
+  });
+
+  it("repeats a beginner word only when it teaches a listed new meaning", () => {
+    for (const it of a2.items) {
+      if (a1Words.has(it.word.toLowerCase())) expect(NEW_SENSES.has(it.word.toLowerCase()), it.word).toBe(true);
+    }
+  });
+
+  it("has stable, unique source refs (safe to re-import)", () => {
+    expect(new Set(a2.items.map((i) => i.sourceRef)).size).toBe(700);
+    expect(buildElementaryA2().items.map((i) => i.sourceRef)).toEqual(a2.items.map((i) => i.sourceRef));
+  });
+});
+
+describe("course levels", () => {
+  it("labels levels in both languages", () => {
+    expect(levelLabel("A1")).toBe("Beginner · A1");
+    expect(levelLabel("A2", "uz")).toBe("Elementar · A2");
+    expect(levelLabel(null)).toBe("");
+    expect(levelRank("A1")).toBeLessThan(levelRank("A2"));
+    expect(isLearningLevel("B1")).toBe(true);
+    expect(isLearningLevel("Z9")).toBe(false);
   });
 });
 

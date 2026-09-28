@@ -1,23 +1,25 @@
 /**
- * `npm run learning:import` — apply migrations, (re)import the beginner-900
- * vocabulary and print the discrepancy report. Safe to run any number of times.
+ * `npm run learning:import` — apply migrations, (re)import every bundled
+ * vocabulary set and print its discrepancy report. Safe to run any number of
+ * times; never changes a set's published/draft status after its first import.
  */
 import "dotenv/config";
 import { runMigrations } from "../migrate";
-import { importBeginner900 } from "./import";
+import { VOCAB_SETS, importVocabSet } from "./import";
 import { pool } from "../db";
 
 async function main() {
   await runMigrations();
-  const r = await importBeginner900();
-  const rep = r.report;
-  console.log(`[learning] beginner-900: ${rep.items} items in ${rep.stages} stages (inserted ${r.inserted}, updated ${r.updated})`);
-  console.log(`  source rows: ${rep.sourceRows}; numbering gaps: ${rep.numberingGaps.join(", ") || "none"}`);
-  for (const d of rep.duplicatesDropped) console.log(`  dropped #${d.no} ${d.word} (keeps #${d.keeps}): ${d.reason}`);
-  for (const h of rep.homonymsKept) console.log(`  homonym kept: ${h.word} (#${h.nos.join(", #")})`);
-  for (const c of rep.corrections) console.log(`  corrected #${c.no}: ${c.note}`);
-  for (const f of rep.flagged) console.log(`  review #${f.no} ${f.word}: ${f.note}`);
-  if (rep.missingEnrichment.length) console.log(`  missing enrichment: ${rep.missingEnrichment.join(", ")}`);
+  for (const def of VOCAB_SETS) {
+    const r = await importVocabSet(def);
+    const rep = r.report as unknown as Record<string, unknown>;
+    console.log(`[learning] ${def.slug} (${def.level}): ${r.items} items in ${r.stages} stages (inserted ${r.inserted}, updated ${r.updated})`);
+    for (const [k, v] of Object.entries(rep)) {
+      if (Array.isArray(v) && v.length) {
+        console.log(`  ${k}: ${v.map((x) => (typeof x === "object" ? JSON.stringify(x) : String(x))).join(", ")}`);
+      }
+    }
+  }
 }
 
 main()

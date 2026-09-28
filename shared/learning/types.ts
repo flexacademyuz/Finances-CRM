@@ -22,6 +22,44 @@ export const LEARNING_RESOURCE_TYPES = [
 ] as const;
 export type LearningResourceType = (typeof LEARNING_RESOURCE_TYPES)[number];
 
+/**
+ * Course levels, CEFR code → the names students and staff see. Groups are
+ * assigned one of these codes (classes.learning_level) and learning resources
+ * carry one (learning_resources.level); a student sees the resources of their
+ * groups' levels.
+ */
+export const LEARNING_LEVELS = [
+  { code: "A1", en: "Beginner", uz: "Boshlang'ich" },
+  { code: "A2", en: "Elementary", uz: "Elementar" },
+  { code: "B1", en: "Intermediate", uz: "O'rta" },
+  { code: "B2", en: "Upper-Intermediate", uz: "O'rtadan yuqori" },
+  { code: "C1", en: "Advanced", uz: "Yuqori" },
+] as const;
+export type LearningLevel = (typeof LEARNING_LEVELS)[number]["code"];
+export const LEVEL_CODES = LEARNING_LEVELS.map((l) => l.code) as unknown as readonly [LearningLevel, ...LearningLevel[]];
+
+export function isLearningLevel(v: unknown): v is LearningLevel {
+  return typeof v === "string" && (LEVEL_CODES as readonly string[]).includes(v);
+}
+
+/** "Beginner · A1" / "Boshlang'ich · A1" (falls back to the raw code). */
+export function levelLabel(code: string | null | undefined, l: "en" | "uz" = "en"): string {
+  if (!code) return "";
+  const lv = LEARNING_LEVELS.find((x) => x.code === code);
+  return lv ? `${lv[l]} · ${lv.code}` : code;
+}
+
+/** Just the name ("Elementary"). */
+export function levelName(code: string | null | undefined, l: "en" | "uz" = "en"): string {
+  return LEARNING_LEVELS.find((x) => x.code === code)?.[l] ?? code ?? "";
+}
+
+/** Order for sorting levels (unknown codes last). */
+export function levelRank(code: string | null | undefined): number {
+  const i = LEVEL_CODES.indexOf(code as LearningLevel);
+  return i < 0 ? 99 : i;
+}
+
 export const RESOURCE_STATUSES = ["draft", "published", "archived"] as const;
 export type ResourceStatus = (typeof RESOURCE_STATUSES)[number];
 

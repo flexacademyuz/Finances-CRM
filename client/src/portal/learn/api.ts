@@ -4,7 +4,32 @@ import type { ExerciseType, PracticeSource, VocabSettings, WordStatus } from "@s
 import type { PublicQuestion } from "@shared/learning/exercises";
 import type { AchievementCode } from "@shared/learning/gamification";
 
-export const lapi = <T>(path: string, opts: { method?: string; body?: unknown } = {}) => papi<T>(`/learn${path}`, opts);
+const LEVEL_KEY = "learnResource";
+
+/**
+ * The vocabulary set (course level) the student chose, for students whose
+ * groups are at more than one level. The server only honours a set that
+ * belongs to one of the student's groups; otherwise it uses their default.
+ */
+export function selectedSet(): string | null {
+  try {
+    return localStorage.getItem(LEVEL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setSelectedSet(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(LEVEL_KEY, id);
+    else localStorage.removeItem(LEVEL_KEY);
+  } catch {
+    /* storage off: the default level is used */
+  }
+}
+
+export const lapi = <T>(path: string, opts: { method?: string; body?: unknown } = {}) =>
+  papi<T>(`/learn${path}`, { ...opts, query: { resource: selectedSet() ?? undefined } });
 
 export type Stage = {
   id: string;
@@ -24,8 +49,12 @@ export type Stage = {
   toComplete: number;
 };
 
+export type LearnLevel = { resourceId: string; level: string | null; title: string; titleUz: string | null };
+
 export type LearnHome = {
   resource: { id: string; title: string; titleUz: string | null; level: string | null };
+  /** Every level this student may switch between (their groups' levels). */
+  levels: LearnLevel[];
   settings: VocabSettings;
   currentStage: Stage | null;
   stages: Stage[];

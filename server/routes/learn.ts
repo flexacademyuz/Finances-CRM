@@ -10,11 +10,13 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import { asyncHandler } from "./helpers";
-import { learnerIdFor } from "../learning/learner";
+import { learnerIdFor, learnerLevels } from "../learning/learner";
+import type { LearningResource } from "@shared/schema";
 import {
   DECK_MODES,
   WORD_FILTERS,
   answerQuestion,
+  chooseResource,
   createExerciseSession,
   currentStage,
   deck,
@@ -23,7 +25,7 @@ import {
   learnerHome,
   learnerStats,
   loadUnit,
-  requireResource,
+  resourcesForLevels,
   reviewCard,
   setBookmark,
   stageSummaries,
@@ -42,6 +44,7 @@ declare global {
   namespace Express {
     interface Request {
       learnerId?: string;
+      learnSets?: { allowed: LearningResource[]; preferred: LearningResource | null };
     }
   }
 }
@@ -49,24 +52,30 @@ declare global {
 router.use(
   asyncHandler(async (req, _res, next) => {
     req.learnerId = await learnerIdFor(req.student!);
+    // Which course levels this student may study comes from their groups'
+    // levels (server-side); ?resource= may only pick among those.
+    const { levels, preferred } = await learnerLevels(req.student!);
+    req.learnSets = await resourcesForLevels(levels, preferred);
     next();
   }),
 );
 
 const learner = (req: Request) => req.learnerId!;
+const resourceOf = (req: Request) =>
+  chooseResource(req.learnSets!, typeof req.query.resource === "string" ? req.query.resource : null);
 const intQ = (v: unknown, d: number) => (typeof v === "string" && /^\d+$/.test(v) ? Number(v) : d);
 
 router.get(
   "/home",
   asyncHandler(async (req, res) => {
-    res.json(await learnerHome(learner(req), await requireResource()));
+    res.json(await learnerHome(learner(req), resourceOf(req), req.learnSets!.allowed));
   }),
 );
 
 router.get(
   "/stages",
   asyncHandler(async (req, res) => {
-    const r = await requireResource();
+    const r = resourceOf(req);
     const stages = await stageSummaries(learner(req), r);
     res.json({ stages, currentStageId: currentStage(stages)?.id ?? null, settings: settingsOf(r) });
   }),
@@ -76,7 +85,7 @@ router.get(
   "/stages/:id",
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) return res.status(404).json(notFound);
-    const r = await requireResource();
+    const r = resourceOf(req);
     await loadUnit(req.params.id, r.id);
     const stage = (await stageSummaries(learner(req), r)).find((s) => s.id === req.params.id);
     if (!stage) return res.status(404).json(notFound);
@@ -88,7 +97,7 @@ router.get(
   "/stages/:id/words",
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) return res.status(404).json(notFound);
-    const r = await requireResource();
+    const r = resourceOf(req);
     await loadUnit(req.params.id, r.id);
     const filter = z.enum(WORD_FILTERS).catch("all").parse(req.query.filter);
     res.json(await stageWords(learner(req), r, req.params.id, filter, intQ(req.query.after, 0), intQ(req.query.limit, 50)));
@@ -98,7 +107,7 @@ router.get(
 router.get(
   "/deck",
   asyncHandler(async (req, res) => {
-    const r = await requireResource();
+    const r = resourceOf(req);
     const mode = z.enum(DECK_MODES).catch("learn").parse(req.query.mode);
     const unitId = typeof req.query.unit === "string" && UUID_RE.test(req.query.unit) ? req.query.unit : undefined;
     if (unitId) await loadUnit(unitId, r.id);
@@ -112,7 +121,7 @@ router.post(
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.itemId)) return res.status(404).json(notFound);
     const { known } = z.object({ known: z.boolean() }).parse(req.body);
-    res.json(await reviewCard(learner(req), await requireResource(), req.params.itemId, known));
+    res.json(await reviewCard(learner(req), resourceOf(req), req.params.itemId, known));
   }),
 );
 
@@ -121,14 +130,14 @@ router.put(
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.itemId)) return res.status(404).json(notFound);
     const { bookmarked } = z.object({ bookmarked: z.boolean() }).parse(req.body);
-    res.json(await setBookmark(learner(req), await requireResource(), req.params.itemId, bookmarked));
+    res.json(await setBookmark(learner(req), resourceOf(req), req.params.itemId, bookmarked));
   }),
 );
 
 router.get(
   "/bookmarks",
   asyncHandler(async (req, res) => {
-    const cards = await deck(learner(req), await requireResource(), { mode: "bookmarks", limit: 50 });
+    const cards = await deck(learner(req), resourceOf(req), { mode: "bookmarks", limit: 50 });
     res.json({ cards });
   }),
 );
@@ -144,7 +153,7 @@ router.post(
   "/sessions",
   asyncHandler(async (req, res) => {
     const body = sessionBody.parse(req.body);
-    const r = await requireResource();
+    const r = resourceOf(req);
     if (body.unitId) await loadUnit(body.unitId, r.id);
     res.status(201).json(await createExerciseSession(learner(req), r, body));
   }),
@@ -176,7 +185,7 @@ router.post(
   "/sessions/:id/finish",
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) return res.status(404).json(notFound);
-    res.json(await finishSession(learner(req), await requireResource(), req.params.id));
+    res.json(await finishSession(learner(req), resourceOf(req), req.params.id));
   }),
 );
 

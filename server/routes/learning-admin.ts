@@ -16,11 +16,12 @@ import { requirePermission } from "../auth/middleware";
 import { loadGroup, loadStudentViaGroup } from "../auth/group-access";
 import { db } from "../db";
 import { learningResources, learningSessions, learningUnits, students, vocabItems } from "@shared/schema";
-import { resolveVocabSettings } from "@shared/learning/types";
+import { LEVEL_CODES, RESOURCE_STATUSES, levelRank, resolveVocabSettings } from "@shared/learning/types";
 import { displayWord, parseExample } from "@shared/learning/text";
-import { learnerIdFor } from "../learning/learner";
+import { learnerIdFor, learnerLevels } from "../learning/learner";
 import {
-  defaultVocabResource,
+  publishedVocabResources,
+  resourcesForLevels,
   difficultWords,
   invalidateContentCache,
   learnerStats,
@@ -33,15 +34,25 @@ import { audit } from "../services/audit";
 const router = Router();
 const manage = requirePermission("manage_learning");
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A set by id (staff see drafts too), or the easiest set when none is given. */
 async function resourceOr404(id?: string) {
   if (id) {
-    const [r] = await db.select().from(learningResources).where(eq(learningResources.id, id));
+    const [r] = UUID_RE.test(id) ? await db.select().from(learningResources).where(eq(learningResources.id, id)) : [];
     if (!r) throw httpError(404, "not_found", "Resource not found.");
     return r;
   }
-  const r = await defaultVocabResource();
-  if (!r) throw httpError(404, "no_content", "No vocabulary imported yet.");
-  return r;
+  const all = await db.select().from(learningResources).where(eq(learningResources.type, "vocabulary_set"));
+  all.sort((a, b) => levelRank(a.level) - levelRank(b.level) || a.position - b.position);
+  if (!all[0]) throw httpError(404, "no_content", "No vocabulary imported yet.");
+  return all[0];
+}
+
+/** The published set for a course level (null if that level has none yet). */
+async function setForLevel(level: string | null | undefined) {
+  const all = await publishedVocabResources();
+  return all.find((r) => r.level === level) ?? (level ? null : all[0] ?? null);
 }
 
 /* ─────────────────────────────── content ─────────────────────────────── */
@@ -56,13 +67,15 @@ router.get(
         (select count(*) from ${learningUnits} u where u.resource_id = r.id) as stages
       from ${learningResources} r order by r.position, r.created_at`);
     res.json(
-      (rows.rows as Record<string, unknown>[]).map((r) => ({
-        ...r,
-        titleUz: r.title_uz,
-        words: Number(r.words),
-        stages: Number(r.stages),
-        settings: resolveVocabSettings(r.settings as Record<string, unknown>),
-      })),
+      (rows.rows as Record<string, unknown>[])
+        .map((r) => ({
+          ...r,
+          titleUz: r.title_uz,
+          words: Number(r.words),
+          stages: Number(r.stages),
+          settings: resolveVocabSettings(r.settings as Record<string, unknown>),
+        }))
+        .sort((a, b) => levelRank((a as { level?: string }).level) - levelRank((b as { level?: string }).level)),
     );
   }),
 );
@@ -102,6 +115,42 @@ router.patch(
       after: resolveVocabSettings(merged),
     });
     res.json({ settings: resolveVocabSettings(merged) });
+  }),
+);
+
+/**
+ * Publish / unpublish a set (students only ever see published ones), and edit
+ * its title or level. New sets arrive as drafts so a teacher can review them.
+ */
+router.patch(
+  "/learning/resources/:id",
+  manage,
+  asyncHandler(async (req, res) => {
+    const r = await resourceOr404(req.params.id);
+    const patch = z
+      .object({
+        status: z.enum(RESOURCE_STATUSES).optional(),
+        title: z.string().trim().min(1).max(120).optional(),
+        titleUz: z.string().trim().max(120).nullable().optional(),
+        level: z.enum(LEVEL_CODES).optional(),
+      })
+      .parse(req.body);
+    const [updated] = await db
+      .update(learningResources)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(learningResources.id, r.id))
+      .returning();
+    invalidateContentCache();
+    await audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: patch.status && patch.status !== r.status ? `learning.resource_${patch.status}` : "learning.resource_updated",
+      entityType: "learning_resource",
+      entityId: r.id,
+      before: { status: r.status, title: r.title, level: r.level },
+      after: patch,
+    });
+    res.json(updated);
   }),
 );
 
@@ -333,11 +382,15 @@ router.get(
   "/learning/students/:id",
   asyncHandler(async (req, res) => {
     const { student } = await loadStudentViaGroup(req, req.params.id, "view");
-    const r = await defaultVocabResource();
-    if (!r) return res.json({ available: false });
+    const { levels, preferred } = await learnerLevels(student);
+    const { allowed } = await resourcesForLevels(levels, preferred);
+    if (allowed.length === 0) return res.json({ available: false });
     const learnerId = await learnerIdFor(student);
-    const [stages, stats, difficult, sessions] = await Promise.all([
-      stageSummaries(learnerId, r),
+    const [sets, stats, difficult, sessions] = await Promise.all([
+      // One stage breakdown per level the student studies.
+      Promise.all(
+        allowed.map(async (r) => ({ resourceId: r.id, level: r.level, title: r.title, stages: await stageSummaries(learnerId, r) })),
+      ),
       learnerStats(learnerId),
       difficultWords(learnerId, 15),
       db
@@ -356,7 +409,7 @@ router.get(
         .limit(10),
     ]);
     const { history, ...summary } = stats;
-    res.json({ available: true, stages, stats: summary, history, difficult, sessions });
+    res.json({ available: true, sets, stages: sets[0].stages, stats: summary, history, difficult, sessions });
   }),
 );
 
@@ -372,8 +425,9 @@ router.get(
       .orderBy(asc(students.fullName));
     const learnerOf = new Map<string, string>();
     for (const s of roster) learnerOf.set(s.id, await learnerIdFor(s));
-    const summary = await learnersSummary([...learnerOf.values()]);
-    const r = await defaultVocabResource();
+    // Progress is measured against the group's own level (its vocabulary set).
+    const r = await setForLevel(cls.learningLevel);
+    const summary = await learnersSummary([...learnerOf.values()], r?.id ?? null);
     const totalWords = r
       ? Number(
           (
@@ -382,6 +436,8 @@ router.get(
         )
       : 0;
     res.json({
+      level: cls.learningLevel,
+      set: r ? { id: r.id, title: r.title, level: r.level } : null,
       totalWords,
       students: roster.map((s) => {
         const m = summary.get(learnerOf.get(s.id)!) ?? {};

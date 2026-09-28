@@ -55,11 +55,11 @@ async function main() {
   // Learning content (vocabulary): imported once, re-synced only when the
   // bundled content version changes. Never blocks the CRM from starting.
   try {
-    const imp = await ensureLearningContent();
-    if (imp)
+    for (const imp of await ensureLearningContent()) {
       console.log(
-        `[learning] vocabulary imported: ${imp.report.items} words / ${imp.report.stages} stages (+${imp.inserted}, ~${imp.updated}).`,
+        `[learning] vocabulary "${imp.slug}" imported: ${imp.items} words / ${imp.stages} stages (+${imp.inserted}, ~${imp.updated}).`,
       );
+    }
   } catch (err) {
     console.error("[learning] vocabulary import failed:", (err as Error).message);
   }

@@ -425,6 +425,7 @@ export async function createClass(input: {
   room?: string | null;
   maxStudents?: number | null;
   startDate?: string | null;
+  learningLevel?: string | null;
 }) {
   const [c] = await db
     .insert(classes)
@@ -445,6 +446,7 @@ export async function updateClass(
     room: string | null;
     maxStudents: number | null;
     startDate: string | null;
+    learningLevel: string | null;
     active: boolean;
   }>,
 ) {

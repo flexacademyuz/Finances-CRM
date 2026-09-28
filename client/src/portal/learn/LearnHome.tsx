@@ -4,7 +4,7 @@ import { ChevronRight, Dumbbell, Star, AlertTriangle, BarChart3, Check, Layers }
 import type { ReactNode } from "react";
 import { PCard, PageSkeleton, ErrorState, SectionTitle, EmptyState } from "../ui";
 import { useLT } from "./i18n";
-import { TodayCard, StageBar, useLearnHome } from "./ui";
+import { LevelBar, TodayCard, StageBar, useLearnHome } from "./ui";
 import type { ApiError } from "../../lib/api";
 
 export function LearnHomePage() {
@@ -18,6 +18,7 @@ export function LearnHomePage() {
 
   return (
     <div className="space-y-3 animate-slide-up">
+      <LevelBar />
       <TodayCard />
 
       {/* Overall progress */}

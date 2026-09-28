@@ -10,6 +10,7 @@ import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { formatDate } from "../lib/format";
 import { Card, Empty, Spinner } from "./ui";
+import { levelLabel } from "@shared/learning/types";
 
 const L = {
   vocab: { en: "Vocabulary", uz: "Lug'at" },
@@ -27,6 +28,10 @@ const L = {
   lastActive: { en: "Last active", uz: "Oxirgi faollik" },
   struggling: { en: "struggling", uz: "qiynalmoqda" },
   never: { en: "never", uz: "hech qachon" },
+  level: { en: "Level", uz: "Daraja" },
+  notSet: { en: "not set (Beginner is used)", uz: "tanlanmagan (Boshlang'ich ishlatiladi)" },
+  noSetYet: { en: "No published vocabulary for this level yet: students get Beginner.", uz: "Bu daraja uchun lug'at hali e'lon qilinmagan: o'quvchilar Boshlang'ichni o'rganadi." },
+  words: { en: "words", uz: "so'z" },
 } as const;
 
 type Stage = { id: string; position: number; total: number; mastered: number; learning: number; needPractice: number; percent: number; completed: boolean };
@@ -34,6 +39,7 @@ type StudentLearning =
   | { available: false }
   | {
       available: true;
+      sets: { resourceId: string; level: string | null; title: string; stages: Stage[] }[];
       stages: Stage[];
       stats: { wordsSeen: number; wordsLearned: number; needPractice: number; accuracy: number | null; streak: number; xp: number };
       difficult: { id: string; word: string; translation: string; stage: number; correct: number; incorrect: number }[];
@@ -46,6 +52,7 @@ function useL() {
 
 export function StudentLearningPanel({ studentId }: { studentId: string }) {
   const l = useL();
+  const { locale } = useI18n();
   const q = useQuery({
     queryKey: ["student-learning", studentId],
     queryFn: () => api<StudentLearning>(`/api/learning/students/${studentId}`),
@@ -81,21 +88,26 @@ export function StudentLearningPanel({ studentId }: { studentId: string }) {
                 {l("streak")}: <b>{s.streak}</b> {l("days")}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {d.stages.map((st) => (
-                <div key={st.id} className="rounded-xl bg-bg px-2.5 py-2">
-                  <div className="flex justify-between text-xs font-semibold text-muted">
-                    <span>
-                      {l("stage")} {st.position}
-                    </span>
-                    <span className={st.completed ? "text-status-paid" : ""}>{st.percent}%</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-dark/[0.07]">
-                    <div className="h-full rounded-full bg-status-paid" style={{ width: `${st.percent}%` }} />
-                  </div>
+            {d.sets.map((set) => (
+              <div key={set.resourceId}>
+                {set.level && <div className="mb-1.5"><span className="badge-pill">{levelLabel(set.level, locale)}</span></div>}
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                  {set.stages.map((st) => (
+                    <div key={st.id} className="rounded-xl bg-bg px-2.5 py-2">
+                      <div className="flex justify-between text-xs font-semibold text-muted">
+                        <span>
+                          {l("stage")} {st.position}
+                        </span>
+                        <span className={st.completed ? "text-status-paid" : ""}>{st.percent}%</span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-dark/[0.07]">
+                        <div className="h-full rounded-full bg-status-paid" style={{ width: `${st.percent}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
             {d.difficult.length > 0 && (
               <div>
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{l("difficult")}</div>
@@ -132,14 +144,32 @@ export function GroupLearning({ classId }: { classId: string }) {
   const { locale } = useI18n();
   const q = useQuery({
     queryKey: ["group-learning", classId],
-    queryFn: () => api<{ totalWords: number; students: GroupRow[] }>(`/api/learning/classes/${classId}`),
+    queryFn: () =>
+      api<{ level: string | null; set: { id: string; title: string; level: string | null } | null; totalWords: number; students: GroupRow[] }>(
+        `/api/learning/classes/${classId}`,
+      ),
     retry: false,
   });
   if (q.isLoading) return <Spinner />;
   if (q.error || !q.data) return <Empty />;
-  const rows = [...q.data.students].sort((a, b) => Number(b.struggling) - Number(a.struggling) || b.percent - a.percent);
-  if (rows.length === 0) return <Empty />;
+  const d = q.data;
+  const rows = [...d.students].sort((a, b) => Number(b.struggling) - Number(a.struggling) || b.percent - a.percent);
+  const header = (
+    <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted">{l("level")}:</span>
+      {d.level ? <span className="badge-pill">{levelLabel(d.level, locale)}</span> : <span className="chip">{l("notSet")}</span>}
+      {d.level && !d.set && <span className="text-xs text-warning">{l("noSetYet")}</span>}
+      {d.set && (
+        <span className="text-xs text-muted">
+          {d.totalWords} {l("words")}
+        </span>
+      )}
+    </div>
+  );
+  if (rows.length === 0) return <>{header}<Empty /></>;
   return (
+    <>
+    {header}
     <Card className="overflow-x-auto !p-0">
       <table className="w-full text-sm">
         <thead>
@@ -177,5 +207,6 @@ export function GroupLearning({ classId }: { classId: string }) {
         </tbody>
       </table>
     </Card>
+    </>
   );
 }

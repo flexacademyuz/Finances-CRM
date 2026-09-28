@@ -422,6 +422,75 @@ describe("staff: content management & analytics", () => {
   });
 });
 
+describe("course levels (assigned by group)", () => {
+  let a1 = "";
+  let a2 = "";
+
+  it("imports the A2 set as a DRAFT, invisible to students", async () => {
+    const { VOCAB_SETS, importVocabSet } = await import("../server/learning/import");
+    const r = await importVocabSet(VOCAB_SETS[1]);
+    expect(r).toMatchObject({ slug: "elementary-a2", inserted: 700, stages: 7 });
+    const again = await importVocabSet(VOCAB_SETS[1]);
+    expect(again.inserted).toBe(0);
+    const sets = (await call("/api/learning/resources", { auth: S.ceo })).body as Json[];
+    a1 = sets.find((s) => s.level === "A1")!.id;
+    const a2set = sets.find((s) => s.level === "A2")!;
+    a2 = a2set.id;
+    expect(a2set).toMatchObject({ status: "draft", words: 700, stages: 7 });
+    // Group A set to A2, but A2 is a draft → students still get Beginner.
+    const patch = await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "A2" } });
+    expect(patch.status).toBe(200);
+    expect(patch.body.learningLevel).toBe("A2");
+    const home = await call("/api/student/learn/home", { auth: BOB });
+    expect(home.body.resource.level).toBe("A1");
+  });
+
+  it("rejects an unknown level code", async () => {
+    const bad = await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "Z9" } });
+    expect(bad.status).toBe(400);
+  });
+
+  it("once published, the group's students study their own level only", async () => {
+    expect((await call(`/api/learning/resources/${a2}`, { method: "PATCH", auth: S.teacher1, body: { status: "published" } })).status).toBe(403);
+    const pub = await call(`/api/learning/resources/${a2}`, { method: "PATCH", auth: S.ceo, body: { status: "published" } });
+    expect(pub.body.status).toBe("published");
+    const home = await call("/api/student/learn/home", { auth: BOB });
+    expect(home.body.resource.level).toBe("A2");
+    expect(home.body.levels.map((l: Json) => l.level)).toEqual(["A2"]);
+    expect(home.body.totals.words).toBe(700);
+    // Bob (A2 group only) cannot switch himself into the A1 set.
+    const sneaky = await call(`/api/student/learn/home?resource=${a1}`, { auth: BOB });
+    expect(sneaky.body.resource.level).toBe("A2");
+  });
+
+  it("a student in groups of two levels can switch between them", async () => {
+    // Alice: group A (now A2) + group B (set to A1).
+    await call(`/api/classes/${S.classB}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "A1" } });
+    const home = await call("/api/student/learn/home", { auth: ALICE });
+    expect(home.body.levels.map((l: Json) => l.level)).toEqual(["A1", "A2"]);
+    expect(home.body.resource.level).toBe("A2"); // the group she's viewing (A)
+    const viaB = await call("/api/student/learn/home", { auth: ALICE, headers: { "X-Student-Id": S.alice2 } });
+    expect(viaB.body.resource.level).toBe("A1");
+    const switched = await call(`/api/student/learn/home?resource=${a1}`, { auth: ALICE });
+    expect(switched.body.resource.level).toBe("A1");
+    // Her A1 progress is still there under the A1 set.
+    expect(switched.body.totals.seen).toBeGreaterThan(0);
+  });
+
+  it("teachers see group progress against the group's level", async () => {
+    const g = await call(`/api/learning/classes/${S.classA}`, { auth: S.teacher1 });
+    expect(g.body).toMatchObject({ level: "A2", totalWords: 700 });
+    const st = await call(`/api/learning/students/${S.alice}`, { auth: S.teacher1 });
+    expect(st.body.sets.map((s: Json) => s.level).sort()).toEqual(["A1", "A2"]);
+  });
+
+  it("unpublishing hides the set again", async () => {
+    await call(`/api/learning/resources/${a2}`, { method: "PATCH", auth: S.ceo, body: { status: "draft" } });
+    const home = await call("/api/student/learn/home", { auth: BOB });
+    expect(home.body.resource.level).toBe("A1");
+  });
+});
+
 describe("learning reminders", () => {
   it("nudges learners who haven't practised today, once", async () => {
     const { runLearningReminders } = await import("../server/learning/reminders");

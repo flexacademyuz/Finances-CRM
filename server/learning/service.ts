@@ -33,7 +33,7 @@ import {
   type VocabLite,
 } from "@shared/learning/exercises";
 import { displayWord } from "@shared/learning/text";
-import { resolveVocabSettings, type AttemptMode, type ExerciseType, type PracticeSource, type VocabSettings } from "@shared/learning/types";
+import { levelRank, resolveVocabSettings, type AttemptMode, type ExerciseType, type PracticeSource, type VocabSettings } from "@shared/learning/types";
 import { ACHIEVEMENTS, XP, achievementsFor, currentStreak, longestStreak, type AchievementCode } from "@shared/learning/gamification";
 import { httpError } from "../routes/helpers";
 import { createMany } from "../notifications/service";
@@ -46,19 +46,48 @@ const n = (v: unknown) => Number(v ?? 0);
 
 /* ───────────────────────────── resources & pool ───────────────────────────── */
 
-let resourceCache: { at: number; value: LearningResource | null } | null = null;
+let resourceCache: { at: number; value: LearningResource[] } | null = null;
 
-/** The vocabulary set students study (first published one). */
-export async function defaultVocabResource(): Promise<LearningResource | null> {
+/** Every published vocabulary set, easiest level first (cached 1 min). */
+export async function publishedVocabResources(): Promise<LearningResource[]> {
   if (resourceCache && Date.now() - resourceCache.at < 60_000) return resourceCache.value;
-  const [r] = await db
+  const rows = await db
     .select()
     .from(learningResources)
     .where(and(eq(learningResources.type, "vocabulary_set"), eq(learningResources.status, "published")))
-    .orderBy(asc(learningResources.position), asc(learningResources.createdAt))
-    .limit(1);
-  resourceCache = { at: Date.now(), value: r ?? null };
-  return r ?? null;
+    .orderBy(asc(learningResources.position), asc(learningResources.createdAt));
+  rows.sort((a, b) => levelRank(a.level) - levelRank(b.level) || a.position - b.position);
+  resourceCache = { at: Date.now(), value: rows };
+  return rows;
+}
+
+/** The easiest published set (fallback for learners whose group has no level). */
+export async function defaultVocabResource(): Promise<LearningResource | null> {
+  return (await publishedVocabResources())[0] ?? null;
+}
+
+/**
+ * The sets a learner may study: those matching their groups' levels. A group
+ * without a level (or a level with no published set yet) falls back to the
+ * easiest published set, so nobody is left with nothing.
+ * `preferred` is the set of the group the student is currently viewing.
+ */
+export async function resourcesForLevels(levels: string[], preferredLevel: string | null) {
+  const all = await publishedVocabResources();
+  let allowed = all.filter((r) => r.level && levels.includes(r.level));
+  if (allowed.length === 0 && all.length) allowed = [all[0]];
+  const preferred = allowed.find((r) => r.level === preferredLevel) ?? allowed[0] ?? null;
+  return { allowed, preferred };
+}
+
+/** Pick the requested set if the learner may use it, else their default. */
+export function chooseResource(
+  ctx: { allowed: LearningResource[]; preferred: LearningResource | null },
+  requestedId?: string | null,
+): LearningResource {
+  const r = (requestedId && ctx.allowed.find((x) => x.id === requestedId)) || ctx.preferred;
+  if (!r) throw httpError(404, "no_content", "Vocabulary isn't available yet.");
+  return r;
 }
 
 export async function requireResource(): Promise<LearningResource> {
@@ -832,7 +861,7 @@ export async function learnerStats(learnerId: string) {
 }
 
 /** Everything the learning Home needs in one round trip. */
-export async function learnerHome(learnerId: string, resource: LearningResource) {
+export async function learnerHome(learnerId: string, resource: LearningResource, allowed: LearningResource[] = [resource]) {
   const s = settingsOf(resource);
   const [stages, t, days, today] = await Promise.all([
     stageSummaries(learnerId, resource),
@@ -841,23 +870,28 @@ export async function learnerHome(learnerId: string, resource: LearningResource)
     activityOn(learnerId, tashkentDate()),
   ]);
   const cur = currentStage(stages);
-  const totalWords = stages.reduce((a, x) => a + x.total, 0);
-  const reviewDue = Math.min(t.due, s.dailyReviewWords);
+  // Word counts are for THIS level's set; streak/XP/accuracy are the learner's overall.
+  const sum = (k: "total" | "mastered" | "seen" | "needPractice" | "bookmarked" | "due") => stages.reduce((a, x) => a + x[k], 0);
+  const totalWords = sum("total");
+  const learned = sum("mastered");
+  const reviewDue = Math.min(sum("due"), s.dailyReviewWords);
   const newLeft = Math.max(0, Math.min(s.dailyNewWords - today.newWords, cur?.newCount ?? 0));
   const goal = s.dailyNewWords + s.dailyExercises;
   const doneToday = today.cardsReviewed + today.exercisesAnswered;
   return {
     resource: { id: resource.id, title: resource.title, titleUz: resource.titleUz, level: resource.level },
+    // The course levels this learner may switch between (their groups' levels).
+    levels: allowed.map((r) => ({ resourceId: r.id, level: r.level, title: r.title, titleUz: r.titleUz })),
     settings: s,
     currentStage: cur,
     stages,
     totals: {
       words: totalWords,
-      learned: t.mastered,
-      seen: t.seen,
-      needPractice: t.needPractice,
-      bookmarked: t.bookmarked,
-      percent: totalWords ? Math.round((t.mastered / totalWords) * 100) : 0,
+      learned,
+      seen: sum("seen"),
+      needPractice: sum("needPractice"),
+      bookmarked: sum("bookmarked"),
+      percent: totalWords ? Math.round((learned / totalWords) * 100) : 0,
     },
     today: {
       reviewDue,
@@ -877,16 +911,20 @@ export async function learnerHome(learnerId: string, resource: LearningResource)
 /* ───────────────────────────── staff analytics ───────────────────────────── */
 
 /** Per-learner vocabulary summary for many learners at once (one query each). */
-export async function learnersSummary(learnerIds: string[]) {
+export async function learnersSummary(learnerIds: string[], resourceId?: string | null) {
   if (learnerIds.length === 0) return new Map<string, Record<string, number | string | null>>();
   const ids = [...new Set(learnerIds)];
+  // Word counts are per level when a set is given (a group's own level).
+  const scope = resourceId
+    ? sql`and item_id in (select id from ${vocabItems} where resource_id = ${resourceId})`
+    : sql``;
   const prog = rowsOf<Record<string, unknown>>(
     await db.execute(sql`
       select student_id,
         count(*) filter (where box > 0) as seen,
         count(*) filter (where box >= ${MASTERED_BOX} and last_result is not false) as mastered,
         count(*) filter (where box > 0 and last_result = false) as need_practice
-      from ${learnerVocabProgress} where student_id = any(${sql.param(ids)}::uuid[]) group by student_id`),
+      from ${learnerVocabProgress} where student_id = any(${sql.param(ids)}::uuid[]) ${scope} group by student_id`),
   );
   const acc = rowsOf<Record<string, unknown>>(
     await db.execute(sql`

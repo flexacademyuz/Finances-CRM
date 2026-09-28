@@ -60,13 +60,20 @@ export function FlashcardsPage() {
     if (done) void qc.invalidateQueries({ queryKey: ["portal", "learn"], refetchType: "active" });
   }, [done, qc]);
 
+  // "I know" appears exactly where "Tap to see the meaning" was, so a quick
+  // double tap would rate the card by accident. Ignore ratings for a moment
+  // after the card is revealed.
+  const revealedAt = useRef(0);
   const flip = () => {
     haptic("light");
-    setFlipped((f) => !f);
+    setFlipped((f) => {
+      if (!f) revealedAt.current = Date.now();
+      return !f;
+    });
   };
 
   const rate = (isKnown: boolean) => {
-    if (!card) return;
+    if (!card || Date.now() - revealedAt.current < 450) return;
     haptic(isKnown ? "success" : "error");
     if (isKnown) setKnown((n) => n + (marks[card.id] === undefined ? 1 : 0));
     else setUnknown((n) => n + (marks[card.id] === undefined ? 1 : 0));

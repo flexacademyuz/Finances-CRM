@@ -1,5 +1,5 @@
 /**
- * Which `students` row owns a person's learning progress.
+ * Who a learner is, and which course levels they may study.
  *
  * Billing keeps one student record PER GROUP, so a person in English + Math has
  * two records. Vocabulary belongs to the person, not the group — switching
@@ -10,36 +10,61 @@
  * EARLIEST created one. Inactive records count too, so leaving the first group
  * doesn't move the progress.
  *
+ * Levels come from the person's groups (classes.learning_level): a student in
+ * an A1 group studies the A1 set; in A1 + A2 groups, both.
+ *
  * Derived only from server-side CRM data (never from the request), so it
  * cannot be used to reach someone else's progress.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
-import { students, type Student } from "@shared/schema";
+import { classes, students, type Student } from "@shared/schema";
 import { phonesMatch } from "@shared/linking";
 
-const cache = new Map<string, { id: string; at: number }>();
+type PersonInfo = { learnerId: string; recordIds: string[]; at: number };
+const cache = new Map<string, PersonInfo>();
 const TTL = 5 * 60_000;
 
-export async function learnerIdFor(student: Pick<Student, "id" | "fullName" | "phone" | "createdAt">): Promise<string> {
+async function person(student: Pick<Student, "id" | "fullName" | "phone" | "createdAt">): Promise<PersonInfo> {
   const hit = cache.get(student.id);
-  if (hit && Date.now() - hit.at < TTL) return hit.id;
-  let id = student.id;
+  if (hit && Date.now() - hit.at < TTL) return hit;
+  let same = [{ id: student.id, createdAt: student.createdAt }];
   if (student.phone) {
     const namesakes = await db
       .select({ id: students.id, phone: students.phone, createdAt: students.createdAt })
       .from(students)
       .where(
-        and(
-          sql`lower(regexp_replace(trim(${students.fullName}), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(${student.fullName}), '\\s+', ' ', 'g'))`,
-        ),
+        sql`lower(regexp_replace(trim(${students.fullName}), '\\s+', ' ', 'g')) = lower(regexp_replace(trim(${student.fullName}), '\\s+', ' ', 'g'))`,
       );
-    const same = namesakes.filter((s) => s.id === student.id || phonesMatch(s.phone, student.phone));
-    same.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
-    if (same.length) id = same[0].id;
+    const matched = namesakes.filter((s) => s.id === student.id || phonesMatch(s.phone, student.phone));
+    if (matched.length) same = matched;
   }
-  cache.set(student.id, { id, at: Date.now() });
-  return id;
+  same.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  const info = { learnerId: same[0].id, recordIds: same.map((s) => s.id), at: Date.now() };
+  cache.set(student.id, info);
+  return info;
+}
+
+export async function learnerIdFor(student: Pick<Student, "id" | "fullName" | "phone" | "createdAt">): Promise<string> {
+  return (await person(student)).learnerId;
+}
+
+/**
+ * The course levels this person's ACTIVE groups are set to, plus the level of
+ * the group record they're looking at now (`preferred`, if set).
+ */
+export async function learnerLevels(
+  student: Pick<Student, "id" | "fullName" | "phone" | "createdAt" | "classId">,
+): Promise<{ levels: string[]; preferred: string | null }> {
+  const { recordIds } = await person(student);
+  const rows = await db
+    .select({ id: students.id, active: students.active, classId: students.classId, level: classes.learningLevel })
+    .from(students)
+    .innerJoin(classes, eq(classes.id, students.classId))
+    .where(inArray(students.id, recordIds));
+  const levels = [...new Set(rows.filter((r) => r.active && r.level).map((r) => r.level!))];
+  const own = rows.find((r) => r.id === student.id)?.level ?? null;
+  return { levels, preferred: own };
 }
 
 /** Test hook. */

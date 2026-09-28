@@ -5,13 +5,14 @@
  * deduped so re-runs are harmless. Students can switch the whole "Vocabulary
  * practice" group off; the CEO can disable any type centre-wide.
  */
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { learnerDailyActivity, learnerVocabProgress } from "@shared/schema";
+import { learnerDailyActivity, learnerVocabProgress, students } from "@shared/schema";
+import { learnerLevels } from "./learner";
 import { tashkentDate, addDaysIso } from "@shared/lesson-schedule";
 import { currentStreak } from "@shared/learning/gamification";
 import { createMany, type CreateNotificationInput } from "../notifications/service";
-import { defaultVocabResource, stageSummaries, currentStage } from "./service";
+import { defaultVocabResource, resourcesForLevels, stageSummaries, currentStage } from "./service";
 
 const STREAK_MILESTONES = new Set([3, 7, 14, 30, 50, 100]);
 
@@ -54,8 +55,11 @@ export async function runLearningReminders(now: Date = new Date()): Promise<Reco
       inputs.push({ studentId: id, type: "learning_streak", params: { days: streak }, dedupeKey: `learn-streak:${id}:${today}` });
     }
 
-    // Close to finishing the current stage (once per stage).
-    const cur = currentStage(await stageSummaries(id, resource));
+    // Close to finishing the current stage of their own level (once per stage).
+    const [row] = await db.select().from(students).where(eq(students.id, id));
+    const lv = row ? await learnerLevels(row) : { levels: [], preferred: null };
+    const set = (await resourcesForLevels(lv.levels, lv.preferred)).preferred ?? resource;
+    const cur = currentStage(await stageSummaries(id, set));
     if (cur && !cur.completed && cur.toComplete > 0 && cur.toComplete <= 10) {
       inputs.push({
         studentId: id,

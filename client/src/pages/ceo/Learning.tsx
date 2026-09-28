@@ -6,8 +6,8 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Users, Activity, Target, Plus, Pencil, Trash2, Save, Search, RotateCcw } from "lucide-react";
-import { POS_LABELS, type VocabSettings } from "@shared/learning/types";
+import { BookOpen, Users, Activity, Target, Plus, Pencil, Trash2, Save, Search, RotateCcw, Eye, EyeOff } from "lucide-react";
+import { POS_LABELS, levelLabel, type VocabSettings } from "@shared/learning/types";
 import { api, type ApiError } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 import { Button, Card, Field, Input, Select, StatTile, Modal, Spinner, Empty } from "../../components/ui";
@@ -54,9 +54,28 @@ const L = {
   loadMore: { en: "Load more", uz: "Yana yuklash" },
   noContent: { en: "No vocabulary imported yet. It is imported automatically on server start.", uz: "Lug'at hali import qilinmagan. Server ishga tushganda avtomatik import qilinadi." },
   cancel: { en: "Cancel", uz: "Bekor qilish" },
+  draft: { en: "Draft", uz: "Qoralama" },
+  draftHint: {
+    en: "Draft: students can't see this set yet. Review the words and translations, then publish.",
+    uz: "Qoralama: o'quvchilar bu to'plamni hali ko'rmaydi. So'z va tarjimalarni tekshirib, e'lon qiling.",
+  },
+  publishedHint: {
+    en: "Published: students in groups of this level study these words.",
+    uz: "E'lon qilingan: shu darajadagi guruh o'quvchilari bu so'zlarni o'rganadi.",
+  },
+  publish: { en: "Publish to students", uz: "O'quvchilarga e'lon qilish" },
+  unpublish: { en: "Unpublish", uz: "E'londan olish" },
+  publishConfirm: {
+    en: "Publish this set? Students in groups of this level will see it right away.",
+    uz: "Bu to'plam e'lon qilinsinmi? Shu darajadagi guruh o'quvchilari uni darhol ko'radi.",
+  },
+  unpublishConfirm: {
+    en: "Hide this set from students? Their progress is kept.",
+    uz: "Bu to'plam o'quvchilardan yashirilsinmi? Ularning natijalari saqlanadi.",
+  },
 } as const;
 
-type Resource = { id: string; title: string; words: number; stages: number; settings: VocabSettings };
+type Resource = { id: string; title: string; level: string | null; status: string; words: number; stages: number; settings: VocabSettings };
 type Unit = { id: string; position: number; title: string; words: number };
 type Item = {
   id: string;
@@ -87,13 +106,25 @@ type Overview = {
 export function LearningPage() {
   const { locale } = useI18n();
   const l = (k: keyof typeof L) => L[k][locale];
+  const qc = useQueryClient();
   const resources = useQuery({ queryKey: ["learning", "resources"], queryFn: () => api<Resource[]>("/api/learning/resources") });
-  const overview = useQuery({ queryKey: ["learning", "overview"], queryFn: () => api<Overview>("/api/learning/overview"), retry: false });
-  const r = resources.data?.[0];
+  const [selected, setSelected] = useState<string | null>(null);
+  const r = resources.data?.find((x) => x.id === selected) ?? resources.data?.[0];
+  const overview = useQuery({
+    queryKey: ["learning", "overview", r?.id],
+    queryFn: () => api<Overview>("/api/learning/overview", { query: { resource: r!.id } }),
+    enabled: !!r,
+    retry: false,
+  });
+  const publish = useMutation({
+    mutationFn: (status: "published" | "draft") => api(`/api/learning/resources/${r!.id}`, { method: "PATCH", body: { status } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["learning"] }),
+  });
 
   if (resources.isLoading) return <Spinner />;
   if (!r) return <Empty>{l("noContent")}</Empty>;
   const o = overview.data;
+  const draft = r.status !== "published";
 
   return (
     <div className="space-y-5">
@@ -101,6 +132,42 @@ export function LearningPage() {
         <h1 className="text-2xl font-extrabold">{l("title")}</h1>
         <p className="text-sm text-muted">{l("subtitle")}</p>
       </div>
+
+      {/* One tab per vocabulary set (course level). */}
+      <div className="flex flex-wrap gap-2">
+        {resources.data!.map((x) => (
+          <button
+            key={x.id}
+            onClick={() => setSelected(x.id)}
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition ${
+              x.id === r.id ? "bg-primary text-white shadow-brand" : "bg-surface text-muted ring-1 ring-border"
+            }`}
+          >
+            {levelLabel(x.level, locale) || x.title}
+            {x.status !== "published" && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${x.id === r.id ? "bg-white/25" : "bg-warning/15 text-warning"}`}>
+                {l("draft")}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <Card className={`flex flex-wrap items-center gap-3 ${draft ? "ring-2 ring-warning/40" : ""}`}>
+        <div className="min-w-0 flex-1">
+          <div className="font-bold">{r.title}</div>
+          <div className="text-sm text-muted">{draft ? l("draftHint") : l("publishedHint")}</div>
+        </div>
+        {draft ? (
+          <Button onClick={() => window.confirm(l("publishConfirm")) && publish.mutate("published")} disabled={publish.isPending}>
+            <Eye size={15} /> {l("publish")}
+          </Button>
+        ) : (
+          <Button variant="ghost" onClick={() => window.confirm(l("unpublishConfirm")) && publish.mutate("draft")} disabled={publish.isPending}>
+            <EyeOff size={15} /> {l("unpublish")}
+          </Button>
+        )}
+      </Card>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile tint="blue" label={l("words")} value={r.words} sub={`${r.stages} ${l("stages")}`} icon={<BookOpen size={17} />} />
@@ -110,9 +177,9 @@ export function LearningPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-        <VocabularyManager resource={r} l={l} />
+        <VocabularyManager key={r.id} resource={r} l={l} />
         <div className="space-y-5">
-          <SettingsCard resource={r} l={l} />
+          <SettingsCard key={r.id} resource={r} l={l} />
           <Card>
             <div className="font-bold">{l("hardest")}</div>
             <p className="mb-3 text-xs text-muted">{l("hardestHint")}</p>
@@ -187,7 +254,10 @@ function SettingsCard({ resource, l }: { resource: Resource; l: Lf }) {
 
 function VocabularyManager({ resource, l }: { resource: Resource; l: Lf }) {
   const qc = useQueryClient();
-  const units = useQuery({ queryKey: ["learning", "units"], queryFn: () => api<{ units: Unit[] }>("/api/learning/units") });
+  const units = useQuery({
+    queryKey: ["learning", "units", resource.id],
+    queryFn: () => api<{ units: Unit[] }>("/api/learning/units", { query: { resource: resource.id } }),
+  });
   const [unit, setUnit] = useState("");
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -199,10 +269,10 @@ function VocabularyManager({ resource, l }: { resource: Resource; l: Lf }) {
   }, [q]);
 
   const items = useInfiniteQuery({
-    queryKey: ["learning", "items", unit, debounced, inactive],
+    queryKey: ["learning", "items", resource.id, unit, debounced, inactive],
     queryFn: ({ pageParam }) =>
       api<{ items: Item[]; nextAfter: number | null }>("/api/learning/items", {
-        query: { unit, q: debounced, after: String(pageParam), limit: "100", inactive: inactive ? "1" : undefined },
+        query: { resource: resource.id, unit, q: debounced, after: String(pageParam), limit: "100", inactive: inactive ? "1" : undefined },
       }),
     initialPageParam: 0,
     getNextPageParam: (p) => p.nextAfter ?? undefined,
