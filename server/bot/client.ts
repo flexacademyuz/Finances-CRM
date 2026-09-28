@@ -22,6 +22,24 @@ export async function sendMessage(chatId: number | string, text: string): Promis
   }
 }
 
+let cachedUsername: string | null | undefined;
+
+/**
+ * The bot's @username (for t.me deep links), from TELEGRAM_BOT_USERNAME or a
+ * cached getMe() call. Null when no bot is configured/reachable.
+ */
+export async function botUsername(): Promise<string | null> {
+  if (env.botUsername) return env.botUsername;
+  if (cachedUsername !== undefined) return cachedUsername;
+  if (!bot) return null;
+  try {
+    cachedUsername = (await bot.api.getMe()).username ?? null;
+  } catch {
+    return null; // don't cache a transient failure
+  }
+  return cachedUsername;
+}
+
 /** Resolve a chat's display title (group name), or null if unreachable. */
 export async function getChatTitle(chatId: number | string): Promise<string | null> {
   if (!bot) return null;

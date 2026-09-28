@@ -6,6 +6,7 @@ import { useI18n } from "../../lib/i18n";
 import { money } from "../../lib/format";
 import type { Class } from "../../lib/types";
 import { Card, Empty, Spinner } from "../../components/ui";
+import { TodayLessons } from "../../components/TodayLessons";
 
 /** Teacher's own classes as folders → each opens its roster + payment table. */
 export function MyClasses() {
@@ -18,6 +19,8 @@ export function MyClasses() {
         <h1 className="text-2xl font-extrabold">{t("myClasses")}</h1>
         <p className="mt-0.5 text-sm text-muted">{t("myClassesSubtitle")}</p>
       </div>
+
+      <TodayLessons />
 
       {classes.isLoading ? (
         <Spinner />

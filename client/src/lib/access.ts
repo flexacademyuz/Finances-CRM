@@ -24,6 +24,10 @@ export type Access = {
   analytics: boolean;
   users: boolean;
   salary: boolean;
+  /** Attendance analytics (teachers: their own groups only, server-scoped). */
+  attendance: boolean;
+  /** Student portal management (settings, announcements, delivery health). */
+  studentPortal: boolean;
 };
 
 export function accessFor(user: User): Access {
@@ -52,5 +56,7 @@ export function accessFor(user: User): Access {
     analytics: ceo,
     users: ceo,
     salary: role === "teacher",
+    attendance: true,
+    studentPortal: ceo || accountant,
   };
 }

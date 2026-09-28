@@ -21,6 +21,8 @@ import {
   getClassById,
 } from "../storage";
 import { normalizeMonth, monthKey } from "@shared/date";
+import { emit } from "../events";
+import { audit } from "../services/audit";
 
 const router = Router();
 
@@ -39,6 +41,16 @@ router.post(
       freezeTo: input.freezeTo ?? null,
       createdBy: req.authUser!.id,
     });
+    emit("freeze.created", { freezeId: freeze.id, studentId: freeze.studentId, actorUserId: req.authUser!.id });
+    void audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: "freeze.created",
+      entityType: "freeze",
+      entityId: freeze.id,
+      studentId: freeze.studentId,
+      after: { from: freeze.freezeFrom, to: freeze.freezeTo, reason: freeze.reason },
+    });
     res.status(201).json(freeze);
   }),
 );
@@ -56,7 +68,11 @@ router.patch(
   asyncHandler(async (req, res) => {
     const existing = await getFreezeById(req.params.id);
     if (!existing) return res.status(404).json({ error: "not_found" });
-    res.json(await liftFreeze(req.params.id));
+    const lifted = await liftFreeze(req.params.id);
+    if (existing.status === "active") {
+      emit("freeze.lifted", { freezeId: existing.id, studentId: existing.studentId, actorUserId: req.authUser!.id });
+    }
+    res.json(lifted);
   }),
 );
 
@@ -79,6 +95,16 @@ router.post(
       validTo: input.validTo ? normalizeMonth(input.validTo) : null,
       reason: input.reason,
       createdBy: req.authUser!.id,
+    });
+    emit("discount.created", { discountId: discount.id, studentId: discount.studentId, actorUserId: req.authUser!.id });
+    void audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: "discount.created",
+      entityType: "discount",
+      entityId: discount.id,
+      studentId: discount.studentId,
+      after: { type: discount.discountType, value: discount.discountValue, validFrom: discount.validFrom, validTo: discount.validTo },
     });
     res.status(201).json(discount);
   }),

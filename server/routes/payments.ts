@@ -28,6 +28,8 @@ import { notifyPaymentRecorded } from "../bot/notifications";
 import { notifyPaymentReceipt } from "../sms/service";
 import { buildPaymentContext, freshMonthPricing, proratedTeacherCredit } from "../services/payment-context";
 import { recomputeStatuses } from "../services/billing";
+import { audit } from "../services/audit";
+import { emit } from "../events";
 
 const router = Router();
 
@@ -180,6 +182,25 @@ router.post(
     // top-up keeps distinct from the month's running total.
     void notifyPaymentRecorded(payment.id).catch(() => undefined);
     void notifyPaymentReceipt(payment.id, input.amount).catch(() => undefined);
+    // Student portal / Telegram notification + audit trail — also async and
+    // isolated, so the payment stands even if Telegram is down.
+    emit("payment.recorded", {
+      paymentId: payment.id,
+      studentId: student.id,
+      amount: input.amount,
+      actorUserId: req.authUser!.id,
+    });
+    void audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: "payment.recorded",
+      entityType: "payment",
+      entityId: payment.id,
+      studentId: student.id,
+      branchId: payment.branchId,
+      after: { amount: input.amount, method: input.method, billingMonth, runningTotal: payment.amount },
+      meta: req.impersonator ? { impersonatedBy: req.impersonator.id } : null,
+    });
 
     res.status(201).json(payment);
   }),
@@ -208,6 +229,18 @@ router.patch(
       { amount, method, teacherCreditAmount },
       reason,
     );
+    void audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: "payment.edited",
+      entityType: "payment",
+      entityId: existing.id,
+      studentId: existing.studentId,
+      branchId: existing.branchId,
+      before: { amount: existing.amount, method: existing.method },
+      after: { amount: updated?.amount, method: updated?.method },
+      meta: { reason },
+    });
     res.json(updated);
   }),
 );
@@ -225,6 +258,25 @@ router.post(
       return res.status(403).json({ error: "forbidden", message: "This payment is not for your class." });
     }
     const updated = await voidPayment(req.params.id, req.authUser!.id, reason);
+    if (!existing.voided) {
+      emit("payment.voided", {
+        paymentId: existing.id,
+        studentId: existing.studentId,
+        amount: Number(existing.amount),
+        actorUserId: req.authUser!.id,
+      });
+      void audit({
+        actorUserId: req.authUser!.id,
+        actorType: "user",
+        action: "payment.voided",
+        entityType: "payment",
+        entityId: existing.id,
+        studentId: existing.studentId,
+        branchId: existing.branchId,
+        before: { amount: existing.amount, billingMonth: existing.billingMonth },
+        meta: { reason },
+      });
+    }
     res.json(updated);
   }),
 );
@@ -283,6 +335,18 @@ router.post(
     assertBranchAccess(req, existing.branchId);
     try {
       const updated = await refundPayment(req.params.id, req.authUser!.id, { amount, reason });
+      void audit({
+        actorUserId: req.authUser!.id,
+        actorType: "user",
+        action: "payment.refunded",
+        entityType: "payment",
+        entityId: existing.id,
+        studentId: existing.studentId,
+        branchId: existing.branchId,
+        before: { refundedAmount: existing.refundedAmount },
+        after: { refundedAmount: updated?.refundedAmount, refund: amount },
+        meta: { reason },
+      });
       res.json(updated);
     } catch (err) {
       return res.status(400).json({ error: "bad_refund", message: (err as Error).message });

@@ -21,6 +21,7 @@ import {
   getSalaryRuleForGroup,
 } from "../storage";
 import { academicMonthsSoFar, monthLabel, normalizeMonth, monthKey } from "@shared/date";
+import { emit } from "../events";
 
 const router = Router();
 
@@ -154,6 +155,17 @@ router.patch(
     }
     const updated = await updateClass(req.params.id, patch);
     if (!updated) return res.status(404).json({ error: "not_found" });
+
+    // Tell the group's students when their schedule, room or teacher changed.
+    const changes: { schedule?: string | null; room?: string | null; teacherId?: string } = {};
+    if (patch.scheduleSlots !== undefined && (existing.schedule ?? null) !== (updated.schedule ?? null)) {
+      changes.schedule = updated.schedule;
+    }
+    if (patch.room !== undefined && (existing.room ?? null) !== (updated.room ?? null)) changes.room = updated.room;
+    if (patch.teacherId !== undefined && existing.teacherId !== updated.teacherId) changes.teacherId = updated.teacherId;
+    if (Object.keys(changes).length) {
+      emit("group.updated", { classId: updated.id, changes, actorUserId: req.authUser!.id });
+    }
     res.json(updated);
   }),
 );

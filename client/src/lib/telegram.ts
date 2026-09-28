@@ -14,6 +14,7 @@ interface TelegramWebApp {
   themeParams: ThemeParams;
   ready(): void;
   expand(): void;
+  close?(): void;
   onEvent(event: string, cb: () => void): void;
   HapticFeedback?: {
     impactOccurred(style: string): void;

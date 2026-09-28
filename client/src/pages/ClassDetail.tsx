@@ -11,6 +11,8 @@ import { money } from "../lib/format";
 import type { ClassLedger, PaymentRow } from "../lib/types";
 import type { PaymentMethod } from "@shared/schema";
 import { Button, Card, Empty, Field, Input, Modal, Segmented, Spinner, StatusBadge } from "../components/ui";
+import { GroupAttendance } from "../components/GroupAttendance";
+import { GroupScores } from "../components/GroupScores";
 
 /** A grid cell the CEO/accountant tapped, to mark a month paid or unpaid. */
 type CellTarget = {
@@ -44,11 +46,17 @@ export function ClassDetail() {
   const canManage = can(user, "add_student");
   // Tick a month paid/unpaid straight from the grid (records or voids a payment).
   const canRecord = can(user, "record_payment");
+  // Attendance & scores tabs (the server enforces own-group / permission access).
+  const [tab, setTab] = useState<"students" | "attendance" | "scores">(() => {
+    const q = new URLSearchParams(window.location.search).get("tab");
+    return q === "attendance" || q === "scores" ? q : "students";
+  });
 
   if (isLoading || !data) return <Spinner />;
   const { class: cls, months, students } = data;
 
   const backHref = user.role === "accountant" ? "/groups" : user.role === "teacher" ? "/" : "/classes";
+  const canScore = user.role === "teacher" || can(user, "manage_scores");
 
   return (
     <div className="space-y-4">
@@ -69,6 +77,24 @@ export function ClassDetail() {
         </div>
       </Card>
 
+      <Segmented
+        full
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "students", label: t("students") },
+          { value: "attendance", label: t("attendance") },
+          { value: "scores", label: t("scores") },
+        ]}
+      />
+
+      {tab === "attendance" && <GroupAttendance classId={cls.id} />}
+      {tab === "scores" && (
+        <GroupScores classId={cls.id} roster={students.map((s) => ({ id: s.id, fullName: s.fullName }))} canEdit={canScore} />
+      )}
+
+      {tab === "students" && (
+      <>
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold">{t("students")}</h2>
         {canManage && (
@@ -167,6 +193,8 @@ export function ClassDetail() {
             ))}
           </div>
         </>
+      )}
+      </>
       )}
 
       {cell && (

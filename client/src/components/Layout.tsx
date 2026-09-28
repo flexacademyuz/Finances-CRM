@@ -21,6 +21,8 @@ import {
   HandCoins,
   Building2,
   CalendarDays,
+  CalendarCheck,
+  Smartphone,
   LogOut,
   Eye,
   ChevronLeft,
@@ -78,7 +80,7 @@ const BOTTOM_NAV: Record<Role, BottomItem[]> = {
 /** Highlight the tab for the current route, including student/class detail pages. */
 function bottomActive(href: string, location: string): boolean {
   if (href === location) return true;
-  if (href === "/students" && location.startsWith("/student")) return true;
+  if (href === "/students" && location.startsWith("/student/")) return true;
   if ((href === "/classes" || href === "/groups") && location.startsWith("/class")) return true;
   return false;
 }
@@ -103,6 +105,7 @@ function buildNav(user: User): NavItem[] {
   if (a.students) items.push({ href: "/students", label: "students", icon: <GraduationCap size={18} /> });
   items.push({ href: "/leads", label: "leads", icon: <UserPlus size={18} /> });
   if (a.groups) items.push({ href: a.groupsPath, label: "groups", icon: <BookOpen size={18} /> });
+  if (a.attendance) items.push({ href: "/attendance", label: "attendance", icon: <CalendarCheck size={18} /> });
   // Timetable is a web-only planning view (CEO), not shown in the Telegram app.
   if (a.role === "ceo" && !isTelegram()) items.push({ href: "/timetable", label: "timetable", icon: <CalendarDays size={18} /> });
   if (a.payroll) items.push({ href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={18} /> });
@@ -114,6 +117,7 @@ function buildNav(user: User): NavItem[] {
   if (a.users) items.push({ href: "/users", label: "users", icon: <UserCog size={18} /> });
   if (a.role === "ceo") items.push({ href: "/branches", label: "branches", icon: <Building2 size={18} /> });
   if (a.role === "ceo") items.push({ href: "/sms", label: "sms", icon: <MessageSquare size={18} /> });
+  if (a.studentPortal) items.push({ href: "/student-portal", label: "studentPortal", icon: <Smartphone size={18} /> });
   if (a.salary) items.push({ href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> });
   // Everyone can manage their own recovery credentials.
   items.push({ href: "/account", label: "myAccount", icon: <KeyRound size={18} /> });
@@ -132,10 +136,10 @@ type NavSection = "overview" | "people" | "money" | "admin" | "account";
 /** Which section each nav item belongs to (groups the sidebar/drawer). */
 const SECTION_OF: Partial<Record<StringKey, NavSection>> = {
   dashboard: "overview", myClasses: "overview", recordPayment: "overview",
-  students: "people", leads: "people", groups: "people", timetable: "people",
+  students: "people", leads: "people", groups: "people", timetable: "people", attendance: "people",
   payments: "money", awaiting: "money", payroll: "money",
   expenses: "money", finances: "money", analytics: "money", mySalary: "money",
-  users: "admin", branches: "admin", sms: "admin",
+  users: "admin", branches: "admin", sms: "admin", studentPortal: "admin",
   myAccount: "account",
 };
 const SECTION_ORDER: NavSection[] = ["overview", "people", "money", "admin", "account"];
@@ -157,7 +161,7 @@ function groupNav(items: NavItem[]): { section: NavSection; items: NavItem[] }[]
 function navActive(href: string, location: string): boolean {
   if (href === "/") return location === "/";
   if (location === href) return true;
-  if (href === "/students" && location.startsWith("/student")) return true;
+  if (href === "/students" && location.startsWith("/student/")) return true;
   if ((href === "/classes" || href === "/groups") && location.startsWith("/class")) return true;
   return false;
 }
@@ -306,7 +310,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
   let titleKey = items.find((i) => i.href === location)?.label;
   if (!titleKey) {
     if (location.startsWith("/class")) titleKey = "groups";
-    else if (location.startsWith("/student")) titleKey = "students";
+    else if (location.startsWith("/student/")) titleKey = "students";
     else titleKey = items[0].label;
   }
   const title = t(titleKey);

@@ -13,6 +13,10 @@ import pricingRouter from "./pricing";
 import expensesRouter from "./expenses";
 import analyticsRouter from "./analytics";
 import smsRouter from "./sms";
+import studentPortalRouter from "./student";
+import attendanceRouter from "./attendance";
+import scoresRouter from "./scores";
+import portalAdminRouter from "./portal-admin";
 
 const api = Router();
 
@@ -23,6 +27,11 @@ api.get("/health", (_req, res) => res.json({ ok: true, version: "2.0.0" }));
 // Credential login / sign-up: reachable WITHOUT an existing linked account, so
 // they must come before the authenticate gate.
 api.use(authRouter);
+
+// Student portal: students are not staff users, so it authenticates on its own
+// (Telegram initData → linked student) and must be mounted before the staff
+// gate. It answers every /student/* path itself (404s never fall through).
+api.use("/student", studentPortalRouter);
 
 // Everything else requires a verified Telegram user.
 api.use(authenticate);
@@ -39,5 +48,8 @@ api.use(pricingRouter);
 api.use(expensesRouter);
 api.use(analyticsRouter);
 api.use(smsRouter);
+api.use(attendanceRouter);
+api.use(scoresRouter);
+api.use(portalAdminRouter);
 
 export default api;

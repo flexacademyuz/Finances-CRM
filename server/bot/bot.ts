@@ -9,6 +9,7 @@ import {
   getBranchByPaymentGroupChatId,
 } from "../storage";
 import { todaySummaryNow } from "./notifications";
+import { handleStudentStart, handleStudentUnlink, registerStudentBot } from "./student-bot";
 
 /**
  * Configure the companion bot: /start launches the Mini App via an inline
@@ -27,6 +28,8 @@ export function configureBot(): void {
       : undefined;
 
     if (!known) {
+      // Not staff → the student flow (link / welcome back / deep-link code).
+      if (await handleStudentStart(ctx, String(ctx.match ?? "").trim())) return;
       await ctx.reply(
         "👋 Welcome to <b>Flex Academy Finances</b>.\n\n" +
           "Your Telegram account isn't registered yet. Please ask the CEO to add you " +
@@ -117,6 +120,8 @@ export function configureBot(): void {
   // /unlink — stop posting payment notifications to whichever branch group is
   // linked to this chat.
   bot.command("unlink", async (ctx) => {
+    // In a private chat, a linked student uses /unlink to disconnect themselves.
+    if (await handleStudentUnlink(ctx)) return;
     const user = ctx.from ? await getUserByTelegramId(ctx.from.id) : undefined;
     if (!user || user.role !== "ceo") {
       await ctx.reply("Only the CEO can change payment-notification settings.");
@@ -143,6 +148,9 @@ export function configureBot(): void {
       ).catch(() => undefined);
     }
   });
+
+  // Student account linking (group → name → phone/code verification).
+  registerStudentBot(bot);
 
   bot.catch((err) => {
     console.error("[bot] error:", err.message);

@@ -35,11 +35,18 @@ import { AccountPage } from "./pages/Account";
 // Public
 import { Landing } from "./pages/Landing";
 import { LoginPage } from "./pages/Login";
+// Student Mini-App + its staff-side management
+import { PortalApp } from "./portal/PortalApp";
+import { AttendanceAnalyticsPage } from "./pages/AttendanceAnalytics";
+import { StudentPortalAdminPage } from "./pages/ceo/StudentPortalAdmin";
 
 /** Logged-out web visitors get the marketing page; its "Log in" leads to /login.
  *  Telegram users and pending/other auth states go straight to the gate. */
 function PublicGate({ err }: { err: ApiError }) {
   const [loc] = useLocation();
+  // Inside Telegram, anyone who isn't staff is (or can become) a student: send
+  // them to the student portal, which handles linked / not-yet-linked users.
+  if (isTelegram() && err?.code === "not_registered") return <Redirect to="/portal" />;
   if (!isTelegram() && err?.status === 401 && loc !== "/login") return <Landing />;
   return <LoginPage err={err} />;
 }
@@ -73,6 +80,8 @@ function Routes({ me }: { me: Me }) {
         {role === "ceo" && !isTelegram() && <Route path="/timetable" component={TimetablePage} />}
         {role === "ceo" && <Route path="/sms" component={SmsPage} />}
         {a.salary && <Route path="/salary" component={MySalary} />}
+        {a.attendance && <Route path="/attendance" component={AttendanceAnalyticsPage} />}
+        {a.studentPortal && <Route path="/student-portal" component={StudentPortalAdminPage} />}
         <Route path="/account" component={AccountPage} />
         <Route><Redirect to="/" /></Route>
       </Switch>
@@ -88,6 +97,16 @@ export function App() {
     return (
       <LocaleContext.Provider value={{ locale, setLocale }}>
         <Landing />
+      </LocaleContext.Provider>
+    );
+  }
+  // Student Mini-App: its own session (students aren't staff users).
+  if (loc === "/portal" || loc.startsWith("/portal/")) {
+    return (
+      <LocaleContext.Provider value={{ locale, setLocale }}>
+        <Route path="/portal" nest>
+          <PortalApp />
+        </Route>
       </LocaleContext.Provider>
     );
   }

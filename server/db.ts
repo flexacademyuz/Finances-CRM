@@ -3,7 +3,19 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "@shared/schema";
 import { env } from "./env";
 
-const pool = new pg.Pool({ connectionString: env.databaseUrl });
+const pool = new pg.Pool({
+  connectionString: env.databaseUrl,
+  // Optional cap (default: pg's 10). Useful for small managed DB plans or a
+  // single-session local database.
+  max: Number(process.env.PG_POOL_MAX) || undefined,
+});
+
+// An idle client dying (DB restart, network blip) emits 'error' on the pool;
+// unhandled, that crashes the whole API. Log it — the pool replaces the client
+// and the next query reconnects.
+pool.on("error", (err) => {
+  console.error("[db] idle client error (will reconnect):", err.message);
+});
 
 export const db = drizzle(pool, { schema });
 export { pool };

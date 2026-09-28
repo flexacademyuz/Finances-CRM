@@ -37,7 +37,13 @@ export class ApiError extends Error {
  */
 export async function api<T = unknown>(
   path: string,
-  opts: { method?: string; body?: unknown; query?: Record<string, string | undefined> } = {},
+  opts: {
+    method?: string;
+    body?: unknown;
+    query?: Record<string, string | undefined>;
+    /** Extra request headers (e.g. the student-portal preview header). */
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<T> {
   const url = new URL(path, window.location.origin);
   if (opts.query) {
@@ -54,6 +60,7 @@ export async function api<T = unknown>(
       Authorization: authHeader(),
       ...(branch ? { "X-Branch-Id": branch } : {}),
       ...impersonationHeader(),
+      ...(opts.headers ?? {}),
     },
     body: opts.body != null ? JSON.stringify(opts.body) : undefined,
   });

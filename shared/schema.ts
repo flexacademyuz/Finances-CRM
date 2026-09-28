@@ -4,6 +4,7 @@ import {
   uuid,
   text,
   bigint,
+  integer,
   numeric,
   boolean,
   date,
@@ -55,6 +56,25 @@ export const smsStatusEnum = pgEnum("sms_status", [
   "failed",
   "skipped",
 ]);
+
+// Student portal: how a student was marked for one lesson. "left_early" counts
+// as attended; "excused" is left out of the attendance-rate denominator.
+export const attendanceStatusEnum = pgEnum("attendance_status", [
+  "present",
+  "absent",
+  "late",
+  "excused",
+  "left_early",
+]);
+// A lesson row exists once attendance is taken (held) or the lesson is called
+// off (cancelled — suppresses reminders and notifies the group).
+export const lessonStatusEnum = pgEnum("lesson_status", ["held", "cancelled"]);
+// Outbound student notification delivery (Telegram queue) state.
+export const deliveryStatusEnum = pgEnum("delivery_status", ["pending", "sent", "failed", "skipped"]);
+
+export type AttendanceStatus = (typeof attendanceStatusEnum.enumValues)[number];
+export type LessonStatus = (typeof lessonStatusEnum.enumValues)[number];
+export type DeliveryStatus = (typeof deliveryStatusEnum.enumValues)[number];
 
 export type DiscountType = (typeof discountTypeEnum.enumValues)[number];
 export type FreezeStatus = (typeof freezeStatusEnum.enumValues)[number];
@@ -471,8 +491,35 @@ export const settings = pgTable("settings", {
   // end-of-day close. See server/jobs.ts + bot/notifications.sendTodaySummary.
   todaySummaryEnabled: boolean("today_summary_enabled").notNull().default(true),
   todaySummaryHours: text("today_summary_hours").notNull().default("12,15,19,0"),
+  // Student portal / notification engine knobs (attendance-warning threshold,
+  // lesson-reminder hours, globally disabled notification types, …). Stored as
+  // one jsonb blob merged over code defaults — see shared/notifications.ts
+  // `resolvePortalSettings` — so new knobs need no migration.
+  studentPortal: jsonb("student_portal").$type<Partial<StudentPortalSettings>>().notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** CEO-configurable student-portal settings (merged over defaults in code). */
+export type StudentPortalSettings = {
+  /** Master switch for Telegram pushes to students (in-app still records). */
+  telegramEnabled: boolean;
+  /** Warn a student when their attendance rate drops below this % … */
+  attendanceWarningThreshold: number;
+  /** … but only once they've had at least this many counted lessons. */
+  attendanceWarningMinLessons: number;
+  /** Also notify on a plain "Present" mark (absent/late always notify). */
+  notifyPresent: boolean;
+  /** Hours before a lesson to send reminders, e.g. [24, 2]. Empty = none. */
+  lessonReminderHours: number[];
+  /** Days before the due date to send a "payment due soon" reminder. */
+  paymentDueSoonDays: number;
+  /** Re-send the outstanding-debt reminder every N days while unpaid. */
+  debtReminderEveryDays: number;
+  /** How many days back a teacher may still edit a lesson's attendance. */
+  attendanceEditDays: number;
+  /** Notification types switched off center-wide. */
+  disabledTypes: string[];
+};
 
 /**
  * Excused absence: while a freeze is active for a student in a group, the
@@ -707,6 +754,298 @@ export const smsMessages = pgTable(
   }),
 );
 
+/* ─────────────────── Student portal: lessons & attendance ─────────────────── */
+
+/**
+ * One meeting of a group on one day. Created the first time a teacher takes
+ * attendance for that date (or when a lesson is cancelled). One lesson per group
+ * per day. Teacher/room/time are snapshotted so history survives a group being
+ * reassigned or rescheduled later.
+ */
+export const lessons = pgTable(
+  "lessons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
+    // The teacher who taught it (the group's teacher at the time).
+    teacherId: uuid("teacher_id").references(() => teachers.id, { onDelete: "set null" }),
+    lessonDate: date("lesson_date").notNull(),
+    // "HH:MM" Tashkent, from the group's schedule slot for that weekday if any.
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    room: text("room"),
+    topic: text("topic"),
+    status: lessonStatusEnum("status").notNull().default("held"),
+    cancelReason: text("cancel_reason"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqClassDate: uniqueIndex("lessons_class_date_uniq").on(t.classId, t.lessonDate),
+    byDate: index("lessons_date_idx").on(t.lessonDate),
+    byBranch: index("lessons_branch_idx").on(t.branchId),
+  }),
+);
+
+/**
+ * One student's attendance at one lesson. Every mark is stored individually so
+ * rates/streaks are always computed from history, never stored. Group, branch,
+ * teacher and date are denormalized from the lesson for fast range analytics.
+ */
+export const attendanceRecords = pgTable(
+  "attendance_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    lessonId: uuid("lesson_id")
+      .notNull()
+      .references(() => lessons.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
+    teacherId: uuid("teacher_id").references(() => teachers.id, { onDelete: "set null" }),
+    lessonDate: date("lesson_date").notNull(),
+    status: attendanceStatusEnum("status").notNull(),
+    note: text("note"),
+    markedBy: uuid("marked_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqLessonStudent: uniqueIndex("attendance_lesson_student_uniq").on(t.lessonId, t.studentId),
+    byStudentDate: index("attendance_student_date_idx").on(t.studentId, t.lessonDate),
+    byClassDate: index("attendance_class_date_idx").on(t.classId, t.lessonDate),
+    byDate: index("attendance_date_idx").on(t.lessonDate),
+    byBranch: index("attendance_branch_idx").on(t.branchId),
+  }),
+);
+
+/* ─────────────────────── Student portal: scores ─────────────────────── */
+
+/**
+ * A score a teacher recorded for a student (homework, quiz, IELTS mock, …).
+ * `category` is one of SCORE_CATEGORIES in shared/scores.ts (validated in the
+ * API, stored as text so new categories need no migration); `title` names the
+ * specific assessment ("Reading Test 3").
+ */
+export const studentScores = pgTable(
+  "student_scores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
+    teacherId: uuid("teacher_id").references(() => teachers.id, { onDelete: "set null" }),
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    score: numeric("score", { precision: 8, scale: 2 }).notNull(),
+    maxScore: numeric("max_score", { precision: 8, scale: 2 }).notNull(),
+    scoreDate: date("score_date").notNull(),
+    comment: text("comment"),
+    attachmentUrl: text("attachment_url"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byStudentDate: index("scores_student_date_idx").on(t.studentId, t.scoreDate),
+    byClassDate: index("scores_class_date_idx").on(t.classId, t.scoreDate),
+  }),
+);
+
+/* ──────────────────── Student portal: Telegram linking ──────────────────── */
+
+/**
+ * A verified link from a Telegram account to a CRM student. The Telegram user
+ * id is unique (one Telegram account ↔ one student); a student may have a few
+ * linked accounts (their own + a parent's). Created only by the bot after phone
+ * or one-time-code verification — never from client-supplied ids.
+ */
+export const studentTelegramAccounts = pgTable(
+  "student_telegram_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    telegramUserId: bigint("telegram_user_id", { mode: "number" }).notNull().unique(),
+    telegramUsername: text("telegram_username"),
+    firstName: text("first_name"),
+    // "uz" | "en" — the language notifications are rendered in for this chat.
+    languageCode: text("language_code"),
+    // "phone" (shared contact matched the student's phone) | "code" (staff code).
+    verificationMethod: text("verification_method").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+    // Set when Telegram reports the user blocked the bot; pushes are skipped
+    // until they /start it again.
+    botBlocked: boolean("bot_blocked").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byStudent: index("student_tg_student_idx").on(t.studentId) }),
+);
+
+/**
+ * One-time link codes staff generate on a student's profile (for students whose
+ * CRM phone is a parent's number). Only a SHA-256 hash is stored; the code is
+ * single-use and short-lived.
+ */
+export const studentLinkCodes = pgTable(
+  "student_link_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    usedByTelegramId: bigint("used_by_telegram_id", { mode: "number" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byStudent: index("link_codes_student_idx").on(t.studentId) }),
+);
+
+/* ───────────────────── Student portal: notifications ───────────────────── */
+
+/**
+ * An in-app notification for one student. Text is NOT stored: `type` + `params`
+ * are rendered at read/send time by the template registry in
+ * shared/notifications.ts, in the reader's language. `dedupeKey` (unique) makes
+ * every automatic event idempotent (e.g. one "due soon" per due date).
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    // financial | academic | attendance | schedule | general
+    category: text("category").notNull(),
+    params: jsonb("params").$type<Record<string, unknown>>().notNull().default({}),
+    // The related object, e.g. ("payment", <id>) — lets the app deep-link.
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    dedupeKey: text("dedupe_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byStudentCreated: index("notifications_student_created_idx").on(t.studentId, t.createdAt),
+    // Unread badge counts stay cheap as history grows.
+    byUnread: index("notifications_unread_idx").on(t.studentId).where(sql`${t.readAt} is null`),
+    byDedupe: uniqueIndex("notifications_dedupe_idx").on(t.dedupeKey),
+  }),
+);
+
+/**
+ * Telegram delivery queue: one row per (notification, linked account). A worker
+ * claims due `pending` rows (FOR UPDATE SKIP LOCKED), sends, and either marks
+ * them sent or reschedules with backoff; after the last attempt → failed (and
+ * audit-logged). CRM writes never wait on Telegram.
+ */
+export const notificationDeliveries = pgTable(
+  "notification_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    notificationId: uuid("notification_id")
+      .notNull()
+      .references(() => notifications.id, { onDelete: "cascade" }),
+    telegramAccountId: uuid("telegram_account_id")
+      .notNull()
+      .references(() => studentTelegramAccounts.id, { onDelete: "cascade" }),
+    chatId: bigint("chat_id", { mode: "number" }).notNull(),
+    status: deliveryStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    lastError: text("last_error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byStatusNext: index("deliveries_status_next_idx").on(t.status, t.nextAttemptAt),
+    byNotification: index("deliveries_notification_idx").on(t.notificationId),
+  }),
+);
+
+/** A student's opt-outs, by preference group (see NOTIFICATION_PREF_GROUPS). */
+export const studentNotificationPrefs = pgTable("student_notification_prefs", {
+  studentId: uuid("student_id")
+    .primaryKey()
+    .references(() => students.id, { onDelete: "cascade" }),
+  disabled: jsonb("disabled").$type<string[]>().notNull().default([]),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A management announcement, fanned out as one notification per recipient. */
+export const announcements = pgTable("announcements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  // "general" | "important" | "holiday"
+  kind: text("kind").notNull().default("general"),
+  // Audience: null = everyone the author can reach; else one branch / group.
+  branchId: uuid("branch_id"),
+  classId: uuid("class_id"),
+  recipients: integer("recipients").notNull().default(0),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Append-only audit trail for sensitive changes (attendance edits, scores,
+ * payments, Telegram links, final notification failures). Actor/entity ids are
+ * kept without FKs so the trail survives deletions.
+ */
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actorUserId: uuid("actor_user_id"),
+    // user | student | system | bot
+    actorType: text("actor_type").notNull(),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    studentId: uuid("student_id"),
+    branchId: uuid("branch_id"),
+    before: jsonb("before"),
+    after: jsonb("after"),
+    meta: jsonb("meta"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byEntity: index("audit_entity_idx").on(t.entityType, t.entityId),
+    byCreated: index("audit_created_idx").on(t.createdAt),
+    byStudent: index("audit_student_idx").on(t.studentId),
+  }),
+);
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const branchesRelations = relations(branches, ({ many }) => ({
@@ -760,6 +1099,14 @@ export type TeacherSalaryRule = typeof teacherSalaryRules.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
 export type DraftClass = typeof draftClasses.$inferSelect;
+export type Lesson = typeof lessons.$inferSelect;
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+export type StudentScore = typeof studentScores.$inferSelect;
+export type StudentTelegramAccount = typeof studentTelegramAccounts.$inferSelect;
+export type NotificationRow = typeof notifications.$inferSelect;
+export type NotificationDelivery = typeof notificationDeliveries.$inferSelect;
+export type Announcement = typeof announcements.$inferSelect;
+export type AuditLog = typeof auditLogs.$inferSelect;
 
 /* ───────────────────── Zod validation schemas ────────────────────── */
 
@@ -1061,3 +1408,98 @@ export const createPayoutSchema = z.object({
 
 export type CreateAdvanceInput = z.infer<typeof createAdvanceSchema>;
 export type CreatePayoutInput = z.infer<typeof createPayoutSchema>;
+
+/* ─────────────────────── Student portal inputs ─────────────────────── */
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// Only http(s) links — a bare .url() would accept javascript: URLs, and these
+// are rendered as links in the student portal.
+const httpUrl = z.string().max(500).regex(/^https?:\/\/\S+$/i, "Must be an http(s) link");
+
+/** Save (upsert) attendance for one group on one date. */
+export const saveAttendanceSchema = z.object({
+  date: isoDate,
+  topic: z.string().max(200).nullable().optional(),
+  records: z
+    .array(
+      z.object({
+        studentId: z.string().uuid(),
+        status: z.enum(attendanceStatusEnum.enumValues),
+        note: z.string().max(500).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+export const cancelLessonSchema = z.object({
+  date: isoDate,
+  reason: z.string().min(1).max(300),
+});
+
+const scoreFields = {
+  category: z.string().min(1).max(40),
+  title: z.string().min(1).max(120),
+  maxScore: z.coerce.number().positive().max(100000),
+  scoreDate: isoDate,
+};
+
+/** One score for one student. */
+export const createScoreSchema = z
+  .object({
+    ...scoreFields,
+    studentId: z.string().uuid(),
+    score: z.coerce.number().min(0),
+    comment: z.string().max(1000).nullable().optional(),
+    attachmentUrl: httpUrl.nullable().optional().or(z.literal("")),
+  })
+  .refine((v) => v.score <= v.maxScore, { message: "Score cannot exceed the maximum.", path: ["score"] });
+
+/** The same assessment scored for several students of one group at once. */
+export const bulkScoresSchema = z.object({
+  ...scoreFields,
+  entries: z
+    .array(
+      z.object({
+        studentId: z.string().uuid(),
+        score: z.coerce.number().min(0),
+        comment: z.string().max(1000).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+export const updateScoreSchema = z.object({
+  category: z.string().min(1).max(40).optional(),
+  title: z.string().min(1).max(120).optional(),
+  score: z.coerce.number().min(0).optional(),
+  maxScore: z.coerce.number().positive().max(100000).optional(),
+  scoreDate: isoDate.optional(),
+  comment: z.string().max(1000).nullable().optional(),
+  attachmentUrl: httpUrl.nullable().optional().or(z.literal("")),
+});
+
+export const createAnnouncementSchema = z.object({
+  title: z.string().min(1).max(120),
+  body: z.string().min(1).max(2000),
+  kind: z.enum(["general", "important", "holiday"]).default("general"),
+  branchId: z.string().uuid().nullable().optional(),
+  classId: z.string().uuid().nullable().optional(),
+});
+
+export const portalSettingsSchema = z.object({
+  telegramEnabled: z.boolean().optional(),
+  attendanceWarningThreshold: z.coerce.number().int().min(0).max(100).optional(),
+  attendanceWarningMinLessons: z.coerce.number().int().min(1).max(100).optional(),
+  notifyPresent: z.boolean().optional(),
+  lessonReminderHours: z.array(z.coerce.number().int().min(1).max(72)).max(4).optional(),
+  paymentDueSoonDays: z.coerce.number().int().min(0).max(14).optional(),
+  debtReminderEveryDays: z.coerce.number().int().min(1).max(60).optional(),
+  attendanceEditDays: z.coerce.number().int().min(0).max(365).optional(),
+  disabledTypes: z.array(z.string().max(60)).max(60).optional(),
+});
+
+export const studentPrefsSchema = z.object({
+  disabled: z.array(z.string().max(40)).max(20),
+});

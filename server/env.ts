@@ -16,6 +16,9 @@ export const env = {
   isProd: process.env.NODE_ENV === "production",
 
   botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  // Optional @username of the bot (without "@"), used for t.me link-code deep
+  // links. Looked up via getMe() when unset.
+  botUsername: (process.env.TELEGRAM_BOT_USERNAME ?? "").replace(/^@/, ""),
   webAppUrl: optional("WEB_APP_URL", ""),
   // Secret for signing web session tokens (browser login, outside Telegram).
   // Falls back to the bot token, then a dev-only constant.

@@ -11,6 +11,11 @@ export function parseBody<T>(schema: ZodSchema<T>, body: unknown): T {
   return schema.parse(body);
 }
 
+/** An error the central handler turns into `status` + `{ error: code, message }`. */
+export function httpError(status: number, code: string, message: string): Error {
+  return Object.assign(new Error(message), { status, code });
+}
+
 /** Central error middleware: turns ZodError into 400, everything else 500. */
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof ZodError) {
@@ -21,7 +26,10 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   // throw `Object.assign(new Error(...), { status: 403 })`).
   const explicit = (err as { status?: unknown }).status;
   if (typeof explicit === "number") {
-    return res.status(explicit).json({ error: explicit === 403 ? "forbidden" : "error", message });
+    const code = (err as { code?: unknown }).code;
+    return res
+      .status(explicit)
+      .json({ error: typeof code === "string" ? code : explicit === 403 ? "forbidden" : "error", message });
   }
   const known = /not found|not registered|forbidden/i.test(message);
   res.status(known ? 400 : 500).json({ error: "server_error", message });

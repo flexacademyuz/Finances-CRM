@@ -16,6 +16,10 @@ export const PERMISSIONS = [
   "add_expense",
   "manage_discounts",
   "approve_leads",
+  // Student portal: take/edit attendance and enter scores for ANY group on any
+  // date. Teachers always manage their own groups without these grants.
+  "manage_attendance",
+  "manage_scores",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -31,6 +35,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   add_expense: "Add expenses",
   manage_discounts: "Manage discounts & freezes",
   approve_leads: "Approve new-student leads",
+  manage_attendance: "Manage attendance (all groups)",
+  manage_scores: "Manage scores (all groups)",
 };
 
 /** Abilities each role has by default, before any per-user grants. */

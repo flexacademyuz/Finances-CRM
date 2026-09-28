@@ -13,19 +13,13 @@ import {
   deleteStudent,
   countStudentPayments,
   getClassById,
-  effectiveFee,
-  listPayments,
-  listDiscountsForStudent,
-  listFreezesForStudent,
-  getSettings,
   type StudentFilter,
 } from "../storage";
-import { parseDate, fullMonthsBetween, atMidnight, toIso } from "@shared/date";
-import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { recomputeStatuses } from "../services/billing";
+import { computeStudentBilling } from "../services/student-billing";
 import { ensureSponsoredComps } from "../services/sponsored";
 import { notifyStudentEdited } from "../bot/notifications";
-import { env } from "../env";
+import { emit } from "../events";
 
 const router = Router();
 
@@ -45,53 +39,8 @@ router.get(
     }
     assertBranchAccess(req, student.branchId);
 
-    const [feeVal, payments, discounts, freezes, settings] = await Promise.all([
-      effectiveFee(student.id),
-      // Voided (accidental) payments are removed from the student's view; they
-      // remain in the CEO payments log for audit.
-      listPayments({ studentId: student.id, includeVoided: false }),
-      listDiscountsForStudent(student.id),
-      listFreezesForStudent(student.id),
-      getSettings(),
-    ]);
-
-    const grace = settings?.gracePeriodDays ?? env.defaultGracePeriodDays;
-    const currency = settings?.currency ?? env.defaultCurrency;
-    const now = new Date();
-    // Billing anchor: resume date if the student stopped and came back, else
-    // their enrolment date.
-    const anchor = student.billingStartDate ?? student.enrolledAt;
-    const start = atMidnight(parseDate(anchor));
-    const monthsElapsed = fullMonthsBetween(start, now);
-    const active = payments.filter((p) => !p.voided);
-
-    const activeFreezes = freezes.filter((f) => f.status === "active");
-    const todayIso = toIso(now);
-    const isFrozenNow = activeFreezes.some(
-      (f) => todayIso >= f.freezeFrom && (f.freezeTo == null || todayIso <= f.freezeTo),
-    );
-
-    // Only fully-settled months advance coverage; a partial payment leaves a
-    // balance and does not move the next-due date.
-    const settled = active.filter((p) =>
-      isMonthSettled(Number(p.amount), p.amountDue == null ? null : Number(p.amountDue)),
-    );
-    // Outstanding balance = everything still owed across partially-paid months.
-    const balance = +active
-      .reduce((sum, p) => sum + (p.amountDue == null ? 0 : Math.max(Number(p.amountDue) - Number(p.amount), 0)), 0)
-      .toFixed(2);
-
-    const args = {
-      startDate: anchor,
-      paymentDates: settled.map((p) => toIso(new Date(p.createdAt))),
-      frozenDays: elapsedFrozenDays(
-        activeFreezes.map((f) => ({ from: f.freezeFrom, to: f.freezeTo })),
-        start,
-        atMidnight(now),
-      ),
-    };
-    const paidThrough = computePaidThrough(args);
-    const status = decideStudentStatus({ ...args, today: now, gracePeriodDays: grace, isFrozenNow });
+    // Billing math is shared with the student portal (services/student-billing).
+    const { billing, payments, discounts, freezes } = await computeStudentBilling(student);
 
     res.json({
       student: {
@@ -105,23 +54,19 @@ router.get(
         sponsored: student.sponsored,
       },
       billing: {
-        startDate: anchor,
-        monthsEnrolled: monthsElapsed,
-        paymentsMade: active.length,
-        effectiveFee: feeVal,
-        currency,
-        // Coverage runs up to (but not including) this date, so it doubles as
-        // the day the next payment falls due.
-        paidThrough: toIso(paidThrough),
-        nextDueDate: toIso(paidThrough),
-        // Money still owed for months that were only partially paid. > 0 means
-        // "some charges remain to complete the payment".
-        balance,
-        status,
+        startDate: billing.startDate,
+        monthsEnrolled: billing.monthsEnrolled,
+        paymentsMade: billing.paymentsMade,
+        effectiveFee: billing.effectiveFee,
+        currency: billing.currency,
+        paidThrough: billing.paidThrough,
+        nextDueDate: billing.nextDueDate,
+        balance: billing.balance,
+        status: billing.status,
       },
       payments,
-      discounts: discounts.filter((d) => d.isActive),
-      freezes: activeFreezes,
+      discounts,
+      freezes,
     });
   }),
 );
@@ -262,6 +207,15 @@ router.patch(
     // Notify the CEO whenever a teacher changes a student's details.
     if (req.authUser!.role === "teacher") {
       void notifyStudentEdited(req.params.id, req.authUser!.id, before, patch).catch(() => undefined);
+    }
+    // Tell the student (portal / Telegram) when they're moved to another group.
+    if (patch.classId && patch.classId !== before.classId) {
+      emit("student.movedGroup", {
+        studentId: req.params.id,
+        fromClassId: before.classId,
+        toClassId: patch.classId,
+        actorUserId: req.authUser!.id,
+      });
     }
     res.json(updated);
   }),

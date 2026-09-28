@@ -10,6 +10,9 @@ import { runMigrations } from "./migrate";
 import { bootstrap } from "./bootstrap";
 import { configureBot, configureMenuButton } from "./bot/bot";
 import { bot } from "./bot/client";
+import { registerNotificationListeners } from "./notifications/listeners";
+import { startNotificationWorker } from "./notifications/queue";
+import { startStudentScheduler } from "./notifications/scheduler";
 
 async function main() {
   const app = express();
@@ -49,6 +52,12 @@ async function main() {
   else console.log(`• CEO seed skipped: ${boot.ceoSkipped}.`);
 
   startJobs();
+
+  // Student notification engine: event → notification wiring, the Telegram
+  // delivery queue (retries/backoff), and time-based reminders.
+  registerNotificationListeners();
+  startNotificationWorker();
+  startStudentScheduler();
 
   // Run the companion bot in-process via long polling when a token is present,
   // so a single deployed service handles both the API and the bot. Set
