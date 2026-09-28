@@ -1,0 +1,898 @@
+# Generated enrichment for beginner-900 (NOT from the source file): source No. <TAB> part of speech <TAB> IPA (British) <TAB> example sentence with the headword in {braces}.
+# Reviewable/editable by admins after import; the importer never overwrites a field an admin has edited.
+1	pron	/aɪ/	{I} am a student.
+2	pron	/juː/	Are {you} happy today?
+3	pron	/wiː/	{We} live in Tashkent.
+4	pron	/hiː/	{He} is my brother.
+5	pron	/ʃiː/	{She} is a teacher.
+6	pron	/ɪt/	{It} is a small cat.
+7	pron	/ðeɪ/	{They} play football every day.
+8	pron	/wɒt/	{What} is your name?
+9	pron	/huː/	{Who} is that man?
+10	adv	/weə/	{Where} do you live?
+11	adv	/haʊ/	{How} are you today?
+12	adv	/waɪ/	{Why} are you sad?
+13	adv	/wen/	{When} does the lesson start?
+14	det	/maɪ/	This is {my} bag.
+15	det	/jɔː/	What is {your} name?
+16	det	/hɪz/	{His} car is red.
+17	det	/hɜː/	{Her} dress is beautiful.
+18	det	/ɪts/	The dog is eating {its} food.
+19	det	/ˈaʊə/	{Our} house is big.
+20	det	/ðeə/	{Their} children go to school.
+21	n	/kæt/	The {cat} is sleeping on the sofa.
+22	n	/dɒɡ/	My {dog} likes to run.
+23	n	/bɜːd/	A small {bird} is singing.
+24	n	/ˈskwɪrəl/	The {squirrel} is in the tree.
+25	n	/wʊlf/	A {wolf} lives in the forest.
+26	n	/ɡuːs/	The {goose} is swimming in the lake.
+27	n	/dʒɪˈrɑːf/	A {giraffe} has a very long neck.
+28	n	/ˈræbɪt/	The {rabbit} likes carrots.
+29	n	/kaʊ/	The {cow} gives us milk.
+30	n	/ræt/	There is a {rat} in the basement.
+31	n	/fɒks/	The {fox} is red and clever.
+32	n	/hɔːs/	He rides a {horse}.
+33	n	/frɒɡ/	A green {frog} is sitting by the water.
+34	n	/beə/	The {bear} is big and strong.
+35	n	/maʊs/	The cat is chasing a {mouse}.
+36	n	/ˈmʌŋki/	The {monkey} is eating a banana.
+37	n	/pɪɡ/	The {pig} is pink.
+38	n	/ˈelɪfənt/	An {elephant} is a very big animal.
+39	n	/dʌk/	A {duck} is swimming in the pond.
+40	n	/bred/	We eat {bread} every day.
+41	n	/ˈbʌtə/	I put {butter} on my bread.
+42	n	/ɔɪl/	Fry the eggs in {oil}.
+43	n	/tʃiːz/	I like {cheese} sandwiches.
+44	n	/ˈsɒsɪdʒ/	He had a {sausage} for breakfast.
+45	n	/hæm/	She made a sandwich with {ham}.
+46	n	/miːt/	We buy {meat} at the market.
+47	n	/biːf/	This soup is made with {beef}.
+48	n	/læm/	Plov is often cooked with {lamb}.
+49	n	/ˈtʃɪkɪn/	We had {chicken} and rice for dinner.
+50	n	/ˈkʌtlət/	Mum made a {cutlet} for me.
+51	n	/fɪʃ/	I like to eat {fish}.
+52	n	/eɡ/	I eat an {egg} every morning.
+53	n	/ˈsæləd/	She made a tomato {salad}.
+54	n	/ˈmʌʃruːm/	I found a {mushroom} in the forest.
+55	n	/kɔːn/	The farmer grows {corn}.
+56	n	/ˈpɒrɪdʒ/	I eat {porridge} for breakfast.
+57	n	/suːp/	This {soup} is very hot.
+58	n	/ˈsænwɪtʃ/	I take a {sandwich} to school.
+59	n	/raɪs/	We need {rice} for plov.
+60	n	/ˈnuːdlz/	The children love {noodles}.
+61	n	/ˈflaʊə/	You need {flour} to make bread.
+62	n	/spaɪs/	This {spice} makes the food tasty.
+63	n	/ˈpepə/	Add salt and {pepper}.
+64	n	/sɔːlt/	Please pass me the {salt}.
+65	n	/ˈʌnjən/	Cut the {onion} into small pieces.
+66	n	/ˈɡɑːlɪk/	{Garlic} has a strong smell.
+67	n	/sɔːs/	I like pasta with tomato {sauce}.
+68	n	/ˈvedʒtəblz/	Eat more fruit and {vegetables}.
+69	n	/pəˈteɪtəʊz/	We cook {potatoes} for dinner.
+70	n	/ˈkærət/	The rabbit is eating a {carrot}.
+71	n	/biːt/	A {beet} is a red vegetable.
+72	n	/təˈmɑːtəʊ/	A {tomato} is red and round.
+73	n	/ˈkjuːkʌmbə/	I put a {cucumber} in the salad.
+74	n	/ˈkæbɪdʒ/	My grandmother makes soup with {cabbage}.
+75	n	/ˈeɡplɑːnt/	She fried an {eggplant}.
+76	n	/nʌt/	The squirrel is eating a {nut}.
+77	n	/fruːt/	An apple is a {fruit}.
+78	n	/ˈæpl/	I eat an {apple} every day.
+79	n	/peə/	This {pear} is sweet.
+80	n	/bəˈnɑːnə/	I have a {banana} in my bag.
+81	n	/ˈberi/	This {berry} is very sweet.
+82	n	/ˈstrɔːbəri/	I like {strawberry} ice cream.
+83	n	/ˈrɑːzbəri/	She made {raspberry} jam.
+84	n	/ˈtʃeri/	There is a {cherry} on the cake.
+85	n	/plʌm/	This {plum} is purple and juicy.
+86	n	/ɡreɪp/	Try this green {grape}.
+87	n	/ˈeɪprɪkɒt/	An {apricot} is a small orange fruit.
+88	n	/piːtʃ/	The {peach} is soft and sweet.
+89	n	/ˈmelən/	This {melon} is from Khorezm.
+90	n	/ˈwɔːtəmelən/	We eat {watermelon} in summer.
+91	n	/ˈpʌmpkɪn/	The {pumpkin} is big and orange.
+92	n	/ˈɒrɪndʒ/	I drink {orange} juice every morning.
+93	n	/ˈmændərɪn/	Children love to eat a {mandarin} in winter.
+94	n	/ˈlemən/	I put {lemon} in my tea.
+95	n	/ˈpaɪnæpl/	A {pineapple} is a sweet fruit.
+96	n	/ˈʃʊɡə/	Do you take {sugar} in your tea?
+97	n	/ˈhʌni/	Bees make {honey}.
+98	n	/dʒæm/	I eat bread with {jam}.
+99	n	/keɪk/	We have a {cake} for my birthday.
+100	n	/bʌn/	I bought a sweet {bun} at the bakery.
+101	n	/ˈkʊki/	Can I have a {cookie}?
+102	n	/paɪ/	Grandma made an apple {pie}.
+103	n	/swiːt/	The child wants a {sweet}.
+104	n	/ˌaɪs ˈkriːm/	I love chocolate {ice-cream}.
+105	n	/ˈtʃɒklət/	{Chocolate} is my favourite sweet.
+106	n	/ˈwɔːtə/	Drink a glass of {water}.
+107	n	/ˈsəʊdə/	He is drinking a {soda}.
+108	n	/dʒuːs/	I drink apple {juice}.
+109	n	/waɪn/	They make {wine} from grapes.
+110	n	/tiː/	Would you like a cup of {tea}?
+111	n	/ˈkɒfi/	My father drinks {coffee} in the morning.
+112	n	/mɪlk/	Children drink {milk}.
+113	n	/kriːm/	The cake has {cream} on top.
+114	n	/ˈjɒɡət/	I eat {yogurt} with fruit.
+115	n	/kɜːd/	My mother makes {curd} from milk.
+116	interj	/haɪ/	{Hi}! How are you?
+117	interj	/həˈləʊ/	{Hello}, my name is Ali.
+118	interj	/ˈsɒri/	{Sorry}, I am late.
+119	adv	/pliːz/	Open the door, {please}.
+120	n	/mæn/	That {man} is my teacher.
+121	n	/ˈwʊmən/	A {woman} is reading a book.
+122	n	/tʃaɪld/	The {child} is playing in the yard.
+123	n	/bɔɪ/	The {boy} is ten years old.
+124	n	/ɡɜːl/	The {girl} has long hair.
+125	n	/ɡaɪ/	He is a nice {guy}.
+126	n	/frend/	Ali is my best {friend}.
+127	n	/əˈkweɪntəns/	He is not a friend, just an {acquaintance}.
+128	n	/ˈneɪbə/	My {neighbor} has a big dog.
+129	n	/ɡest/	We have a {guest} tonight.
+130	n	/tʃiːf/	He is the {chief} of the police.
+131	n	/bɒs/	My {boss} is very kind.
+132	n	/kəmˈpetɪtə/	That shop is our {competitor}.
+133	n	/ˈklaɪənt/	The lawyer is talking to a {client}.
+134	n	/ˈkɒliːɡ/	She is my {colleague} at work.
+135	n	/ˈfæməli/	I love my {family}.
+136	n	/ˈpiːpl/	Many {people} live in this city.
+137	n	/ˈpeərənts/	My {parents} are doctors.
+138	n	/ˈfɑːðə/	My {father} works in a bank.
+139	n	/ˈmʌðə/	My {mother} cooks very well.
+140	n	/ˈhʌzbənd/	Her {husband} is a driver.
+141	n	/waɪf/	His {wife} is a nurse.
+142	n	/sʌn/	They have one {son}.
+143	n	/ˈdɔːtə/	Their {daughter} is five years old.
+144	n	/ˈbrʌðə/	My {brother} is older than me.
+145	n	/ˈsɪstə/	My {sister} goes to school.
+146	n	/ˈɡrænfɑːðə/	My {grandfather} is seventy years old.
+147	n	/ˈfɑːðər ɪn lɔː/	Her {father-in-law} lives with them.
+148	n	/ˈʌŋkl/	My {uncle} lives in Samarkand.
+149	n	/ˈɡrænmʌðə/	My {grandmother} makes the best plov.
+150	n	/ɑːnt/	My {aunt} is my mother's sister.
+151	n	/ˈkʌzn/	My {cousin} is the same age as me.
+152	n	/ˈnefjuː/	My sister's son is my {nephew}.
+153	n	/niːs/	My brother's daughter is my {niece}.
+154	n	/dʒɒb/	I have a new {job}.
+155	n	/ˈbɪznəsmæn/	My uncle is a {businessman}.
+156	n	/ˈtiːtʃə/	Our {teacher} is very kind.
+157	n	/ˈdraɪvə/	The bus {driver} is careful.
+158	n	/ˈwɜːkə/	He is a factory {worker}.
+159	n	/ˌendʒɪˈnɪə/	My father is an {engineer}.
+160	n	/ˈdɒktə/	I need to see a {doctor}.
+161	n	/ˈlɔːjə/	She wants to be a {lawyer}.
+162	n	/ˈdʒɜːnəlɪst/	The {journalist} is writing a story.
+163	n	/nɜːs/	The {nurse} works in a hospital.
+164	n	/ˈʃɒp əsɪstənt/	The {shop assistant} helped me find a shirt.
+165	n	/ˈweɪtə/	The {waiter} brought our food.
+166	n	/əˈkaʊntənt/	An {accountant} works with money.
+167	n	/ˈɑːtɪst/	The {artist} is painting a picture.
+168	n	/mjuˈzɪʃn/	He is a famous {musician}.
+169	n	/ˈæktə/	The {actor} is in a new film.
+170	n	/ˈstjuːdnt/	I am a {student} at the university.
+171	n	/ˈpjuːpl/	Every {pupil} has a book.
+172	n	/ˈkʌntri/	Uzbekistan is a beautiful {country}.
+173	n	/ˈsɪti/	Tashkent is a big {city}.
+174	n	/haʊs/	They live in a big {house}.
+175	n	/həʊm/	I go {home} after school.
+176	n	/ˈbɪldɪŋ/	This {building} is very tall.
+177	n	/pleɪs/	This is a nice {place}.
+178	n	/ˈentrəns/	Meet me at the {entrance}.
+179	n	/ˈeksɪt/	Where is the {exit}?
+180	n	/ˈsentə/	The shop is in the city {center}.
+181	n	/jɑːd/	The children play in the {yard}.
+182	n	/ruːf/	The cat is on the {roof}.
+183	n	/fens/	There is a {fence} around the garden.
+184	n	/lænd/	The farmer has a lot of {land}.
+185	n	/ˈvɪlɪdʒ/	My grandparents live in a {village}.
+186	n	/skuːl/	I go to {school} every day.
+187	n	/ˌjuːnɪˈvɜːsəti/	My sister studies at the {university}.
+188	n	/ˈθɪətə/	We went to the {theatre} last night.
+189	n	/tʃɜːtʃ/	There is an old {church} in the town.
+190	n	/ˈrestrɒnt/	Let's have dinner at a {restaurant}.
+191	n	/ˈkæfeɪ/	We drink coffee at a {café}.
+192	n	/həʊˈtel/	We stayed at a {hotel}.
+193	n	/bæŋk/	I keep my money in the {bank}.
+194	n	/ˈsɪnəmə/	Let's go to the {cinema}.
+195	n	/ˈhɒspɪtl/	The doctor works at the {hospital}.
+196	n	/ˈpəʊst ɒfɪs/	I sent a letter from the {post office}.
+197	n	/ˈsteɪʃn/	The train leaves from this {station}.
+198	n	/ˈeəpɔːt/	We arrived at the {airport} early.
+199	n	/ʃɒp/	I bought bread at the {shop}.
+200	n	/ˈfɑːməsi/	You can buy medicine at the {pharmacy}.
+201	n	/ˈmɑːkɪt/	We buy fruit at the {market}.
+202	n	/ˈɒfɪs/	My mother works in an {office}.
+203	n	/ˈkʌmpəni/	He works for a big {company}.
+204	n	/ˈfæktri/	They make cars in this {factory}.
+205	n	/skweə/	There are many people in the {square}.
+206	n	/striːt/	I live on this {street}.
+207	n	/rəʊd/	Be careful when you cross the {road}.
+208	n	/stɒp/	We wait at the bus {stop}.
+209	n	/ˈsaɪdwɔːk/	Walk on the {sidewalk}, not on the road.
+210	n	/ˈɡɑːdn/	There are flowers in our {garden}.
+211	n	/pɑːk/	We walk in the {park} on Sundays.
+212	n	/brɪdʒ/	We walked across the {bridge}.
+213	n	/ˈrɪvə/	The {river} is long and wide.
+214	n	/ˈfɒrɪst/	Many animals live in the {forest}.
+215	n	/fiːld/	Cows are eating grass in the {field}.
+216	n	/ˈmaʊntən/	We climbed a high {mountain}.
+217	n	/leɪk/	We swim in the {lake} in summer.
+218	n	/siː/	The {sea} is blue today.
+219	n	/ˈəʊʃn/	The Pacific {Ocean} is very big.
+220	n	/kəʊst/	They have a house on the {coast}.
+221	n	/biːtʃ/	We played on the {beach}.
+222	n	/sænd/	The children are playing in the {sand}.
+223	n	/ˈbɔːdə/	We crossed the {border} by car.
+224	n	/ˈkʌstəmz/	They checked our bags at {customs}.
+225	n	/ˈɡɑːbɪdʒ/	Please take out the {garbage}.
+226	n	/weɪst/	Don't throw {waste} in the river.
+227	n	/stəʊn/	He threw a {stone} into the water.
+228	v	/əˈɡriː/	I {agree} with you.
+229	v	/əˈlaʊ/	My parents {allow} me to play outside.
+230	v	/biː/	I want to {be} a doctor.
+231	v	/bɪˈkʌm/	She wants to {become} a teacher.
+232	v	/bɪˈɡɪn/	Lessons {begin} at nine o'clock.
+233	v	/breɪk/	Be careful, don't {break} the glass.
+234	v	/brɪŋ/	Please {bring} your book tomorrow.
+235	v	/baɪ/	I want to {buy} a new phone.
+236	v	/kɔːl/	I will {call} you tonight.
+237	modal	/kæn/	I {can} swim.
+238	v	/tʃeɪndʒ/	I want to {change} my clothes.
+239	v	/kləʊz/	Please {close} the window.
+240	v	/kʌm/	Can you {come} to my party?
+241	v	/kʊk/	My mother likes to {cook}.
+242	v	/kʌt/	{Cut} the bread with a knife.
+243	v	/duː/	I {do} my homework after school.
+244	v	/fɔːl/	Be careful, don't {fall}!
+245	v	/faɪnd/	I can't {find} my keys.
+246	v	/flaɪ/	Birds can {fly}.
+247	v	/ˈfɒləʊ/	Please {follow} me.
+248	v	/ɡet/	I {get} a lot of messages every day.
+249	v	/hæv/	I {have} two brothers.
+250	v	/həʊld/	Please {hold} my bag.
+251	v	/nəʊ/	I {know} the answer.
+252	v	/liːv/	Don't {leave} your bag here.
+253	v	/meɪk/	Let's {make} a cake.
+254	modal	/meɪ/	{May} I come in?
+255	v	/miːn/	What does this word {mean}?
+256	v	/niːd/	I {need} a pen.
+257	v	/ˈəʊpən/	Please {open} the door.
+258	v	/peɪ/	I will {pay} for the tickets.
+259	v	/pleɪ/	The children {play} football after school.
+260	v	/sel/	They {sell} fruit at the market.
+261	v	/send/	I will {send} you a message.
+262	v	/sɪt/	Please {sit} on this chair.
+263	v	/spiːk/	Do you {speak} English?
+264	v	/stænd/	Please {stand} here and wait.
+265	v	/stɑːt/	Let's {start} the lesson.
+266	v	/stɒp/	Please {stop} the car here.
+267	v	/tɔːk/	Can we {talk} after class?
+268	v	/tel/	Please {tell} me a story.
+269	v	/ˈtrævl/	I like to {travel} by train.
+270	v	/traɪ/	{Try} this cake, it's delicious.
+271	v	/ˌʌndəˈstænd/	I don't {understand} this question.
+272	v	/juːz/	Can I {use} your phone?
+273	v	/weɪt/	Please {wait} for me here.
+274	v	/wɒtʃ/	We {watch} TV in the evening.
+275	v	/wɪn/	I hope our team will {win}.
+276	v	/wɜːk/	My parents {work} in a hospital.
+277	v	/ˈwʌri/	Don't {worry}, everything is fine.
+278	v	/ˈɑːnsə/	Please {answer} the question.
+279	v	/ɑːsk/	Can I {ask} you a question?
+280	v	/bɪˈliːv/	I {believe} you.
+281	v	/ˈbɒrəʊ/	Can I {borrow} your pen?
+282	v	/ˈkæri/	Can you help me {carry} this box?
+283	v	/ˈkɒpi/	{Copy} the words into your notebook.
+284	v	/dɪˈsaɪd/	I can't {decide} what to wear.
+285	v	/dɪˈskʌs/	Let's {discuss} this problem.
+286	v	/iːt/	We {eat} lunch at one o'clock.
+287	v	/ɪkˈspleɪn/	Can you {explain} this rule?
+288	v	/fiːl/	I {feel} happy today.
+289	v	/fɪl/	{Fill} the glass with water.
+290	v	/ˈfɪnɪʃ/	I will {finish} my homework soon.
+291	v	/fəˈɡet/	Don't {forget} your keys.
+292	v	/ɡɪv/	Please {give} me the book.
+293	v	/ɡəʊ/	I {go} to school every day.
+294	v	/ˈhæpən/	What will {happen} next?
+295	v	/hɪə/	Can you {hear} me?
+296	v	/help/	Can you {help} me, please?
+297	v	/kiːp/	You can {keep} this book.
+298	v	/lɜːn/	I want to {learn} English.
+299	v	/laɪk/	I {like} ice cream.
+300	v	/ˈlɪsn/	{Listen} to the teacher.
+301	v	/lɪv/	I {live} in Tashkent.
+302	v	/lʊk/	{Look} at this picture.
+303	v	/miːt/	Nice to {meet} you.
+304	v	/muːv/	Please don't {move}.
+305	modal	/mʌst/	You {must} wear a seatbelt.
+306	v	/ˈprɒmɪs/	I {promise} to help you.
+307	v	/pʊt/	{Put} your bag on the table.
+308	v	/riːd/	I {read} a book every week.
+309	v	/rɪˈmembə/	I can't {remember} his name.
+310	v	/rʌn/	I {run} in the park every morning.
+311	v	/seɪ/	What did you {say}?
+312	v	/siː/	I can {see} the mountains from here.
+313	modal	/ʃʊd/	You {should} drink more water.
+314	v	/ʃəʊ/	Please {show} me your ticket.
+315	v	/sliːp/	I {sleep} eight hours every night.
+316	v	/spend/	I {spend} a lot of time reading.
+317	v	/ˈstʌdi/	I {study} English every day.
+318	v	/səˈdʒest/	I {suggest} we go by bus.
+319	v	/teɪk/	{Take} an umbrella, it's raining.
+320	v	/θɪŋk/	I {think} you are right.
+321	v	/tɜːn/	{Turn} left at the bank.
+322	phrase	/weɪk ˈʌp/	I {wake up} at seven o'clock.
+323	v	/wɔːk/	I {walk} to school.
+324	v	/raɪt/	Please {write} your name here.
+325	adj	/əˈweɪk/	Are you still {awake}?
+326	adj	/bæd/	The weather is {bad} today.
+327	adj	/bent/	The old nail is {bent}.
+328	adj	/ˈbɪtə/	This coffee is very {bitter}.
+329	adj	/bluː/	The sky is {blue}.
+330	adj	/kəʊld/	It is {cold} in winter.
+331	adj	/ˈkruːəl/	It is {cruel} to hurt animals.
+332	adj	/dɑːk/	It is {dark} outside.
+333	adj	/ded/	The flowers are {dead}.
+334	adj	/dɪə/	She is a {dear} friend.
+335	adj	/ˈdɪfrənt/	These two bags are {different}.
+336	adj	/ˈdɜːti/	My shoes are {dirty}.
+337	adj	/draɪ/	The towel is {dry} now.
+338	adj	/fɔːls/	Is this sentence true or {false}?
+339	adj	/ˈfiːbl/	The old dog is {feeble}.
+340	adj	/ˈfuːlɪʃ/	That was a {foolish} idea.
+341	n	/ˈfjuːtʃə/	Nobody knows the {future}.
+342	adj	/ɡriːn/	The grass is {green}.
+343	adj	/ɪl/	She is {ill} today.
+344	adj	/lɑːst/	This is the {last} lesson.
+345	adj	/leɪt/	Don't be {late} for class.
+346	adj	/left/	Turn {left} at the corner.
+347	adj	/luːs/	These trousers are too {loose}.
+348	adj	/laʊd/	The music is too {loud}.
+349	adj	/ləʊ/	The table is very {low}.
+350	adj	/mɪkst/	I had a {mixed} salad.
+351	adj	/ˈnærəʊ/	This street is very {narrow}.
+352	adj	/əʊld/	My grandfather is {old}.
+353	adj	/ˈɒpəzɪt/	They live on the {opposite} side of the street.
+354	adj	/rʌf/	The wall is {rough}.
+355	adj	/sæd/	Why are you {sad}?
+356	adj	/seɪf/	This street is {safe}.
+357	adj	/ˈsiːkrət/	This is a {secret} place.
+358	adj	/ʃɔːt/	My sister has {short} hair.
+359	adj	/ˈsɪmpl/	This exercise is {simple}.
+360	adj	/sləʊ/	The old bus is very {slow}.
+361	adj	/smɔːl/	We have a {small} garden.
+362	adj	/sɒft/	The pillow is very {soft}.
+363	adj	/ˈsɒlɪd/	Ice is {solid} water.
+364	adj	/ˈspeʃl/	Today is a {special} day.
+365	adj	/streɪndʒ/	I heard a {strange} noise.
+366	adj	/θɪn/	He is tall and {thin}.
+367	adj	/waɪt/	Snow is {white}.
+368	adj	/rɒŋ/	Your answer is {wrong}.
+369	n	/taɪm/	What {time} is it?
+370	n	/ˈsekənd/	Wait a {second}, please.
+371	n	/ˈmɪnɪt/	I'll be ready in a {minute}.
+372	n	/ˈaʊə/	The lesson is one {hour} long.
+373	n	/deɪ/	Have a nice {day}!
+374	n	/wiːk/	There are seven days in a {week}.
+375	n	/mʌnθ/	January is the first {month} of the year.
+376	n	/jɪə/	Happy New {Year}!
+377	adv	/ˈjestədeɪ/	I was at home {yesterday}.
+378	phrase	/ðə deɪ bɪˈfɔː ˈjestədeɪ/	I saw him {the day before yesterday}.
+379	adv	/təˈdeɪ/	{Today} is Monday.
+380	adv	/təˈnaɪt/	What are you doing {tonight}?
+381	adv	/təˈmɒrəʊ/	See you {tomorrow}!
+382	phrase	/ðə deɪ ˈɑːftə təˈmɒrəʊ/	We will leave {the day after tomorrow}.
+383	n	/ˈmɔːnɪŋ/	I drink tea every {morning}.
+384	n	/ˌɑːftəˈnuːn/	Good {afternoon}!
+385	n	/ˈiːvnɪŋ/	We watch TV in the {evening}.
+386	n	/naɪt/	Good {night}, sleep well.
+387	n	/ˈmʌndeɪ/	School starts on {Monday}.
+388	n	/ˈtjuːzdeɪ/	I have English on {Tuesday}.
+389	n	/ˈwenzdeɪ/	{Wednesday} is in the middle of the week.
+390	n	/ˈθɜːzdeɪ/	We play football on {Thursday}.
+391	n	/ˈfraɪdeɪ/	{Friday} is the last day of the working week.
+392	n	/ˈsætədeɪ/	We visit grandma on {Saturday}.
+393	n	/ˈsʌndeɪ/	I don't work on {Sunday}.
+394	n	/ˈdʒænjuəri/	{January} is very cold.
+395	n	/ˈfebruəri/	{February} is the shortest month.
+396	n	/mɑːtʃ/	Navruz is in {March}.
+397	n	/ˈeɪprəl/	It often rains in {April}.
+398	n	/meɪ/	My birthday is in {May}.
+399	n	/dʒuːn/	Summer starts in {June}.
+400	n	/dʒuˈlaɪ/	{July} is very hot.
+401	n	/ˈɔːɡəst/	We go on holiday in {August}.
+402	n	/sepˈtembə/	School starts in {September}.
+403	n	/ɒkˈtəʊbə/	The leaves fall in {October}.
+404	n	/nəʊˈvembə/	It gets cold in {November}.
+405	n	/dɪˈsembə/	{December} is the last month of the year.
+406	n	/ˈsiːzn/	Summer is my favourite {season}.
+407	n	/sprɪŋ/	Flowers grow in {spring}.
+408	n	/ˈsʌmə/	It is hot in {summer}.
+409	n	/ˈɔːtəm/	Leaves fall in {autumn}.
+410	n	/ˈwɪntə/	It snows in {winter}.
+411	n	/ˈhɒlədeɪ/	Navruz is a big {holiday}.
+412	n	/ˈbɜːθdeɪ/	Happy {birthday}!
+413	phrase	/ˈθæŋk juː/	{Thank you} for your help.
+414	phrase	/juː ə ˈwelkəm/	"Thank you!" - "{You are welcome}."
+415	phrase	/ˌwɒt ə ˈpɪti/	"I can't come." - "{What a pity}!"
+416	interj	/ˌɡʊdˈbaɪ/	{Good bye}, see you tomorrow!
+417	n	/ˈrʌʃə/	Moscow is in {Russia}.
+418	n	/ʊzˌbekɪˈstɑːn/	I live in {Uzbekistan}.
+419	n	/ˌɡreɪt ˈbrɪtn/	London is in {Great Britain}.
+420	n	/ˈɪŋɡlənd/	People speak English in {England}.
+421	n	/plɑːnt/	Water the {plant} every day.
+422	n	/triː/	There is a big {tree} in our yard.
+423	n	/ɡrɑːs/	The cows eat {grass}.
+424	n	/ˈflaʊə/	She gave me a beautiful {flower}.
+425	n	/liːf/	A yellow {leaf} fell from the tree.
+426	n	/flæt/	We live in a {flat} on the fifth floor.
+427	n	/ruːm/	My {room} is small but nice.
+428	n	/ˈlɪvɪŋ ruːm/	We watch TV in the {living room}.
+429	n	/ˈbedruːm/	My {bedroom} has a big window.
+430	n	/ˈbɑːθruːm/	The {bathroom} is next to the bedroom.
+431	n	/ˈʃaʊə/	I take a {shower} every morning.
+432	n	/ˈtɔɪlət/	Where is the {toilet}, please?
+433	n	/ˈkɪtʃɪn/	Mum is cooking in the {kitchen}.
+434	n	/hɔːl/	Leave your shoes in the {hall}.
+435	n	/ˈbælkəni/	We drink tea on the {balcony}.
+436	n	/flɔː/	The book is on the {floor}.
+437	n	/ˈsiːlɪŋ/	There is a lamp on the {ceiling}.
+438	n	/wɔːl/	There is a picture on the {wall}.
+439	n	/steəz/	Go up the {stairs} to the second floor.
+440	n	/dɔː/	Please close the {door}.
+441	n	/ˈwɪndəʊ/	Open the {window}, please.
+442	n	/ˈwɪndəʊsɪl/	The cat is sitting on the {windowsill}.
+443	n	/ˈkɜːtn/	Close the {curtain}, please.
+444	n	/swɪtʃ/	The light {switch} is next to the door.
+445	n	/ˈsɒkɪt/	Plug the phone into the {socket}.
+446	n	/ˈfɔːsɪt/	Turn off the {faucet}.
+447	n	/paɪp/	Water comes through this {pipe}.
+448	n	/ˈtʃɪmni/	Smoke is coming out of the {chimney}.
+449	n	/ˈfɜːnɪtʃə/	We bought new {furniture}.
+450	n	/ˈteɪbl/	The plates are on the {table}.
+451	n	/tʃeə/	Sit on this {chair}.
+452	n	/ˈɑːmtʃeə/	Grandpa is sleeping in his {armchair}.
+453	n	/ˈsəʊfə/	The cat is on the {sofa}.
+454	n	/bed/	I go to {bed} at ten o'clock.
+455	n	/ˈwɔːdrəʊb/	My clothes are in the {wardrobe}.
+456	n	/ˈkæbɪnət/	The cups are in the kitchen {cabinet}.
+457	n	/ʃelf/	Put the books on the {shelf}.
+458	n	/ˈmɪrə/	She is looking in the {mirror}.
+459	n	/ˈkɑːpɪt/	We have a red {carpet} in the living room.
+460	n	/frɪdʒ/	The milk is in the {fridge}.
+461	n	/ˈmaɪkrəweɪv/	Heat the soup in the {microwave}.
+462	n	/ˈʌvn/	The bread is in the {oven}.
+463	n	/stəʊv/	The pot is on the {stove}.
+464	n	/dɪʃ/	Put the salad in a big {dish}.
+465	n	/kʌp/	Would you like a {cup} of tea?
+466	n	/ɡlɑːs/	Can I have a {glass} of water?
+467	n	/mʌɡ/	I drink coffee from a big {mug}.
+468	n	/pleɪt/	Put the bread on the {plate}.
+469	n	/spuːn/	I eat soup with a {spoon}.
+470	n	/fɔːk/	I eat salad with a {fork}.
+471	n	/naɪf/	Cut the meat with a {knife}.
+472	n	/ˈsɔːsə/	Put the cup on the {saucer}.
+473	n	/ˈbɒtl/	I bought a {bottle} of water.
+474	n	/ˈnæpkɪn/	Can I have a {napkin}, please?
+475	n	/ˈfraɪɪŋ pæn/	Cook the eggs in a {frying pan}.
+476	n	/pæn/	Put the {pan} on the stove.
+477	n	/ˈketl/	The {kettle} is boiling.
+478	n	/miːl/	Breakfast is the first {meal} of the day.
+479	n	/ˈbrekfəst/	I have {breakfast} at seven.
+480	n	/lʌntʃ/	We have {lunch} at school.
+481	n	/ˈdɪnə/	We have {dinner} together as a family.
+482	n	/ˈtrænspɔːt/	The city has good public {transport}.
+483	n	/pleɪn/	We flew to Istanbul by {plane}.
+484	n	/kɑː/	My father has a new {car}.
+485	n	/træm/	We go to work by {tram}.
+486	n	/bʌs/	I take the {bus} to school.
+487	n	/treɪn/	The {train} to Samarkand is fast.
+488	n	/ʃɪp/	The {ship} is in the port.
+489	n	/ˈbaɪsɪkl/	I ride my {bicycle} in the park.
+490	n	/fɔːm/	Please fill in this {form}.
+491	n	/neɪm/	What is your {name}?
+492	n	/ˈfɜːst neɪm/	My {first name} is Aziza.
+493	n	/ˈsɜːneɪm/	What is your {surname}?
+494	n	/ˈmeɪdn neɪm/	My mother's {maiden name} is Karimova.
+495	n	/ˈbɜːθ deɪt/	Write your {birth date} here.
+496	n	/ˌpleɪs əv ˈbɜːθ/	My {place of birth} is Bukhara.
+497	n	/əˈdres/	What is your {address}?
+498	n	/ˌmærɪtl ˈsteɪtəs/	Write your {marital status} on the form.
+499	adj	/ˈsɪŋɡl/	He is not married, he is {single}.
+500	adj	/ˈmærid/	My sister is {married}.
+501	adj	/dɪˈvɔːst/	They are {divorced} now.
+502	adj	/ˈwɪdəʊd/	My grandmother is {widowed}.
+503	n	/θɪŋ/	What is that {thing} on the table?
+504	n	/pen/	Can I borrow your {pen}?
+505	n	/ˈpensl/	Write with a {pencil}.
+506	n	/bʊk/	I am reading a good {book}.
+507	n	/ˈkɒpibʊk/	Write the words in your {copybook}.
+508	n	/nəʊt/	I left a {note} on the table.
+509	n	/ˈnəʊtbʊk/	I write new words in my {notebook}.
+510	n	/ˈdɪkʃənri/	Look up the word in the {dictionary}.
+511	n	/ˈletə/	I wrote a {letter} to my friend.
+512	n	/ˈenvələʊp/	Put the letter in an {envelope}.
+513	n	/ˈpeɪpə/	I need a piece of {paper}.
+514	n	/ˈnjuːzpeɪpə/	My grandfather reads the {newspaper} every day.
+515	n	/ˌmæɡəˈziːn/	She is reading a fashion {magazine}.
+516	n	/ˈtelɪfəʊn/	The {telephone} is ringing.
+517	n	/klɒk/	The {clock} on the wall is slow.
+518	n	/kəʊm/	I need a {comb} for my hair.
+519	n	/ˌtiː ˈviː/	We watch {TV} in the evening.
+520	n	/ˈaɪən/	Be careful, the {iron} is hot.
+521	n	/səʊp/	Wash your hands with {soap}.
+522	n	/ˈreɪdiəʊ/	I listen to the {radio} in the car.
+523	n	/bæɡ/	My books are in my {bag}.
+524	n	/ˈbækpæk/	I carry my books in a {backpack}.
+525	n	/mæp/	Look at the {map} of Uzbekistan.
+526	n	/kɑːd/	I pay with a bank {card}.
+527	n	/ˈsuːtkeɪs/	My {suitcase} is very heavy.
+528	n	/ˈpreznt/	This {present} is for you.
+529	n	/ˈkæmərə/	I took photos with my new {camera}.
+530	n	/vɑːz/	Put the flowers in a {vase}.
+531	n	/ˈhæŋkətʃɪf/	He took a {handkerchief} from his pocket.
+532	n	/bɔːl/	The boys are playing with a {ball}.
+533	n	/bəˈluːn/	The child has a red {balloon}.
+534	n	/tɔɪ/	This {toy} is for my little brother.
+535	n	/ˈtɪkɪt/	I bought a {ticket} for the train.
+536	n	/ˈlʌɡɪdʒ/	Our {luggage} is very heavy.
+537	n	/ˈbætri/	My phone {battery} is low.
+538	n	/ˈbʌkɪt/	Fill the {bucket} with water.
+539	n	/rəʊp/	Tie the box with a {rope}.
+540	n	/bɔːd/	The teacher writes on the {board}.
+541	n	/ˈkælɪndə/	Look at the {calendar} on the wall.
+542	n	/ˈlæptɒp/	I do my homework on my {laptop}.
+543	n	/brʌʃ/	I clean my shoes with a {brush}.
+544	n	/kiː/	I can't find my {key}.
+545	n	/ˈkiːbɔːd/	The {keyboard} of my laptop is black.
+546	n	/wiːl/	My bicycle has a broken {wheel}.
+547	n	/ˈstɪərɪŋ wiːl/	Hold the {steering wheel} with both hands.
+548	n	/trʌŋk/	Put the bags in the {trunk} of the car.
+549	n	/ˈɡæsəliːn/	The car needs {gasoline}.
+550	n	/pɜːs/	My mother keeps her money in her {purse}.
+551	n	/ˈwɒlɪt/	I have some money in my {wallet}.
+552	n	/læmp/	Turn on the {lamp}, please.
+553	n	/ˈruːlə/	Draw a line with a {ruler}.
+554	n	/ˈʃʌvl/	He is digging with a {shovel}.
+555	n	/məˈʃiːn/	This {machine} makes coffee.
+556	n	/ˈhæmə/	I need a {hammer} and some nails.
+557	n	/ˈsɪzəz/	Cut the paper with {scissors}.
+558	n	/ˈɡlɑːsɪz/	My grandmother wears {glasses}.
+559	n	/ˈpækɪdʒ/	A {package} came for you today.
+560	n	/stɪk/	The dog is playing with a {stick}.
+561	n	/ɡluː/	Use {glue} to stick the pictures.
+562	n	/ɡɪft/	Thank you for the {gift}!
+563	n	/ˈtaʊəl/	Dry your hands with a {towel}.
+564	n	/meɪl/	Did you check the {mail} today?
+565	n	/ˈwaɪə/	Don't touch that {wire}.
+566	n	/peɪdʒ/	Open your books to {page} ten.
+567	n	/tɔːtʃ/	Take a {torch}, it's dark outside.
+568	n	/bɒks/	The toys are in the {box}.
+569	n	/ˈblæŋkɪt/	It's cold, take a warm {blanket}.
+570	n	/ʃiːt/	Put a clean {sheet} on the bed.
+571	n	/ˈpɪləʊ/	My {pillow} is very soft.
+572	n	/kləʊðz/	I need new {clothes}.
+573	n	/ʃuːz/	Take off your {shoes}, please.
+574	n	/buːt/	I can't find my left {boot}.
+575	n	/ˈsniːkəz/	I wear {sneakers} to the gym.
+576	n	/kəʊt/	Put on your {coat}, it's cold.
+577	n	/dres/	She is wearing a beautiful {dress}.
+578	n	/suːt/	He wears a {suit} to work.
+579	n	/ʃɜːt/	He is wearing a white {shirt}.
+580	n	/blaʊz/	She bought a new {blouse}.
+581	n	/skɜːt/	She is wearing a long {skirt}.
+582	n	/ɡlʌv/	I lost my left {glove}.
+583	n	/ˈmɪtn/	The child lost a {mitten} in the snow.
+584	n	/hæt/	He is wearing a black {hat}.
+585	n	/kæp/	He wears a baseball {cap}.
+586	n	/ˈdʒækɪt/	Take your {jacket}, it's windy.
+587	n	/ˈkɑːdɪɡən/	She is wearing a warm {cardigan}.
+588	n	/skɑːf/	Wear a {scarf} in winter.
+589	n	/sɒk/	I can't find my other {sock}.
+590	n	/ˈswetə/	This {sweater} is very warm.
+591	n	/ˈtiː ʃɜːt/	I wear a {T-shirt} in summer.
+592	n	/taɪ/	He wears a {tie} to work.
+593	n	/ˈtraʊzəz/	These {trousers} are too long.
+594	n	/ʃɔːts/	I wear {shorts} in summer.
+595	n	/taɪts/	She is wearing black {tights}.
+596	n	/ˈstɒkɪŋz/	She bought new {stockings}.
+597	n	/dʒiːnz/	I like wearing {jeans}.
+598	n	/belt/	He wears a leather {belt}.
+599	n	/hʊd/	Put your {hood} up, it's raining.
+600	n	/ˈʌndəweə/	Pack some clean {underwear}.
+601	n	/ˈbɒdi/	Sport is good for your {body}.
+602	n	/hed/	My {head} hurts.
+603	n	/feɪs/	Wash your {face} in the morning.
+604	n	/ˈfɔːhed/	Touch your {forehead} with your hand.
+605	n	/nəʊz/	The clown has a red {nose}.
+606	n	/ɪə/	I have a pain in my {ear}.
+607	n	/maʊθ/	Open your {mouth}, please.
+608	n	/θrəʊt/	I have a sore {throat}.
+609	n	/aɪ/	I have something in my {eye}.
+610	n	/ˈaɪbraʊ/	She raised one {eyebrow}.
+611	n	/lɪps/	Her {lips} are red.
+612	n	/tuːθ/	My {tooth} hurts.
+613	n	/heə/	She has long black {hair}.
+614	n	/məˈstɑːʃ/	My grandfather has a grey {mustache}.
+615	n	/tʃiːk/	She kissed the baby on the {cheek}.
+616	n	/tʃɪn/	He has a small scar on his {chin}.
+617	n	/nek/	The giraffe has a long {neck}.
+618	n	/ˈʃəʊldə/	My {shoulder} hurts.
+619	n	/tʃest/	He has a pain in his {chest}.
+620	n	/hɑːt/	Your {heart} is beating fast.
+621	n	/ˈstʌmək/	I have a pain in my {stomach}.
+622	n	/bæk/	My {back} hurts after work.
+623	n	/rɪst/	She wears a watch on her {wrist}.
+624	n	/hænd/	Raise your {hand}, please.
+625	n	/ˈfɪŋɡə/	She has a ring on her {finger}.
+626	n	/neɪl/	I broke a {nail}.
+627	n	/ˈelbəʊ/	Don't put your {elbow} on the table.
+628	n	/leɡ/	He broke his {leg}.
+629	n	/niː/	I hurt my {knee} playing football.
+630	n	/fʊt/	My left {foot} hurts.
+631	n	/hiːl/	I have a pain in my {heel}.
+632	n	/təʊ/	I hurt my big {toe}.
+633	n	/bɪəd/	My uncle has a long {beard}.
+634	n	/bəʊn/	The dog is eating a {bone}.
+635	n	/helθ/	Sport is good for your {health}.
+636	adj	/ˈhelθi/	Eat fruit to stay {healthy}.
+637	adj	/sɪk/	I am {sick}, I can't go to school.
+638	n	/ˈsɪknəs/	His {sickness} lasted a week.
+639	n	/ˈfiːvə/	The child has a high {fever}.
+640	n	/kɒf/	I have a bad {cough}.
+641	n	/ˈrʌnɪŋ nəʊz/	I have a {running nose} and a cough.
+642	v	/sniːz/	Cover your nose when you {sneeze}.
+643	n	/peɪn/	I have a {pain} in my back.
+644	n	/ˈhedeɪk/	I have a {headache}.
+645	n	/fluː/	She is at home with the {flu}.
+646	n	/bruːz/	He has a {bruise} on his arm.
+647	n	/ɪˈvent/	The concert was a big {event}.
+648	n	/bɜːθ/	We celebrated the {birth} of the baby.
+649	n	/ɡeɪm/	Let's play a {game}.
+650	n	/ˈlesn/	Our English {lesson} starts at nine.
+651	n	/vəˈkeɪʃn/	We are going on {vacation} in July.
+652	n	/ˈpɑːti/	Come to my birthday {party}!
+653	n	/ˈmiːtɪŋ/	The {meeting} starts at ten.
+654	n	/ˈwedɪŋ/	My cousin's {wedding} is on Saturday.
+655	n	/nɪˌɡəʊʃiˈeɪʃn/	The {negotiation} lasted three hours.
+656	n	/trɪp/	We went on a {trip} to Samarkand.
+657	n	/deθ/	The {death} of his dog made him sad.
+658	n	/ˈweðə/	The {weather} is nice today.
+659	n	/sʌn/	The {sun} is shining.
+660	n	/muːn/	The {moon} is bright tonight.
+661	n	/wɪnd/	The {wind} is very strong today.
+662	n	/fɒɡ/	There is thick {fog} this morning.
+663	n	/reɪn/	Take an umbrella, there will be {rain}.
+664	n	/snəʊ/	Children love to play in the {snow}.
+665	n	/skaɪ/	The {sky} is clear and blue.
+666	n	/klaʊd/	There is a big dark {cloud} in the sky.
+667	n	/eə/	The {air} in the mountains is fresh.
+668	n	/ˈtemprətʃə/	The {temperature} today is thirty degrees.
+669	n	/dɪˈɡriː/	It is one {degree} below zero.
+670	n	/ɑːt/	I like modern {art}.
+671	n	/ˈmjuːzɪk/	I listen to {music} every day.
+672	n	/sɒŋ/	This is my favourite {song}.
+673	n	/ˈlɪtrətʃə/	She studies English {literature}.
+674	n	/ˈstɔːri/	Grandma told us a funny {story}.
+675	n	/ˈmuːvi/	Let's watch a {movie} tonight.
+676	n	/fɪlm/	This {film} is very interesting.
+677	n	/ˈskʌlptʃə/	There is a big {sculpture} in the park.
+678	n	/ˈpɪktʃə/	Look at this {picture}.
+679	n	/ˈfəʊtəʊ/	Can I take a {photo} of you?
+680	n	/ˈædvətaɪzɪŋ/	There is too much {advertising} on TV.
+681	n	/ˈpɜːtʃəs/	This phone was a good {purchase}.
+682	n	/saɪz/	What {size} are your shoes?
+683	n	/praɪs/	What is the {price} of this bag?
+684	n	/ˈmʌni/	I don't have much {money}.
+685	n	/kæʃ/	Can I pay in {cash}?
+686	n	/ˈdɪskaʊnt/	Students get a {discount}.
+687	n	/əˈkaʊnt/	I have a bank {account}.
+688	n	/bɪl/	Can I have the {bill}, please?
+689	n	/tɪp/	We left a {tip} for the waiter.
+690	n	/ˈmeʒə/	A metre is a {measure} of length.
+691	n	/ˈdɪstəns/	What is the {distance} from here to the city?
+692	n	/leŋθ/	What is the {length} of this table?
+693	n	/haɪt/	What is your {height}?
+694	n	/depθ/	The {depth} of the lake is ten metres.
+695	n	/streŋθ/	He has great {strength}.
+696	n	/spiːd/	The car was going at high {speed}.
+697	n	/kɪˈlɒmɪtə/	The school is one {kilometer} from my house.
+698	n	/ˈkɪləɡræm/	I bought a {kilogram} of apples.
+699	n	/paʊnd/	A {pound} is less than half a kilogram.
+700	n	/ˈfiːlɪŋ/	I have a good {feeling} about this.
+701	n	/fʌn/	The party was a lot of {fun}.
+702	n	/dʒɔɪ/	Her face was full of {joy}.
+703	n	/fɪə/	He has a {fear} of dogs.
+704	n	/ˈsædnəs/	I felt {sadness} when my friend left.
+705	n	/ˈpæʃn/	Music is his {passion}.
+706	n	/ˈhæpinəs/	Money can't buy {happiness}.
+707	n	/piːs/	We want {peace} in the world.
+708	n	/lʌv/	A mother's {love} is very strong.
+709	n	/heɪt/	{Hate} is a strong feeling.
+710	n	/wɜːld/	I want to travel around the {world}.
+711	n	/səʊl/	Music is food for the {soul}.
+712	n	/laɪf/	{Life} is beautiful.
+713	n	/ˈnɒlɪdʒ/	{Knowledge} is power.
+714	n	/tɑːsk/	Your first {task} is to read the text.
+715	n	/ˈeksəsaɪz/	Do {exercise} three on page ten.
+716	n	/lʌk/	Good {luck} with your exam!
+717	n	/ˈprɒbləm/	I have a {problem} with my phone.
+718	n	/ˌɒpəˈtjuːnəti/	This is a great {opportunity}.
+719	n	/əˈbɪləti/	She has the {ability} to learn fast.
+720	n	/ˈbjuːti/	I love the {beauty} of the mountains.
+721	n	/ˈdeɪndʒə/	There is {danger} on the road.
+722	n	/ɪkˈspɪəriəns/	She has a lot of {experience} in teaching.
+723	n	/ˈmeməri/	He has a very good {memory}.
+724	n	/ˈbenɪfɪt/	What is the {benefit} of this plan?
+725	n	/ədˈvɑːntɪdʒ/	Speaking English is a big {advantage}.
+726	n	/ˈprɒfɪt/	The shop made a good {profit} this year.
+727	n	/ˈhæbɪt/	Reading is a good {habit}.
+728	n	/ˈriːzn/	What is the {reason} for your mistake?
+729	n	/ˈkɒnsɪkwəns/	Every action has a {consequence}.
+730	n	/ˈmiːnɪŋ/	What is the {meaning} of this word?
+731	n	/miːnz/	The bus is the cheapest {means} of transport.
+732	n	/ˈefət/	Learning a language takes {effort}.
+733	n	/səkˈses/	Hard work brings {success}.
+734	n	/ɡəʊl/	My {goal} is to speak English well.
+735	n	/ˈmɪrəkl/	It's a {miracle} that nobody was hurt.
+736	n	/ˈsaɪəns/	I like {science} at school.
+737	n	/ˈlæŋɡwɪdʒ/	English is an international {language}.
+738	n	/wɜːd/	I learned a new {word} today.
+739	n	/ˈfaɪə/	Don't play with {fire}.
+740	n	/keɪs/	In that {case}, I will stay home.
+741	n	/ˈsɜːkəmstæns/	Under no {circumstance} should you open this door.
+742	n	/θɔːt/	That's a nice {thought}.
+743	n	/tʃɔɪs/	It's your {choice}.
+744	n	/ˈpɜːmɪt/	You need a {permit} to work here.
+745	n	/dɪˈlɪvəri/	The {delivery} will arrive tomorrow.
+746	n	/əˈtʃiːvmənt/	Finishing the marathon was a great {achievement}.
+747	n	/ˈdjuːti/	It is my {duty} to help my parents.
+748	n	/dɪˈleɪ/	There is a {delay} because of the snow.
+749	n	/rɪˈleɪʃnʃɪp/	I have a good {relationship} with my sister.
+750	n	/mɑːk/	I got a good {mark} in the test.
+751	n	/mɪˈsteɪk/	I made a {mistake} in my homework.
+752	n	/bɪˈheɪvjə/	His {behavior} in class is very good.
+753	n	/ˌɪnvɪˈteɪʃn/	Thank you for the {invitation}.
+754	n	/dɪˈveləpmənt/	Reading helps the {development} of children.
+755	n	/dɪˈsɪʒn/	It was a difficult {decision}.
+756	n	/səˈluːʃn/	We need to find a {solution}.
+757	n	/ədˈvaɪs/	Can you give me some {advice}?
+758	n	/əˈɡriːmənt/	We reached an {agreement}.
+759	n	/lɪst/	Make a shopping {list}.
+760	n	/ˈɑːɡjumənt/	They had an {argument} about money.
+761	n	/test/	We have a {test} tomorrow.
+762	n	/step/	Take one {step} to the left.
+763	n	/piːs/	Can I have a {piece} of cake?
+764	n	/ˈeəriə/	We live in a quiet {area}.
+765	n	/peə/	I bought a new {pair} of shoes.
+766	n	/ˈkʌpl/	They are a happy {couple}.
+767	n	/mes/	Your room is a {mess}!
+768	n	/ˈsɜːfɪs/	The {surface} of the table is smooth.
+769	n	/ˈkwestʃən/	Can I ask a {question}?
+770	prep	/frɒm/	I am {from} Uzbekistan.
+771	prep	/ɒv/	Give me a cup {of} tea.
+772	prep	/tuː/	I go {to} school by bus.
+773	prep	/ɪn/	The keys are {in} my bag.
+774	prep	/ɒn/	The book is {on} the table.
+775	prep	/ˈʌndə/	The cat is {under} the bed.
+776	prep	/bɪˈhaɪnd/	The garden is {behind} the house.
+777	prep	/wɪð/	I live {with} my parents.
+778	prep	/wɪˈðaʊt/	I drink tea {without} sugar.
+779	prep	/ɪn ˈfrʌnt əv/	The car is {in front of} the house.
+780	prep	/bɪˈfɔː/	Wash your hands {before} dinner.
+781	prep	/ˈɑːftə/	I play football {after} school.
+782	prep	/bɪˈtwiːn/	The bank is {between} the shop and the café.
+783	prep	/nɪə/	I live {near} the park.
+784	prep	/fɔː/	This present is {for} you.
+785	prep	/sɪns/	I have lived here {since} 2015.
+786	prep	/ˈdjʊərɪŋ/	Don't talk {during} the lesson.
+787	prep	/əˈraʊnd/	We walked {around} the lake.
+788	conj	/bɪˈkɒz/	I am tired {because} I worked all day.
+789	prep	/əˈbaʊt/	This book is {about} animals.
+790	prep	/əˈɡenst/	Our team played {against} a strong team.
+791	prep	/əˈmʌŋ/	She was {among} the best students.
+792	prep	/θruː/	We walked {through} the park.
+793	prep	/pɜː/	The lesson costs ten dollars {per} hour.
+794	prep	/əˈbʌv/	The picture is {above} the sofa.
+795	prep	/bɪˈləʊ/	The temperature is {below} zero.
+796	n	/ˈkʌlə/	What is your favourite {colour}?
+797	adj	/blæk/	My cat is {black}.
+800	adj	/braʊn/	The bear is {brown}.
+802	adj	/ɡreɪ/	The sky is {grey} today.
+803	adj	/red/	The apple is {red}.
+804	adj	/ˈjeləʊ/	The banana is {yellow}.
+805	adj	/pɪŋk/	She has a {pink} dress.
+806	adj	/ˈpɜːpl/	Plums are {purple}.
+807	adj	/ˈbetə/	I feel {better} today.
+808	adj	/best/	You are my {best} friend.
+809	adj	/wɜːs/	The weather is {worse} than yesterday.
+810	adj	/wɜːst/	This is the {worst} day of my life.
+811	det	/mɔː/	Can I have {more} tea?
+812	det	/məʊst/	{Most} students like sport.
+813	det	/les/	Eat {less} sugar.
+814	det	/liːst/	This is the {least} expensive phone.
+815	adv	/ˈsʌmtaɪmz/	I {sometimes} walk to school.
+816	adv	/ˈnevə/	I {never} drink coffee.
+817	adv	/ˈseldəm/	We {seldom} go to the cinema.
+818	adv	/ˈjuːʒuəli/	I {usually} get up at seven.
+819	adv	/ˈɒfn/	I {often} visit my grandparents.
+820	adv	/ˈɔːlweɪz/	She {always} does her homework.
+821	adv	/suːn/	See you {soon}!
+822	adv	/ˈriːsntli/	I {recently} started learning English.
+823	adv	/wel/	She speaks English very {well}.
+824	adv	/fɑː/	My school is not {far} from here.
+825	adv	/ɪɡˈzæktli/	It is {exactly} five o'clock.
+826	adv	/ˈprɒbəbli/	It will {probably} rain tomorrow.
+827	adv	/ˈmeɪbi/	{Maybe} he is at home.
+828	adv	/pəˈhæps/	{Perhaps} she is right.
+829	adv	/ˈrɪəli/	I {really} like this song.
+830	phrase	/əv ˈkɔːs/	"Can you help me?" - "{Of course}!"
+831	adv	/ˈsɜːtnli/	I will {certainly} come to your party.
+832	adv	/ˈɒbviəsli/	He was {obviously} tired.
+833	adv	/ɪˈspeʃəli/	I love fruit, {especially} apples.
+834	interj	/jes/	"Are you a student?" - "{Yes}, I am."
+835	interj	/nəʊ/	"Are you tired?" - "{No}, I am not."
+836	adv	/nɒt/	I am {not} hungry.
+837	det	/ðɪs/	{This} is my book.
+839	det	/ðæt/	Look at {that} building over there.
+840	det	/ðiːz/	{These} apples are sweet.
+841	det	/ðəʊz/	Look at {those} birds in the sky.
+842	det	/ˈmeni/	I have {many} friends.
+843	det	/mʌtʃ/	I don't have {much} time.
+844	det	/fjuː/	Only a {few} students came.
+845	det	/ˈlɪtl/	I have a {little} money.
+846	det	/sʌm/	I need {some} water.
+847	det	/ˈeni/	Do you have {any} questions?
+848	pron	/ˈsʌmbədi/	{Somebody} is at the door.
+849	pron	/ˈsʌmθɪŋ/	I want {something} to eat.
+850	pron	/ˈenibɒdi/	Is {anybody} at home?
+851	pron	/ˈeniθɪŋ/	Do you need {anything}?
+852	pron	/ˈnəʊbədi/	{Nobody} knows the answer.
+853	pron	/ˈnʌθɪŋ/	There is {nothing} in the box.
+854	adv	/hɪə/	Come {here}, please.
+855	adv	/ðeə/	Put the box over {there}.
+856	adv	/naʊ/	I am busy {now}.
+857	adv	/əˈɡen/	Please say that {again}.
+858	adv	/ðen/	First wash your hands, {then} eat.
+859	adv	/ɔːlˈredi/	I have {already} finished my homework.
+860	adv	/dʒʌst/	I have {just} arrived.
+861	adv	/stɪl/	He is {still} sleeping.
+862	adv	/jet/	I haven't finished {yet}.
+863	adv	/ˈɔːlməʊst/	It is {almost} ten o'clock.
+864	det	/ˈsevrəl/	I have read this book {several} times.
+865	adv	/ˈveri/	It is {very} hot today.
+866	det	/ˈevri/	I study English {every} day.
+867	det	/iːtʃ/	{Each} student has a book.
+868	det	/ɔːl/	{All} my friends like football.
+869	det	/sʌtʃ/	It was {such} a nice day.
+870	adv	/ʌp/	Stand {up}, please.
+871	adv	/daʊn/	Sit {down}, please.
+872	adv	/təˈɡeðə/	Let's do it {together}.
+873	adv	/ˈfɔːwəd/	Take one step {forward}.
+874	adv	/ˈiːvn/	{Even} a child can do it.
+875	det	/ɪˈnʌf/	We have {enough} food.
+876	adv	/ˈɔːlsəʊ/	She speaks English and {also} Russian.
+877	adv	/tuː/	I like tea, and my sister likes it {too}.
+878	adv	/ˈəʊnli/	I have {only} one brother.
+879	conj	/ænd/	I have a cat {and} a dog.
+880	conj	/ɔː/	Do you want tea {or} coffee?
+881	conj	/bʌt/	I like tea, {but} I don't like coffee.
+882	adv	/haʊˈevə/	It was cold. {However}, we went for a walk.
+883	conj	/ɪf/	{If} it rains, we will stay home.
+884	conj	/ɔːlˈðəʊ/	{Although} it was late, he kept working.
+885	phrase	/bi əˈfreɪd əv/	Don't {be afraid of} the dog.
+886	phrase	/bi ˈɪntrəstɪd ɪn/	It is good to {be interested in} science.
+887	phrase	/bi səˈpraɪzd/	Don't {be surprised} if he is late.
+888	phrase	/ˈhæv tə/	I {have to} go to school tomorrow.
+889	phrase	/ɡet ˈʌp/	I {get up} at seven o'clock.
+890	phrase	/pʊt ˈɒn/	{Put on} your coat, it's cold.
+891	phrase	/teɪk ˈɒf/	{Take off} your shoes, please.
+892	adj	/kiːn/	A dog has a {keen} sense of smell.
+893	v	/əˈbændən/	Never {abandon} your pets.
+894	adj	/ˈdʒeləs/	He is {jealous} of his brother's new car.
+895	n	/tækt/	A good teacher needs {tact}.
+896	n	/əʊθ/	The doctor took an {oath}.
+897	adj	/ˈveɪkənt/	Is this seat {vacant}?
+898	n	/ˈhɑːdʃɪp/	They lived through years of {hardship}.
+899	adj	/ˈɡælənt/	The {gallant} soldier saved the child.
+900	n	/ˈdeɪtə/	We need more {data} for the report.

@@ -1053,6 +1053,238 @@ export const auditLogs = pgTable(
   }),
 );
 
+/* ─────────────────────────── Learning platform ─────────────────────────── */
+
+/**
+ * A learning resource: the top of the content tree. Vocabulary is ONE resource
+ * type; grammar, reading, listening, tests, videos, PDFs… are future types that
+ * reuse the same resource → unit shape (see LEARNING_RESOURCE_TYPES in
+ * shared/learning/types.ts). `type` is text (validated in code) so a new type
+ * needs no migration. `settings` holds per-resource knobs (completion
+ * threshold, daily goals, imported content version).
+ */
+export const learningResources = pgTable("learning_resources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  type: text("type").notNull(),
+  // Stable key for idempotent imports / deep links, e.g. "beginner-900".
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  titleUz: text("title_uz"),
+  description: text("description"),
+  // Free-text level tag (CEFR "A1", "IELTS 5.5", …).
+  level: text("level"),
+  // draft | published | archived — only published resources reach students.
+  status: text("status").notNull().default("published"),
+  position: integer("position").notNull().default(0),
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * An ordered learning unit inside a resource. For a vocabulary set a unit is a
+ * "Stage" (100 words); for a course it would be a lesson/module.
+ */
+export const learningUnits = pgTable(
+  "learning_units",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => learningResources.id, { onDelete: "cascade" }),
+    // 1-based order within the resource ("Stage 3" has position 3).
+    position: integer("position").notNull(),
+    title: text("title").notNull(),
+    titleUz: text("title_uz"),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqResourcePos: uniqueIndex("learning_units_resource_pos_uniq").on(t.resourceId, t.position),
+  }),
+);
+
+/**
+ * One vocabulary item (word + meaning). Every exercise type is generated from
+ * these fields at runtime — nothing is hard-coded per question. `example` holds
+ * one sentence with the headword wrapped in {braces} (the gap for sentence /
+ * missing-word exercises). `sourceRef` ties an imported row to its source line
+ * ("beginner-900#683") so re-imports update instead of duplicating;
+ * `editedFields` lists fields an admin changed, which re-imports never overwrite.
+ */
+export const vocabItems = pgTable(
+  "vocab_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => learningResources.id, { onDelete: "cascade" }),
+    unitId: uuid("unit_id")
+      .notNull()
+      .references(() => learningUnits.id, { onDelete: "restrict" }),
+    // Order within the resource (drives stage assignment and "next new word").
+    position: integer("position").notNull(),
+    sourceRef: text("source_ref"),
+    word: text("word").notNull(),
+    translation: text("translation").notNull(),
+    partOfSpeech: text("part_of_speech"),
+    phonetic: text("phonetic"),
+    example: text("example"),
+    // 1 (easiest) … 5.
+    difficulty: integer("difficulty").notNull().default(1),
+    imageUrl: text("image_url"),
+    audioUrl: text("audio_url"),
+    // Editorial note (e.g. "source spelling 'Prise' corrected").
+    note: text("note"),
+    editedFields: jsonb("edited_fields").$type<string[]>().notNull().default([]),
+    // Soft delete: inactive items vanish for students but keep their history.
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqSource: uniqueIndex("vocab_items_source_uniq").on(t.resourceId, t.sourceRef),
+    byUnitPos: index("vocab_items_unit_pos_idx").on(t.unitId, t.position),
+    byResourcePos: index("vocab_items_resource_pos_idx").on(t.resourceId, t.position),
+  }),
+);
+
+/**
+ * One learner's state for one vocabulary item: a Leitner box (0 = never
+ * answered … 5), scheduling, counters and the bookmark flag. The learner is a
+ * `students` row — the person's canonical record when they study in several
+ * groups (see server/learning/learner.ts), so progress never splits by group.
+ */
+export const learnerVocabProgress = pgTable(
+  "learner_vocab_progress",
+  {
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => vocabItems.id, { onDelete: "cascade" }),
+    box: integer("box").notNull().default(0),
+    bookmarked: boolean("bookmarked").notNull().default(false),
+    bookmarkedAt: timestamp("bookmarked_at", { withTimezone: true }),
+    reviewCount: integer("review_count").notNull().default(0),
+    correctCount: integer("correct_count").notNull().default(0),
+    incorrectCount: integer("incorrect_count").notNull().default(0),
+    // Consecutive correct answers (reset by any miss).
+    streak: integer("streak").notNull().default(0),
+    lastResult: boolean("last_result"),
+    lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+    nextReviewAt: timestamp("next_review_at", { withTimezone: true }),
+    masteredAt: timestamp("mastered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: uniqueIndex("learner_vocab_progress_pk").on(t.studentId, t.itemId),
+    byDue: index("learner_vocab_due_idx").on(t.studentId, t.nextReviewAt),
+    byBookmark: index("learner_vocab_bookmark_idx").on(t.studentId, t.bookmarkedAt).where(sql`${t.bookmarked}`),
+    // Teacher analytics: "which words does the group struggle with".
+    byItem: index("learner_vocab_item_idx").on(t.itemId),
+  }),
+);
+
+/**
+ * A practice session. For exercise sessions the SERVER generates the questions
+ * and keeps the answer key here (`questions`), so grading never trusts the
+ * client; the client only ever sees prompts and options.
+ */
+export const learningSessions = pgTable(
+  "learning_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    resourceId: uuid("resource_id").references(() => learningResources.id, { onDelete: "set null" }),
+    unitId: uuid("unit_id").references(() => learningUnits.id, { onDelete: "set null" }),
+    // exercise | flashcards
+    kind: text("kind").notNull(),
+    // stage | mixed | difficult | bookmarks | daily
+    source: text("source").notNull(),
+    questions: jsonb("questions").$type<unknown[]>().notNull().default([]),
+    total: integer("total").notNull().default(0),
+    answered: integer("answered").notNull().default(0),
+    correct: integer("correct").notNull().default(0),
+    xp: integer("xp").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => ({
+    byStudentStarted: index("learning_sessions_student_idx").on(t.studentId, t.startedAt),
+  }),
+);
+
+/**
+ * Append-only log of every answer (flashcard know/don't-know and each exercise
+ * answer). Progress rows are the fast summary; this is the history that powers
+ * accuracy, learning history and future analytics.
+ */
+export const learningAttempts = pgTable(
+  "learning_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id").references(() => vocabItems.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => learningSessions.id, { onDelete: "set null" }),
+    // flashcard | meaning | en_uz | uz_en | sentence | matching | gap | recognition | spelling
+    mode: text("mode").notNull(),
+    correct: boolean("correct").notNull(),
+    answer: text("answer"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byStudentCreated: index("learning_attempts_student_idx").on(t.studentId, t.createdAt),
+    byItem: index("learning_attempts_item_idx").on(t.itemId),
+  }),
+);
+
+/** Per-learner, per-day activity (Tashkent date): drives streaks, XP and history. */
+export const learnerDailyActivity = pgTable(
+  "learner_daily_activity",
+  {
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    xp: integer("xp").notNull().default(0),
+    cardsReviewed: integer("cards_reviewed").notNull().default(0),
+    exercisesAnswered: integer("exercises_answered").notNull().default(0),
+    correct: integer("correct").notNull().default(0),
+    newWords: integer("new_words").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ pk: uniqueIndex("learner_daily_activity_pk").on(t.studentId, t.day) }),
+);
+
+/** Earned achievement badges (codes defined in shared/learning/gamification.ts). */
+export const learnerAchievements = pgTable(
+  "learner_achievements",
+  {
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    earnedAt: timestamp("earned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ pk: uniqueIndex("learner_achievements_pk").on(t.studentId, t.code) }),
+);
+
+export type LearningResource = typeof learningResources.$inferSelect;
+export type LearningUnit = typeof learningUnits.$inferSelect;
+export type VocabItem = typeof vocabItems.$inferSelect;
+export type LearnerVocabProgress = typeof learnerVocabProgress.$inferSelect;
+export type LearningSession = typeof learningSessions.$inferSelect;
+export type LearningAttempt = typeof learningAttempts.$inferSelect;
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const branchesRelations = relations(branches, ({ many }) => ({
