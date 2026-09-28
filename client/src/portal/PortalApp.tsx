@@ -34,6 +34,7 @@ import { FlashcardsPage } from "./learn/Flashcards";
 import { PracticePage } from "./learn/Practice";
 import { BookmarksPage } from "./learn/Bookmarks";
 import { StatsPage } from "./learn/Stats";
+import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 
 initPreviewFromUrl();
 
@@ -144,6 +145,7 @@ export function PortalApp() {
             <Route path="/learn/practice" component={PracticePage} />
             <Route path="/learn/bookmarks" component={BookmarksPage} />
             <Route path="/learn/stats" component={StatsPage} />
+            <Route path="/leaderboard" component={LeaderboardPage} />
             <Route>
               <Redirect to="/" />
             </Route>
@@ -174,6 +176,7 @@ function Header({ me }: { me: Me }) {
     "/notifications": "notificationsTitle",
     "/profile": "profile",
     "/learn": "learn",
+    "/leaderboard": "leaderboard",
   };
   const title = titles[loc];
   return (

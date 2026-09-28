@@ -18,6 +18,7 @@ import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { LEVEL_CODES } from "./learning/types";
+import type { LeaderboardSettings } from "./leaderboard";
 
 /* ────────────────────────────── Enums ────────────────────────────── */
 
@@ -524,7 +525,7 @@ export type StudentPortalSettings = {
   attendanceEditDays: number;
   /** Notification types switched off center-wide. */
   disabledTypes: string[];
-};
+} & LeaderboardSettings;
 
 /**
  * Excused absence: while a freeze is active for a student in a group, the
@@ -1744,6 +1745,12 @@ export const portalSettingsSchema = z.object({
   debtReminderEveryDays: z.coerce.number().int().min(1).max(60).optional(),
   attendanceEditDays: z.coerce.number().int().min(0).max(365).optional(),
   disabledTypes: z.array(z.string().max(60)).max(60).optional(),
+  // Leaderboards (see shared/leaderboard.ts).
+  leaderboardEnabled: z.boolean().optional(),
+  lbXpPerPoint: z.coerce.number().int().min(1).max(1000).optional(),
+  lbPresentPoints: z.coerce.number().min(0).max(100).optional(),
+  lbPartialPoints: z.coerce.number().min(0).max(100).optional(),
+  lbScorePointsPerPercent: z.coerce.number().min(0).max(10).optional(),
 });
 
 export const studentPrefsSchema = z.object({

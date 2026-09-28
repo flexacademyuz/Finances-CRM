@@ -585,6 +585,7 @@ const dict = {
   // ── Student portal (staff side) ──
   studentPortal: { en: "Student portal", uz: "O'quvchi kabineti" },
   learning: { en: "Learning", uz: "Ta'lim" },
+  leaderboard: { en: "Leaderboard", uz: "Reyting" },
   studentPortalSubtitle: {
     en: "The students' Telegram Mini-App: who's connected, notifications and announcements.",
     uz: "O'quvchilarning Telegram ilovasi: kim ulangan, bildirishnomalar va e'lonlar.",

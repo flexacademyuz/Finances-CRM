@@ -8,6 +8,7 @@
  */
 import type { StudentPortalSettings } from "./schema";
 import { categoryLabel } from "./scores";
+import { DEFAULT_LEADERBOARD_SETTINGS } from "./leaderboard";
 
 export type Locale = "en" | "uz";
 
@@ -497,6 +498,7 @@ export const DEFAULT_PORTAL_SETTINGS: StudentPortalSettings = {
   debtReminderEveryDays: 7,
   attendanceEditDays: 7,
   disabledTypes: [],
+  ...DEFAULT_LEADERBOARD_SETTINGS,
 };
 
 /** Stored (partial) settings merged over the defaults. */

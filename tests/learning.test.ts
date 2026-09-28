@@ -18,6 +18,7 @@ import {
 import { answerMatches, displayWord, exampleFitsWord, meaningsOverlap, normalizeAnswer, senses } from "@shared/learning/text";
 import { EXERCISE_TYPES, isLearningLevel, levelLabel, levelRank, resolveVocabSettings } from "@shared/learning/types";
 import { buildElementaryA2, NEW_SENSES } from "../server/learning/content/elementary-a2";
+import { periodStart, publicName, rankRows, ratingPoints } from "@shared/leaderboard";
 import { achievementsFor, currentStreak, longestStreak } from "@shared/learning/gamification";
 
 const { items, report } = buildBeginner900();
@@ -279,6 +280,41 @@ describe("grading", () => {
     const g = gradeAnswer(q, swapped);
     expect(g.correct).toBe(false);
     expect(g.perItem.filter((p) => p.correct)).toHaveLength(q.itemIds.length - 2);
+  });
+});
+
+describe("leaderboard rules", () => {
+  it("turns activity into rating points", () => {
+    expect(ratingPoints({ xp: 257, present: 3, partial: 1, scorePercentSum: 175, scoreCount: 2 })).toEqual({
+      practice: 25,
+      attendance: 35,
+      results: 88,
+      total: 148,
+    });
+    expect(ratingPoints({ xp: 0, present: 0, partial: 0, scorePercentSum: 0, scoreCount: 0 }).total).toBe(0);
+  });
+
+  it("periods start on Monday / the 1st (Tashkent dates)", () => {
+    expect(periodStart("week", "2026-10-01")).toBe("2026-09-28"); // Thursday → Monday
+    expect(periodStart("week", "2026-09-28")).toBe("2026-09-28"); // Monday itself
+    expect(periodStart("week", "2026-10-04")).toBe("2026-09-28"); // Sunday
+    expect(periodStart("month", "2026-10-17")).toBe("2026-10-01");
+    expect(periodStart("all", "2026-10-17")).toBeNull();
+  });
+
+  it("ties share a rank (1, 2, 2, 4) and list alphabetically", () => {
+    const r = rankRows([
+      { name: "Zafar", total: 50 },
+      { name: "Aziza", total: 80 },
+      { name: "Bobur", total: 50 },
+      { name: "Dilnoza", total: 10 },
+    ]);
+    expect(r.map((x) => `${x.rank}:${x.name}`)).toEqual(["1:Aziza", "2:Bobur", "2:Zafar", "4:Dilnoza"]);
+  });
+
+  it("shows other students by surname + initial", () => {
+    expect(publicName("Rahimova Aziza Karimovna")).toBe("Rahimova A.");
+    expect(publicName("Ali")).toBe("Ali");
   });
 });
 

@@ -36,6 +36,7 @@ import { listForStudent, unreadCount, markAsRead, markAllRead } from "../notific
 import { setAccountLanguage, unlinkAccount } from "../services/telegram-link";
 import { isMonthSettled } from "@shared/billing";
 import learnRouter from "./learn";
+import { studentLeaderboardRouter } from "./leaderboard";
 
 const router = Router();
 router.use(authenticateStudent);
@@ -417,6 +418,9 @@ router.post(
 
 // Vocabulary & practice (inherits the student auth + preview guard above).
 router.use("/learn", learnRouter);
+
+// Group + centre leaderboards (read-only; public names for other students).
+router.use("/leaderboard", studentLeaderboardRouter);
 
 // Anything else under /api/student is unknown — never fall through to staff routes.
 router.use((_req, res) => res.status(404).json({ error: "not_found" }));

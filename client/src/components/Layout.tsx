@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Users,
   GraduationCap,
+  Trophy,
   Wallet,
   BookOpen,
   BadgeDollarSign,
@@ -119,6 +120,7 @@ function buildNav(user: User): NavItem[] {
   if (a.role === "ceo") items.push({ href: "/sms", label: "sms", icon: <MessageSquare size={18} /> });
   if (a.studentPortal) items.push({ href: "/student-portal", label: "studentPortal", icon: <Smartphone size={18} /> });
   if (a.learning) items.push({ href: "/learning", label: "learning", icon: <GraduationCap size={18} /> });
+  items.push({ href: "/leaderboard", label: "leaderboard", icon: <Trophy size={18} /> });
   if (a.salary) items.push({ href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={18} /> });
   // Everyone can manage their own recovery credentials.
   items.push({ href: "/account", label: "myAccount", icon: <KeyRound size={18} /> });
@@ -140,7 +142,7 @@ const SECTION_OF: Partial<Record<StringKey, NavSection>> = {
   students: "people", leads: "people", groups: "people", timetable: "people", attendance: "people",
   payments: "money", awaiting: "money", payroll: "money",
   expenses: "money", finances: "money", analytics: "money", mySalary: "money",
-  users: "admin", branches: "admin", sms: "admin", studentPortal: "admin", learning: "people",
+  users: "admin", branches: "admin", sms: "admin", studentPortal: "admin", learning: "people", leaderboard: "people",
   myAccount: "account",
 };
 const SECTION_ORDER: NavSection[] = ["overview", "people", "money", "admin", "account"];

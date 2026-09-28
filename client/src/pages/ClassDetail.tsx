@@ -14,6 +14,7 @@ import { Button, Card, Empty, Field, Input, Modal, Segmented, Spinner, StatusBad
 import { GroupAttendance } from "../components/GroupAttendance";
 import { GroupScores } from "../components/GroupScores";
 import { GroupLearning } from "../components/LearningPanels";
+import { LeaderboardTable } from "../components/LeaderboardTable";
 
 /** A grid cell the CEO/accountant tapped, to mark a month paid or unpaid. */
 type CellTarget = {
@@ -48,9 +49,9 @@ export function ClassDetail() {
   // Tick a month paid/unpaid straight from the grid (records or voids a payment).
   const canRecord = can(user, "record_payment");
   // Attendance & scores tabs (the server enforces own-group / permission access).
-  const [tab, setTab] = useState<"students" | "attendance" | "scores" | "vocabulary">(() => {
+  const [tab, setTab] = useState<"students" | "attendance" | "scores" | "vocabulary" | "rating">(() => {
     const q = new URLSearchParams(window.location.search).get("tab");
-    return q === "attendance" || q === "scores" || q === "vocabulary" ? q : "students";
+    return q === "attendance" || q === "scores" || q === "vocabulary" || q === "rating" ? q : "students";
   });
 
   if (isLoading || !data) return <Spinner />;
@@ -87,11 +88,13 @@ export function ClassDetail() {
           { value: "attendance", label: t("attendance") },
           { value: "scores", label: t("scores") },
           { value: "vocabulary", label: locale === "uz" ? "Lug'at" : "Vocabulary" },
+          { value: "rating", label: locale === "uz" ? "Reyting" : "Rating" },
         ]}
       />
 
       {tab === "attendance" && <GroupAttendance classId={cls.id} />}
       {tab === "vocabulary" && <GroupLearning classId={cls.id} />}
+      {tab === "rating" && <LeaderboardTable classId={cls.id} />}
       {tab === "scores" && (
         <GroupScores classId={cls.id} roster={students.map((s) => ({ id: s.id, fullName: s.fullName }))} canEdit={canScore} />
       )}

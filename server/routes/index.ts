@@ -18,6 +18,7 @@ import attendanceRouter from "./attendance";
 import scoresRouter from "./scores";
 import portalAdminRouter from "./portal-admin";
 import learningAdminRouter from "./learning-admin";
+import leaderboardRouter from "./leaderboard";
 
 const api = Router();
 
@@ -53,5 +54,6 @@ api.use(attendanceRouter);
 api.use(scoresRouter);
 api.use(portalAdminRouter);
 api.use(learningAdminRouter);
+api.use(leaderboardRouter);
 
 export default api;

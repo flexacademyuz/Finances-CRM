@@ -491,6 +491,85 @@ describe("course levels (assigned by group)", () => {
   });
 });
 
+describe("leaderboards", () => {
+  const today = new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
+
+  it("rank a group by practice + attendance + scores", async () => {
+    // Attendance today: Alice present (10), Bob late (5).
+    const att = await call(`/api/groups/${S.classA}/attendance`, {
+      method: "PUT",
+      auth: S.teacher1,
+      body: { date: today, records: [{ studentId: S.alice, status: "present" }, { studentId: S.bob, status: "late" }] },
+    });
+    expect(att.status).toBe(200);
+    // A test today: Alice 75% (→ 38), Bob 100% (→ 50).
+    const sc = await call(`/api/groups/${S.classA}/scores`, {
+      method: "POST",
+      auth: S.teacher1,
+      body: { category: "vocabulary", title: "Words quiz 1", maxScore: 40, scoreDate: today, entries: [{ studentId: S.alice, score: 30 }, { studentId: S.bob, score: 40 }] },
+    });
+    expect(sc.status).toBe(201);
+
+    const aliceXp = (await call("/api/student/learn/stats", { auth: ALICE })).body.history.find((h: Json) => h.day === today)?.xp ?? 0;
+    const board = await call(`/api/leaderboard/group/${S.classA}?period=week`, { auth: S.teacher1 });
+    expect(board.status).toBe(200);
+    const alice = board.body.rows.find((r: Json) => r.studentId === S.alice);
+    const bob = board.body.rows.find((r: Json) => r.studentId === S.bob);
+    expect(alice).toMatchObject({ attendance: 10, results: 38, practice: Math.floor(aliceXp / 10) });
+    expect(alice.total).toBe(alice.practice + 48);
+    expect(bob).toMatchObject({ practice: 0, attendance: 5, results: 50, total: 55 });
+    const ranks = board.body.rows.map((r: Json) => r.total);
+    expect([...ranks].sort((a: number, b: number) => b - a)).toEqual(ranks);
+  });
+
+  it("students see public names and only their own breakdown", async () => {
+    const r = await call("/api/student/leaderboard?scope=group&period=week", { auth: BOB });
+    expect(r.status).toBe(200);
+    const names = r.body.rows.map((x: Json) => x.name);
+    expect(names).toContain("Rahimova A.");
+    expect(names).toContain("Karimov Bob");
+    expect(names).not.toContain("Rahimova Alice");
+    for (const row of r.body.rows) {
+      expect(Object.keys(row).sort()).toEqual(["initials", "me", "name", "points", "rank"]);
+    }
+    expect(r.body.me).toMatchObject({ name: "Karimov Bob", attendance: 5, results: 50 });
+  });
+
+  it("the centre board counts a two-group student once", async () => {
+    const a1 = await call("/api/student/leaderboard?scope=center&period=all", { auth: ALICE });
+    const a2 = await call("/api/student/leaderboard?scope=center&period=all", { auth: ALICE, headers: { "X-Student-Id": S.alice2 } });
+    expect(a1.body.me.rank).toBe(a2.body.me.rank);
+    expect(a1.body.rows.filter((x: Json) => x.me)).toHaveLength(1);
+    const staff = await call("/api/leaderboard/center?period=all", { auth: S.ceo });
+    const alices = staff.body.rows.filter((x: Json) => /Alice/.test(x.name));
+    expect(alices).toHaveLength(1);
+    expect(staff.body.rows.map((x: Json) => x.name)).toContain("Aliyeva Carol");
+  });
+
+  it("home summary shows my weekly rank", async () => {
+    const s = await call("/api/student/leaderboard/summary", { auth: BOB });
+    expect(s.body.enabled).toBe(true);
+    expect(s.body.group).toMatchObject({ of: 2 });
+    expect(s.body.podium.length).toBeGreaterThan(0);
+  });
+
+  it("teachers only see their own groups' boards", async () => {
+    expect((await call(`/api/leaderboard/group/${S.classA}`, { auth: S.teacher2 })).status).toBe(403);
+    expect((await call(`/api/leaderboard/group/${S.classB}`, { auth: S.teacher2 })).status).toBe(200);
+  });
+
+  it("the CEO can tune points or switch leaderboards off", async () => {
+    await call("/api/portal/settings", { method: "PATCH", auth: S.ceo, body: { lbPartialPoints: 7 } });
+    const tuned = await call("/api/student/leaderboard?scope=group&period=week", { auth: BOB });
+    expect(tuned.body.me.attendance).toBe(7);
+    await call("/api/portal/settings", { method: "PATCH", auth: S.ceo, body: { leaderboardEnabled: false } });
+    const off = await call("/api/student/leaderboard?scope=group", { auth: BOB });
+    expect(off.status).toBe(404);
+    expect((await call("/api/student/leaderboard/summary", { auth: BOB })).body.enabled).toBe(false);
+    await call("/api/portal/settings", { method: "PATCH", auth: S.ceo, body: { leaderboardEnabled: true, lbPartialPoints: 5 } });
+  });
+});
+
 describe("learning reminders", () => {
   it("nudges learners who haven't practised today, once", async () => {
     const { runLearningReminders } = await import("../server/learning/reminders");

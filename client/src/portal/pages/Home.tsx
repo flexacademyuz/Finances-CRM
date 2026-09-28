@@ -22,6 +22,7 @@ import {
 } from "../ui";
 import { fmtDay } from "@shared/notifications";
 import { TodayCard } from "../learn/ui";
+import { RankCard } from "../leaderboard/RankCard";
 
 export function HomePage() {
   const { t, locale } = usePT();
@@ -81,6 +82,9 @@ export function HomePage() {
 
       {/* Today's vocabulary practice: the daily learning habit, one tap to start. */}
       <TodayCard compact />
+
+      {/* Weekly rank in my group (and the whole centre). */}
+      <RankCard />
 
       {/* Payment + attendance tiles */}
       <div className="grid grid-cols-2 gap-3">
