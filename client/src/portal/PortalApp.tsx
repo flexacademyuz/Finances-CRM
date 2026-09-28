@@ -6,7 +6,7 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Route, Switch, Link, useLocation, Redirect } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Home, Wallet, TrendingUp, CalendarCheck, Bell, Eye, Link2, X } from "lucide-react";
+import { Home, Wallet, TrendingUp, CalendarCheck, Bell, Eye, Link2, X, GraduationCap } from "lucide-react";
 import type { ApiError } from "../lib/api";
 import { haptic, tg, isTelegram } from "../lib/telegram";
 import { initials, avatarColor } from "../lib/format";
@@ -27,6 +27,13 @@ import { ProgressPage } from "./pages/Progress";
 import { AttendancePage } from "./pages/Attendance";
 import { NotificationsPage } from "./pages/Notifications";
 import { ProfilePage } from "./pages/Profile";
+import { LearnHomePage } from "./learn/LearnHome";
+import { StagePage } from "./learn/StagePage";
+import { WordsPage } from "./learn/WordsPage";
+import { FlashcardsPage } from "./learn/Flashcards";
+import { PracticePage } from "./learn/Practice";
+import { BookmarksPage } from "./learn/Bookmarks";
+import { StatsPage } from "./learn/Stats";
 
 initPreviewFromUrl();
 
@@ -45,6 +52,9 @@ export function useMeQuery() {
 export function PortalApp() {
   const { t, locale, setLocale } = usePT();
   const me = useMeQuery();
+  const [loc] = useLocation();
+  // Flashcard / exercise players run full-screen: no header, tabs or group switcher.
+  const immersive = loc.startsWith("/learn/cards") || loc.startsWith("/learn/practice");
   const langSynced = useRef(false);
 
   // Adopt the student's saved notification language once (Telegram users).
@@ -117,9 +127,9 @@ export function PortalApp() {
             </button>
           </div>
         )}
-        <Header me={me.data} />
-        <GroupSwitcher me={me.data} />
-        <main className="pb-28 pt-2">
+        {!immersive && <Header me={me.data} />}
+        {!immersive && <GroupSwitcher me={me.data} />}
+        <main className={immersive ? "" : "pb-28 pt-2"}>
           <Switch>
             <Route path="/" component={HomePage} />
             <Route path="/payments" component={PaymentsPage} />
@@ -127,12 +137,19 @@ export function PortalApp() {
             <Route path="/attendance" component={AttendancePage} />
             <Route path="/notifications" component={NotificationsPage} />
             <Route path="/profile" component={ProfilePage} />
+            <Route path="/learn" component={LearnHomePage} />
+            <Route path="/learn/stage/:id" component={StagePage} />
+            <Route path="/learn/stage/:id/words" component={WordsPage} />
+            <Route path="/learn/cards" component={FlashcardsPage} />
+            <Route path="/learn/practice" component={PracticePage} />
+            <Route path="/learn/bookmarks" component={BookmarksPage} />
+            <Route path="/learn/stats" component={StatsPage} />
             <Route>
               <Redirect to="/" />
             </Route>
           </Switch>
         </main>
-        <BottomNav unread={me.data.unread} />
+        {!immersive && <BottomNav unread={me.data.unread} />}
       </Frame>
     </MeContext.Provider>
   );
@@ -156,6 +173,7 @@ function Header({ me }: { me: Me }) {
     "/attendance": "attendance",
     "/notifications": "notificationsTitle",
     "/profile": "profile",
+    "/learn": "learn",
   };
   const title = titles[loc];
   return (
@@ -237,10 +255,12 @@ function GroupSwitcher({ me }: { me: Me }) {
 
 const TABS: { href: string; key: PKey; icon: ReactNode }[] = [
   { href: "/", key: "home", icon: <Home size={22} /> },
-  { href: "/payments", key: "payments", icon: <Wallet size={22} /> },
+  // Learning sits next to Home: it's the daily habit. Notifications stay one tap
+  // away via the header bell.
+  { href: "/learn", key: "learn", icon: <GraduationCap size={22} /> },
   { href: "/progress", key: "progress", icon: <TrendingUp size={22} /> },
   { href: "/attendance", key: "attendance", icon: <CalendarCheck size={22} /> },
-  { href: "/notifications", key: "notifications", icon: <Bell size={22} /> },
+  { href: "/payments", key: "payments", icon: <Wallet size={22} /> },
 ];
 
 function BottomNav({ unread }: { unread: number }) {

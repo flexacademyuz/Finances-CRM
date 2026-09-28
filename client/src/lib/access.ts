@@ -28,6 +28,8 @@ export type Access = {
   attendance: boolean;
   /** Student portal management (settings, announcements, delivery health). */
   studentPortal: boolean;
+  /** Learning content (vocabulary) management + learning statistics. */
+  learning: boolean;
 };
 
 export function accessFor(user: User): Access {
@@ -58,5 +60,6 @@ export function accessFor(user: User): Access {
     salary: role === "teacher",
     attendance: true,
     studentPortal: ceo || accountant,
+    learning: can(user, "manage_learning"),
   };
 }

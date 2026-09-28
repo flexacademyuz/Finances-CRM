@@ -3,6 +3,7 @@ import { useI18n } from "../lib/i18n";
 
 const dict = {
   home: { en: "Home", uz: "Asosiy" },
+  learn: { en: "Learn", uz: "O'rganish" },
   payments: { en: "Payments", uz: "To'lovlar" },
   progress: { en: "Progress", uz: "Natijalar" },
   attendance: { en: "Attendance", uz: "Davomat" },

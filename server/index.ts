@@ -8,6 +8,7 @@ import { startJobs } from "./jobs";
 import { waitForDatabase } from "./db";
 import { runMigrations } from "./migrate";
 import { bootstrap } from "./bootstrap";
+import { ensureLearningContent } from "./learning/import";
 import { configureBot, configureMenuButton } from "./bot/bot";
 import { bot } from "./bot/client";
 import { registerNotificationListeners } from "./notifications/listeners";
@@ -50,6 +51,18 @@ async function main() {
       `Seeded first CEO (${env.seedCeoUsername ? `login "${env.seedCeoUsername}"` : `Telegram ID ${env.seedCeoTelegramId}`}).`,
     );
   else console.log(`• CEO seed skipped: ${boot.ceoSkipped}.`);
+
+  // Learning content (vocabulary): imported once, re-synced only when the
+  // bundled content version changes. Never blocks the CRM from starting.
+  try {
+    const imp = await ensureLearningContent();
+    if (imp)
+      console.log(
+        `[learning] vocabulary imported: ${imp.report.items} words / ${imp.report.stages} stages (+${imp.inserted}, ~${imp.updated}).`,
+      );
+  } catch (err) {
+    console.error("[learning] vocabulary import failed:", (err as Error).message);
+  }
 
   startJobs();
 

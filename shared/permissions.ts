@@ -20,6 +20,9 @@ export const PERMISSIONS = [
   // date. Teachers always manage their own groups without these grants.
   "manage_attendance",
   "manage_scores",
+  // Learning content: add/edit/move/remove vocabulary, manage stages and view
+  // centre-wide learning statistics. CEO-only by default.
+  "manage_learning",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -37,6 +40,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   approve_leads: "Approve new-student leads",
   manage_attendance: "Manage attendance (all groups)",
   manage_scores: "Manage scores (all groups)",
+  manage_learning: "Manage learning content (vocabulary)",
 };
 
 /** Abilities each role has by default, before any per-user grants. */

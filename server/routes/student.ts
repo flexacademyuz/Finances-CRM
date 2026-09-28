@@ -35,6 +35,7 @@ import { listScores } from "../services/scores";
 import { listForStudent, unreadCount, markAsRead, markAllRead } from "../notifications/service";
 import { setAccountLanguage, unlinkAccount } from "../services/telegram-link";
 import { isMonthSettled } from "@shared/billing";
+import learnRouter from "./learn";
 
 const router = Router();
 router.use(authenticateStudent);
@@ -411,6 +412,11 @@ router.post(
     res.json({ ok: true, unlinked: req.studentAccounts.length });
   }),
 );
+
+/* ─────────────────────────────── learning ─────────────────────────────── */
+
+// Vocabulary & practice (inherits the student auth + preview guard above).
+router.use("/learn", learnRouter);
 
 // Anything else under /api/student is unknown — never fall through to staff routes.
 router.use((_req, res) => res.status(404).json({ error: "not_found" }));

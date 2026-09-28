@@ -20,6 +20,9 @@ import {
   Users,
   Megaphone,
   ShieldCheck,
+  BookOpen,
+  Flame,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import type { AttendanceStatus, StudentStatus } from "@shared/schema";
@@ -262,6 +265,9 @@ const ICONS: Record<NotificationIcon, LucideIcon> = {
   users: Users,
   megaphone: Megaphone,
   shield: ShieldCheck,
+  book: BookOpen,
+  flame: Flame,
+  target: Target,
 };
 
 const TONE_CLS: Record<string, string> = {

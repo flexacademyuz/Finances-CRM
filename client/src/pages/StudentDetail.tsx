@@ -18,6 +18,7 @@ import { renderOverdue, renderReceipt } from "@shared/sms-templates";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge, MethodTag } from "../components/ui";
 import { StudentActions } from "../components/StudentActions";
 import { StudentAttendancePanel, StudentScoresPanel, StudentTelegramPanel } from "../components/StudentPortalPanels";
+import { StudentLearningPanel } from "../components/LearningPanels";
 
 /** Full student profile: start date, next-due, and complete payment history. */
 export function StudentDetail() {
@@ -207,6 +208,7 @@ export function StudentDetail() {
       {/* Academic record + student portal link (hidden if the caller has no access). */}
       <StudentAttendancePanel studentId={student.id} />
       <StudentScoresPanel studentId={student.id} isOwnTeacher={user.role === "teacher"} />
+      <StudentLearningPanel studentId={student.id} />
       <StudentTelegramPanel studentId={student.id} isOwnTeacher={user.role === "teacher"} />
 
       {/* Parent SMS (finance staff only) */}

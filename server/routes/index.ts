@@ -17,6 +17,7 @@ import studentPortalRouter from "./student";
 import attendanceRouter from "./attendance";
 import scoresRouter from "./scores";
 import portalAdminRouter from "./portal-admin";
+import learningAdminRouter from "./learning-admin";
 
 const api = Router();
 
@@ -51,5 +52,6 @@ api.use(smsRouter);
 api.use(attendanceRouter);
 api.use(scoresRouter);
 api.use(portalAdminRouter);
+api.use(learningAdminRouter);
 
 export default api;

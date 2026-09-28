@@ -21,6 +21,7 @@ import {
   NotifIcon,
 } from "../ui";
 import { fmtDay } from "@shared/notifications";
+import { TodayCard } from "../learn/ui";
 
 export function HomePage() {
   const { t, locale } = usePT();
@@ -77,6 +78,9 @@ export function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Today's vocabulary practice: the daily learning habit, one tap to start. */}
+      <TodayCard compact />
 
       {/* Payment + attendance tiles */}
       <div className="grid grid-cols-2 gap-3">

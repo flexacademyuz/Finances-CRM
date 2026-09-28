@@ -525,6 +525,7 @@ const dict = {
   att_left_early: { en: "Left early", uz: "Erta ketdi" },
   perm_manage_attendance: { en: "Manage attendance (all groups)", uz: "Davomatni boshqarish (barcha guruhlar)" },
   perm_manage_scores: { en: "Manage scores (all groups)", uz: "Baholarni boshqarish (barcha guruhlar)" },
+  perm_manage_learning: { en: "Manage learning content (vocabulary)", uz: "O'quv kontentini boshqarish (lug'at)" },
   today: { en: "Today", uz: "Bugun" },
   todaysLessons: { en: "Today's lessons", uz: "Bugungi darslar" },
   takeAttendance: { en: "Take attendance", uz: "Davomat olish" },
@@ -583,6 +584,7 @@ const dict = {
 
   // ── Student portal (staff side) ──
   studentPortal: { en: "Student portal", uz: "O'quvchi kabineti" },
+  learning: { en: "Learning", uz: "Ta'lim" },
   studentPortalSubtitle: {
     en: "The students' Telegram Mini-App: who's connected, notifications and announcements.",
     uz: "O'quvchilarning Telegram ilovasi: kim ulangan, bildirishnomalar va e'lonlar.",

@@ -14,6 +14,7 @@ import { lessonsBetween, tashkentDate, addDaysIso } from "@shared/lesson-schedul
 import { getSettings } from "../storage";
 import { createMany, portalSettings, type CreateNotificationInput } from "./service";
 import { monthEnd } from "./listeners";
+import { runLearningReminders } from "../learning/reminders";
 
 /** Send reminders for lessons starting ≈ h hours from now (for each h). */
 export async function runLessonReminders(now: Date = new Date()): Promise<number> {
@@ -197,6 +198,7 @@ export async function runDailyStudentJobs(now: Date = new Date()): Promise<Recor
 }
 
 let lastDailyRun = "";
+let lastLearningRun = "";
 
 /** Start the scheduler: reminders every 5 min, daily jobs from 09:00 Tashkent. */
 export function startStudentScheduler(): void {
@@ -217,6 +219,16 @@ export function startStudentScheduler(): void {
         console.log("[notify] daily student jobs:", JSON.stringify(tally));
       } catch (err) {
         console.error("[notify] daily student jobs failed:", (err as Error).message);
+      }
+    }
+    // Learning nudges in the evening, when a missed day can still be saved.
+    if (tHour >= 18 && lastLearningRun !== tDay) {
+      lastLearningRun = tDay;
+      try {
+        const tally = await runLearningReminders(now);
+        console.log("[notify] learning reminders:", JSON.stringify(tally));
+      } catch (err) {
+        console.error("[notify] learning reminders failed:", (err as Error).message);
       }
     }
   };

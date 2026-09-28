@@ -13,6 +13,7 @@ import type { PaymentMethod } from "@shared/schema";
 import { Button, Card, Empty, Field, Input, Modal, Segmented, Spinner, StatusBadge } from "../components/ui";
 import { GroupAttendance } from "../components/GroupAttendance";
 import { GroupScores } from "../components/GroupScores";
+import { GroupLearning } from "../components/LearningPanels";
 
 /** A grid cell the CEO/accountant tapped, to mark a month paid or unpaid. */
 type CellTarget = {
@@ -30,7 +31,7 @@ type CellTarget = {
  * teachers only for their own classes (enforced server-side).
  */
 export function ClassDetail() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useSession();
   const params = useParams();
   const classId = params.id!;
@@ -47,9 +48,9 @@ export function ClassDetail() {
   // Tick a month paid/unpaid straight from the grid (records or voids a payment).
   const canRecord = can(user, "record_payment");
   // Attendance & scores tabs (the server enforces own-group / permission access).
-  const [tab, setTab] = useState<"students" | "attendance" | "scores">(() => {
+  const [tab, setTab] = useState<"students" | "attendance" | "scores" | "vocabulary">(() => {
     const q = new URLSearchParams(window.location.search).get("tab");
-    return q === "attendance" || q === "scores" ? q : "students";
+    return q === "attendance" || q === "scores" || q === "vocabulary" ? q : "students";
   });
 
   if (isLoading || !data) return <Spinner />;
@@ -85,10 +86,12 @@ export function ClassDetail() {
           { value: "students", label: t("students") },
           { value: "attendance", label: t("attendance") },
           { value: "scores", label: t("scores") },
+          { value: "vocabulary", label: locale === "uz" ? "Lug'at" : "Vocabulary" },
         ]}
       />
 
       {tab === "attendance" && <GroupAttendance classId={cls.id} />}
+      {tab === "vocabulary" && <GroupLearning classId={cls.id} />}
       {tab === "scores" && (
         <GroupScores classId={cls.id} roster={students.map((s) => ({ id: s.id, fullName: s.fullName }))} canEdit={canScore} />
       )}

@@ -26,6 +26,7 @@ export const NOTIFICATION_PREF_GROUPS = [
   "class_reminders",
   "schedule_changes",
   "announcements",
+  "learning",
 ] as const;
 export type PrefGroup = (typeof NOTIFICATION_PREF_GROUPS)[number];
 
@@ -38,6 +39,7 @@ export const PREF_GROUP_LABELS: Record<PrefGroup, { en: string; uz: string }> = 
   class_reminders: { en: "Class reminders", uz: "Dars eslatmalari" },
   schedule_changes: { en: "Schedule changes", uz: "Jadval o'zgarishlari" },
   announcements: { en: "Announcements", uz: "E'lonlar" },
+  learning: { en: "Vocabulary practice", uz: "Lug'at mashqlari" },
 };
 
 type P = Record<string, unknown>;
@@ -57,7 +59,10 @@ export type NotificationIcon =
   | "ban"
   | "users"
   | "megaphone"
-  | "shield";
+  | "shield"
+  | "book"
+  | "flame"
+  | "target";
 type Rendered = { title: string; body: string };
 
 type TypeDef = {
@@ -366,6 +371,65 @@ export const NOTIFICATION_TYPES = {
       l === "uz"
         ? { title: "Telegram ulandi", body: `Telegram hisobingiz (${s(p.account)}) ${s(p.name)} profiliga ulandi. Agar bu siz bo'lmasangiz, markaz ma'muriyatiga murojaat qiling.` }
         : { title: "Telegram linked", body: `A Telegram account (${s(p.account)}) was linked to ${s(p.name)}'s profile. If this wasn't you, contact the academy.` },
+  },
+  /* Learning (vocabulary) */
+  learning_review_due: {
+    category: "academic",
+    prefGroup: "learning",
+    icon: "book",
+    tone: "info",
+    render: (p, l) =>
+      l === "uz"
+        ? { title: "Takrorlash vaqti", body: `Bugun takrorlash uchun ${s(p.count)} ta so'z bor.` }
+        : { title: "Time to review", body: `You have ${s(p.count)} words to review today.` },
+  },
+  learning_reminder: {
+    category: "academic",
+    prefGroup: "learning",
+    icon: "clock",
+    tone: "neutral",
+    render: (p, l) => {
+      const streak = Number(p.streak ?? 0);
+      if (l === "uz")
+        return {
+          title: "Bugungi mashq",
+          body: streak > 0 ? `${streak} kunlik seriyangizni saqlab qoling: bugungi lug'at mashqini bajaring.` : "Bugungi lug'at mashqini unutmang.",
+        };
+      return {
+        title: "Today's practice",
+        body: streak > 0 ? `Keep your ${streak}-day streak: do today's vocabulary practice.` : "Don't forget today's vocabulary practice.",
+      };
+    },
+  },
+  learning_streak: {
+    category: "academic",
+    prefGroup: "learning",
+    icon: "flame",
+    tone: "success",
+    render: (p, l) =>
+      l === "uz"
+        ? { title: "Ajoyib seriya", body: `Siz ${s(p.days)} kundan beri har kuni mashq qilyapsiz.` }
+        : { title: "Great streak", body: `You're on a ${s(p.days)}-day learning streak.` },
+  },
+  learning_stage_near: {
+    category: "academic",
+    prefGroup: "learning",
+    icon: "target",
+    tone: "info",
+    render: (p, l) =>
+      l === "uz"
+        ? { title: "Bosqich yakuniga oz qoldi", body: `${s(p.stage)}-bosqichni yakunlashga ${s(p.left)} ta so'z qoldi.` }
+        : { title: "Almost there", body: `You are ${s(p.left)} words away from completing Stage ${s(p.stage)}.` },
+  },
+  learning_stage_complete: {
+    category: "academic",
+    prefGroup: "learning",
+    icon: "trophy",
+    tone: "success",
+    render: (p, l) =>
+      l === "uz"
+        ? { title: "Bosqich yakunlandi", body: `Tabriklaymiz! ${s(p.stage)}-bosqich so'zlarini o'zlashtirdingiz.` }
+        : { title: "Stage complete", body: `Congratulations! You've mastered the words of Stage ${s(p.stage)}.` },
   },
 } satisfies Record<string, TypeDef>;
 
