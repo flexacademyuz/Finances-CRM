@@ -429,20 +429,35 @@ describe("course levels (assigned by group)", () => {
   it("imports the A2 set as a DRAFT, invisible to students", async () => {
     const { VOCAB_SETS, importVocabSet } = await import("../server/learning/import");
     const r = await importVocabSet(VOCAB_SETS[1]);
-    expect(r).toMatchObject({ slug: "elementary-a2", inserted: 700, stages: 7 });
+    expect(r).toMatchObject({ slug: "elementary-a2", inserted: 1200, stages: 12 });
     const again = await importVocabSet(VOCAB_SETS[1]);
     expect(again.inserted).toBe(0);
     const sets = (await call("/api/learning/resources", { auth: S.ceo })).body as Json[];
     a1 = sets.find((s) => s.level === "A1")!.id;
     const a2set = sets.find((s) => s.level === "A2")!;
     a2 = a2set.id;
-    expect(a2set).toMatchObject({ status: "draft", words: 700, stages: 7 });
+    expect(a2set).toMatchObject({ status: "draft", words: 1200, stages: 12 });
     // Group A set to A2, but A2 is a draft → students still get Beginner.
     const patch = await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "A2" } });
     expect(patch.status).toBe(200);
     expect(patch.body.learningLevel).toBe("A2");
     const home = await call("/api/student/learn/home", { auth: BOB });
     expect(home.body.resource.level).toBe("A1");
+  });
+
+  it("imports the Pre-Intermediate (B1) set as a draft too, idempotently", async () => {
+    const { VOCAB_SETS, importVocabSet } = await import("../server/learning/import");
+    const b1def = VOCAB_SETS.find((d) => d.level === "B1")!;
+    const r = await importVocabSet(b1def);
+    expect(r).toMatchObject({ slug: "pre-intermediate-b1", inserted: 1200, stages: 12 });
+    expect((await importVocabSet(b1def)).inserted).toBe(0);
+    const sets = (await call("/api/learning/resources", { auth: S.ceo })).body as Json[];
+    expect(sets.map((s) => s.level)).toEqual(["A1", "A2", "B1"]);
+    expect(sets.find((s) => s.level === "B1")).toMatchObject({ status: "draft", words: 1200, stages: 12 });
+    // "B1+" (Intermediate) is a valid group level now.
+    const ok = await call(`/api/classes/${S.classB}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "B1+" } });
+    expect(ok.status).toBe(200);
+    await call(`/api/classes/${S.classB}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: null } });
   });
 
   it("rejects an unknown level code", async () => {
@@ -457,7 +472,7 @@ describe("course levels (assigned by group)", () => {
     const home = await call("/api/student/learn/home", { auth: BOB });
     expect(home.body.resource.level).toBe("A2");
     expect(home.body.levels.map((l: Json) => l.level)).toEqual(["A2"]);
-    expect(home.body.totals.words).toBe(700);
+    expect(home.body.totals.words).toBe(1200);
     // Bob (A2 group only) cannot switch himself into the A1 set.
     const sneaky = await call(`/api/student/learn/home?resource=${a1}`, { auth: BOB });
     expect(sneaky.body.resource.level).toBe("A2");
@@ -479,7 +494,7 @@ describe("course levels (assigned by group)", () => {
 
   it("teachers see group progress against the group's level", async () => {
     const g = await call(`/api/learning/classes/${S.classA}`, { auth: S.teacher1 });
-    expect(g.body).toMatchObject({ level: "A2", totalWords: 700 });
+    expect(g.body).toMatchObject({ level: "A2", totalWords: 1200 });
     const st = await call(`/api/learning/students/${S.alice}`, { auth: S.teacher1 });
     expect(st.body.sets.map((s: Json) => s.level).sort()).toEqual(["A1", "A2"]);
   });

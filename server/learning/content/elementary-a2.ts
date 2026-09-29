@@ -1,23 +1,17 @@
 /**
- * Elementary (A2) vocabulary → normalized rows.
+ * Elementary (A2) vocabulary → normalized rows (see tsv-set.ts for the rules).
  *
- * Unlike beginner-900 there is no customer source file: the list in
- * elementary-a2.tsv was written for the academy (common CEFR A2 vocabulary,
- * excluding what the beginner set already teaches). It is imported as a DRAFT
- * set so a teacher can review the Uzbek translations before students see it
- * (publish from the staff Learning page).
- *
- * A word already in the beginner list is only allowed here when it teaches a
- * clearly different meaning — those are listed in NEW_SENSES; anything else
- * that overlaps is dropped and reported.
+ * There is no customer source file: elementary-a2.tsv was written for the
+ * academy (common CEFR A2 vocabulary, excluding what the beginner set already
+ * teaches). v1 = 700 words (stages 1–7); v2 appended 500 more (stages 8–12).
+ * The set was first imported as a DRAFT so a teacher could review the Uzbek.
  */
-import fs from "node:fs";
-import path from "node:path";
-import { contentDir, loadSource, STAGE_SIZE, type BuiltItem } from "./beginner-900";
+import { loadSource, type BuiltItem } from "./beginner-900";
+import { buildTsvSet, loadTsvRows, type TsvRow, type TsvSetReport } from "./tsv-set";
 
 export const ELEMENTARY_A2_SLUG = "elementary-a2";
 /** Bump when elementary-a2.tsv changes, so boot re-syncs existing databases. */
-export const ELEMENTARY_A2_VERSION = 1;
+export const ELEMENTARY_A2_VERSION = 2;
 
 /** Beginner-list words deliberately repeated with a NEW meaning (A1 sense → A2 sense). */
 export const NEW_SENSES = new Set([
@@ -45,75 +39,19 @@ export const NEW_SENSES = new Set([
   "secret", // A1 adjective → noun
 ]);
 
-export type A2Report = {
-  rows: number;
-  droppedOverlap: string[];
-  newSensesKept: string[];
-  duplicatesDropped: string[];
-  badExamples: string[];
-  items: number;
-  stages: number;
-};
+export type A2Report = TsvSetReport;
 
-const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-const norm = (s: string) => s.toLowerCase().replace(/[\s-]+/g, "");
+export function loadElementaryRows(): TsvRow[] {
+  return loadTsvRows("elementary-a2.tsv");
+}
 
-export function loadElementaryRows(dir = contentDir()) {
-  const text = fs.readFileSync(path.join(dir, "elementary-a2.tsv"), "utf8");
-  return text
-    .split(/\r?\n/)
-    .filter((l) => l.trim() && !l.startsWith("#"))
-    .map((l, i) => {
-      const [word, translation, pos, ipa, example] = l.split("\t");
-      return { line: i + 1, word: clean(word ?? ""), translation: clean(translation ?? ""), pos: pos?.trim() ?? "", ipa: ipa?.trim() ?? "", example: example?.trim() ?? "" };
-    });
+export function beginnerWords(): Set<string> {
+  return new Set(loadSource().map((r) => r.word.trim().toLowerCase()));
 }
 
 export function buildElementaryA2(
-  rows = loadElementaryRows(),
-  beginnerWords: Set<string> = new Set(loadSource().map((r) => r.word.trim().toLowerCase())),
+  rows: TsvRow[] = loadElementaryRows(),
+  earlier: Set<string> = beginnerWords(),
 ): { items: BuiltItem[]; report: A2Report } {
-  const report: A2Report = { rows: rows.length, droppedOverlap: [], newSensesKept: [], duplicatesDropped: [], badExamples: [], items: 0, stages: 0 };
-  const items: BuiltItem[] = [];
-  const seen = new Set<string>();
-  for (const r of rows) {
-    if (!r.word || !r.translation) throw new Error(`elementary-a2: line ${r.line} is missing a word or translation`);
-    const key = r.word.toLowerCase();
-    if (beginnerWords.has(key)) {
-      if (!NEW_SENSES.has(key)) {
-        report.droppedOverlap.push(r.word);
-        continue;
-      }
-      report.newSensesKept.push(r.word);
-    }
-    const pair = `${key}|${r.translation.toLowerCase()}`;
-    if (seen.has(pair)) {
-      report.duplicatesDropped.push(r.word);
-      continue;
-    }
-    seen.add(pair);
-    const gap = /\{([^{}]+)\}/.exec(r.example)?.[1];
-    const exampleOk = !!gap && norm(gap) === norm(r.word);
-    if (!exampleOk) report.badExamples.push(r.word);
-    const position = items.length + 1;
-    const stage = Math.ceil(position / STAGE_SIZE);
-    items.push({
-      // The word itself is the stable key (the list has no source numbering);
-      // two senses of one word get distinct refs via the translation.
-      sourceRef: `${ELEMENTARY_A2_SLUG}#${key}${[...seen].filter((p) => p.startsWith(`${key}|`)).length > 1 ? `|${r.translation.toLowerCase()}` : ""}`,
-      sourceNo: position,
-      position,
-      stage,
-      word: r.word,
-      translation: r.translation,
-      partOfSpeech: r.pos || null,
-      phonetic: r.ipa || null,
-      example: exampleOk ? r.example : null,
-      difficulty: Math.min(5, 2 + Math.floor((stage - 1) / 3)),
-      note: null,
-    });
-  }
-  report.items = items.length;
-  report.stages = items.length ? items[items.length - 1].stage : 0;
-  return { items, report };
+  return buildTsvSet({ slug: ELEMENTARY_A2_SLUG, rows, earlierWords: earlier, newSenses: NEW_SENSES, baseDifficulty: 2 });
 }

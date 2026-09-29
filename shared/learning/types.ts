@@ -28,10 +28,13 @@ export type LearningResourceType = (typeof LEARNING_RESOURCE_TYPES)[number];
  * carry one (learning_resources.level); a student sees the resources of their
  * groups' levels.
  */
+// The academy's course ladder. B1 is split the way language centres usually
+// teach it: Pre-Intermediate (B1) then Intermediate (B1+).
 export const LEARNING_LEVELS = [
   { code: "A1", en: "Beginner", uz: "Boshlang'ich" },
   { code: "A2", en: "Elementary", uz: "Elementar" },
-  { code: "B1", en: "Intermediate", uz: "O'rta" },
+  { code: "B1", en: "Pre-Intermediate", uz: "Pre-Intermediate" },
+  { code: "B1+", en: "Intermediate", uz: "O'rta" },
   { code: "B2", en: "Upper-Intermediate", uz: "O'rtadan yuqori" },
   { code: "C1", en: "Advanced", uz: "Yuqori" },
 ] as const;

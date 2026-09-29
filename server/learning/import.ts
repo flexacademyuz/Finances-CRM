@@ -22,6 +22,11 @@ import {
   type BuiltItem,
 } from "./content/beginner-900";
 import { ELEMENTARY_A2_SLUG, ELEMENTARY_A2_VERSION, buildElementaryA2, type A2Report } from "./content/elementary-a2";
+import {
+  PRE_INTERMEDIATE_B1_SLUG,
+  PRE_INTERMEDIATE_B1_VERSION,
+  buildPreIntermediateB1,
+} from "./content/pre-intermediate-b1";
 
 export type VocabSetDef = {
   slug: string;
@@ -53,12 +58,23 @@ export const VOCAB_SETS: VocabSetDef[] = [
     slug: ELEMENTARY_A2_SLUG,
     version: ELEMENTARY_A2_VERSION,
     level: "A2",
-    title: "Elementary Vocabulary (700 words)",
-    titleUz: "Elementar lug'at (700 so'z)",
+    title: "Elementary Vocabulary (1200 words)",
+    titleUz: "Elementar lug'at (1200 so'z)",
     description: "Everyday A2 words beyond the beginner list, with Uzbek translations, in stages of 100.",
     initialStatus: "draft",
     position: 2,
     build: buildElementaryA2,
+  },
+  {
+    slug: PRE_INTERMEDIATE_B1_SLUG,
+    version: PRE_INTERMEDIATE_B1_VERSION,
+    level: "B1",
+    title: "Pre-Intermediate Vocabulary (1200 words)",
+    titleUz: "Pre-Intermediate lug'at (1200 so'z)",
+    description: "B1 words for work, study, society, science, travel and more — none repeated from easier levels.",
+    initialStatus: "draft",
+    position: 3,
+    build: buildPreIntermediateB1,
   },
 ];
 
@@ -147,6 +163,11 @@ export async function importVocabSet(def: VocabSetDef): Promise<ImportResult> {
     .update(learningResources)
     .set({
       level: def.level,
+      // Keep the title in step with the content (e.g. "700 words" → "1200 words").
+      // Runs only when the bundled content version changes.
+      title: def.title,
+      titleUz: def.titleUz,
+      description: def.description,
       settings: sql`${learningResources.settings} || ${JSON.stringify({ contentVersion: def.version })}::jsonb`,
       updatedAt: new Date(),
     })

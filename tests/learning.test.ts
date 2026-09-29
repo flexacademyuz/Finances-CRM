@@ -18,6 +18,7 @@ import {
 import { answerMatches, displayWord, exampleFitsWord, meaningsOverlap, normalizeAnswer, senses } from "@shared/learning/text";
 import { EXERCISE_TYPES, isLearningLevel, levelLabel, levelRank, resolveVocabSettings } from "@shared/learning/types";
 import { buildElementaryA2, NEW_SENSES } from "../server/learning/content/elementary-a2";
+import { buildPreIntermediateB1 } from "../server/learning/content/pre-intermediate-b1";
 import { periodStart, publicName, rankRows, ratingPoints } from "@shared/leaderboard";
 import { achievementsFor, currentStreak, longestStreak } from "@shared/learning/gamification";
 
@@ -70,8 +71,8 @@ describe("elementary (A2) content", () => {
   const a2 = buildElementaryA2();
   const a1Words = new Set(items.map((i) => i.word.toLowerCase()));
 
-  it("yields 700 items in 7 stages of 100, all with a valid example", () => {
-    expect(a2.report).toMatchObject({ items: 700, stages: 7, droppedOverlap: [], duplicatesDropped: [], badExamples: [] });
+  it("yields 1200 items in 12 stages of 100, all with a valid example", () => {
+    expect(a2.report).toMatchObject({ items: 1200, stages: 12, droppedOverlap: [], duplicatesDropped: [], badExamples: [] });
     for (const it of a2.items) expect(exampleFitsWord(it.example, it.word), it.word).toBe(true);
   });
 
@@ -82,15 +83,66 @@ describe("elementary (A2) content", () => {
   });
 
   it("has stable, unique source refs (safe to re-import)", () => {
-    expect(new Set(a2.items.map((i) => i.sourceRef)).size).toBe(700);
+    expect(new Set(a2.items.map((i) => i.sourceRef)).size).toBe(1200);
     expect(buildElementaryA2().items.map((i) => i.sourceRef)).toEqual(a2.items.map((i) => i.sourceRef));
   });
+});
+
+describe("elementary additions + pre-intermediate (B1) content", () => {
+  const a2 = buildElementaryA2();
+  const b1 = buildPreIntermediateB1();
+
+  it("appending 500 words kept the first 700 exactly where they were", () => {
+    // v1 ended with "decorate" at position 700; v2 words start at 701 (stage 8).
+    expect(a2.items[699]).toMatchObject({ word: "decorate", position: 700, stage: 7 });
+    expect(a2.items[700]).toMatchObject({ position: 701, stage: 8 });
+    expect(a2.items[0].sourceRef).toBe("elementary-a2#good");
+  });
+
+  it("B1 has 1200 items in 12 stages of 100 with valid examples", () => {
+    expect(b1.report).toMatchObject({ items: 1200, stages: 12, droppedOverlap: [], duplicatesDropped: [], badExamples: [] });
+    const perStage = new Map<number, number>();
+    for (const it of b1.items) perStage.set(it.stage, (perStage.get(it.stage) ?? 0) + 1);
+    expect([...perStage.values()]).toEqual(Array(12).fill(100));
+    expect(new Set(b1.items.map((i) => i.sourceRef)).size).toBe(1200);
+  });
+
+  it("no word repeats across Beginner, Elementary and Pre-Intermediate", () => {
+    const a1Words = new Set(items.map((i) => i.word.toLowerCase()));
+    const a2Words = new Set(a2.items.map((i) => i.word.toLowerCase()));
+    for (const it of b1.items) {
+      const w = it.word.toLowerCase();
+      expect(a1Words.has(w) || a2Words.has(w), it.word).toBe(false);
+    }
+    // The 500 new A2 words don't repeat the beginner list either.
+    for (const it of a2.items.slice(700)) expect(a1Words.has(it.word.toLowerCase()), it.word).toBe(false);
+  });
+
+  it("every new word yields every exercise type, and each grades its own answer as correct", () => {
+    for (const set of [{ items: a2.items.slice(700) , pool: a2.items }, { items: b1.items, pool: b1.items }]) {
+      const lite = (i: (typeof set.pool)[number]) => ({ id: i.sourceRef, word: i.word, translation: i.translation, partOfSpeech: i.partOfSpeech, example: i.example });
+      const full = set.pool.map(lite);
+      let seed = 1;
+      for (const it of set.items) {
+        const stagePool = set.pool.filter((x) => x.stage === it.stage).map(lite);
+        for (const type of EXERCISE_TYPES) {
+          const ctx = { stagePool, fullPool: full, rng: seededRng(seed++) };
+          const q = type === "matching" ? generateMatching([lite(it)], ctx) : generateQuestion(type, lite(it), ctx);
+          expect(q, `${it.word} / ${type}`).not.toBeNull();
+          expect(gradeAnswer(q!, q!.answer).correct, `${it.word} / ${type}`).toBe(true);
+        }
+      }
+    }
+  }, 60_000);
 });
 
 describe("course levels", () => {
   it("labels levels in both languages", () => {
     expect(levelLabel("A1")).toBe("Beginner · A1");
     expect(levelLabel("A2", "uz")).toBe("Elementar · A2");
+    expect(levelLabel("B1")).toBe("Pre-Intermediate · B1");
+    expect(levelLabel("B1+")).toBe("Intermediate · B1+");
+    expect(levelRank("B1")).toBeLessThan(levelRank("B1+"));
     expect(levelLabel(null)).toBe("");
     expect(levelRank("A1")).toBeLessThan(levelRank("A2"));
     expect(isLearningLevel("B1")).toBe(true);
