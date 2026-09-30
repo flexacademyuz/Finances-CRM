@@ -460,6 +460,46 @@ describe("course levels (assigned by group)", () => {
     await call(`/api/classes/${S.classB}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: null } });
   });
 
+  it("imports Intermediate (B1+) and Upper-Intermediate (B2) as drafts; a B2 group gets harder exercises", async () => {
+    const { VOCAB_SETS, importVocabSet } = await import("../server/learning/import");
+    for (const [level, slug] of [["B1+", "intermediate-b1plus"], ["B2", "upper-intermediate-b2"]] as const) {
+      const def = VOCAB_SETS.find((d) => d.level === level)!;
+      expect(await importVocabSet(def)).toMatchObject({ slug, inserted: 1500, stages: 15 });
+      expect((await importVocabSet(def)).inserted).toBe(0);
+    }
+    const sets = (await call("/api/learning/resources", { auth: S.ceo })).body as Json[];
+    expect(sets.map((s) => s.level)).toEqual(["A1", "A2", "B1", "B1+", "B2"]);
+    const b2 = sets.find((s) => s.level === "B2")!;
+    expect(b2).toMatchObject({ status: "draft", words: 1500, stages: 15 });
+
+    // Publish B2 and put group A on it for a moment: Bob's exercises follow the B2 profile.
+    await call(`/api/learning/resources/${b2.id}`, { method: "PATCH", auth: S.ceo, body: { status: "published" } });
+    await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "B2" } });
+    const home = await call("/api/student/learn/home", { auth: BOB });
+    expect(home.body.resource.level).toBe("B2");
+    const types = new Set<string>();
+    for (let k = 0; k < 4; k++) {
+      const s = await call("/api/student/learn/sessions", { method: "POST", auth: BOB, body: { source: "mixed", count: 12 } });
+      expect(s.status).toBe(201);
+      for (const q of s.body.questions as Json[]) {
+        types.add(q.type);
+        expect(q.answer).toBeUndefined();
+        if (["meaning", "uz_en", "sentence"].includes(q.type)) expect(q.options).toHaveLength(6);
+        if (q.type === "gap") {
+          expect(q.hintOnDemand).toBe(true);
+          expect(q.hint).toBeUndefined();
+        }
+        if (q.type === "word_order") expect(q.tiles.length).toBeGreaterThanOrEqual(4);
+        if (q.type === "cloze") expect(q.right.length).toBe(q.left.length + 2);
+      }
+    }
+    expect(types.has("en_uz")).toBe(false);
+    expect(types.has("recognition")).toBe(false);
+    // Put everything back (later tests rely on group A being A2 and B2 unpublished).
+    await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "A2" } });
+    await call(`/api/learning/resources/${b2.id}`, { method: "PATCH", auth: S.ceo, body: { status: "draft" } });
+  }, 120_000);
+
   it("rejects an unknown level code", async () => {
     const bad = await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "Z9" } });
     expect(bad.status).toBe(400);

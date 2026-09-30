@@ -7,18 +7,24 @@ import { buildBeginner900, DUPLICATES, ERRATA, STAGE_SIZE } from "../server/lear
 import { applyReview, EMPTY_PROGRESS, MASTERED_BOX, masteryLevel, wordStatus, BOX_INTERVALS_MS, isDue } from "@shared/learning/srs";
 import {
   buildExerciseSet,
+  generateCloze,
   generateMatching,
   generateQuestion,
   gradeAnswer,
   pickDistractors,
+  sameSentence,
+  sentenceWords,
   seededRng,
   toPublic,
   type VocabLite,
 } from "@shared/learning/exercises";
 import { answerMatches, displayWord, exampleFitsWord, meaningsOverlap, normalizeAnswer, senses } from "@shared/learning/text";
-import { EXERCISE_TYPES, isLearningLevel, levelLabel, levelRank, resolveVocabSettings } from "@shared/learning/types";
+import { BASE_EXERCISE_TYPES, EXERCISE_TYPES, isLearningLevel, levelLabel, levelRank, resolveVocabSettings } from "@shared/learning/types";
+import { EXERCISE_PROFILES, exerciseProfile, typeDeck } from "@shared/learning/difficulty";
 import { buildElementaryA2, NEW_SENSES } from "../server/learning/content/elementary-a2";
 import { buildPreIntermediateB1 } from "../server/learning/content/pre-intermediate-b1";
+import { buildIntermediateB1Plus } from "../server/learning/content/intermediate-b1plus";
+import { buildUpperIntermediateB2 } from "../server/learning/content/upper-intermediate-b2";
 import { periodStart, publicName, rankRows, ratingPoints } from "@shared/leaderboard";
 import { achievementsFor, currentStreak, longestStreak } from "@shared/learning/gamification";
 
@@ -125,7 +131,7 @@ describe("elementary additions + pre-intermediate (B1) content", () => {
       let seed = 1;
       for (const it of set.items) {
         const stagePool = set.pool.filter((x) => x.stage === it.stage).map(lite);
-        for (const type of EXERCISE_TYPES) {
+        for (const type of BASE_EXERCISE_TYPES) {
           const ctx = { stagePool, fullPool: full, rng: seededRng(seed++) };
           const q = type === "matching" ? generateMatching([lite(it)], ctx) : generateQuestion(type, lite(it), ctx);
           expect(q, `${it.word} / ${type}`).not.toBeNull();
@@ -134,6 +140,166 @@ describe("elementary additions + pre-intermediate (B1) content", () => {
       }
     }
   }, 60_000);
+});
+
+describe("intermediate (B1+) and upper-intermediate (B2) content", () => {
+  const sets = {
+    "B1+": buildIntermediateB1Plus(),
+    B2: buildUpperIntermediateB2(),
+  };
+
+  it("each has 1500 items in 15 stages of 100 with valid examples", () => {
+    for (const [level, set] of Object.entries(sets)) {
+      expect(set.report, level).toMatchObject({ items: 1500, stages: 15, droppedOverlap: [], duplicatesDropped: [], badExamples: [] });
+      const perStage = new Map<number, number>();
+      for (const it of set.items) perStage.set(it.stage, (perStage.get(it.stage) ?? 0) + 1);
+      expect([...perStage.values()], level).toEqual(Array(15).fill(100));
+      expect(new Set(set.items.map((i) => i.sourceRef)).size, level).toBe(1500);
+      for (const it of set.items) {
+        expect(it.partOfSpeech, `${level} ${it.word}`).toBeTruthy();
+        expect(it.phonetic, `${level} ${it.word}`).toMatch(/^\/.+\/$/);
+      }
+    }
+  });
+
+  it("no word repeats across all five levels", () => {
+    // A1 lists two homonyms twice (stop, may); A2's first 700 words predate the rule.
+    const seen = new Map<string, string>(items.map((i) => [i.word.toLowerCase(), "A1"]));
+    const all: [string, { word: string }[]][] = [
+      ["A2", buildElementaryA2().items.slice(700)],
+      ["B1", buildPreIntermediateB1().items],
+      ["B1+", sets["B1+"].items],
+      ["B2", sets.B2.items],
+    ];
+    for (const [level, list] of all) {
+      for (const it of list) {
+        const w = it.word.toLowerCase();
+        expect(seen.get(w), `${level} ${it.word}`).toBeUndefined();
+        seen.set(w, level);
+      }
+    }
+  });
+
+  it("every word yields every type at its own level, and each grades its own answer as correct", () => {
+    let seed = 1;
+    for (const [level, set] of Object.entries(sets)) {
+      const profile = exerciseProfile(level);
+      const lite = (i: (typeof set.items)[number]) => ({ id: i.sourceRef, word: i.word, translation: i.translation, partOfSpeech: i.partOfSpeech, example: i.example });
+      const byStage = new Map<number, VocabLite[]>();
+      for (const it of set.items) byStage.set(it.stage, [...(byStage.get(it.stage) ?? []), lite(it)]);
+      let wordOrders = 0;
+      for (const it of set.items) {
+        for (const type of EXERCISE_TYPES) {
+          // The stage plus its neighbour is plenty of distractors and keeps this test fast.
+          const near = [...byStage.get(it.stage)!, ...(byStage.get(it.stage + 1) ?? byStage.get(it.stage - 1)!)];
+          const ctx = { stagePool: byStage.get(it.stage)!, fullPool: near, rng: seededRng(seed++), profile };
+          const q = generateQuestion(type, lite(it), ctx);
+          if (type === "word_order" && !q) continue; // only sentences of 4…max words
+          if (type === "word_order") wordOrders++;
+          expect(q, `${level} ${it.word} / ${type}`).not.toBeNull();
+          expect(gradeAnswer(q!, q!.answer).correct, `${level} ${it.word} / ${type}`).toBe(true);
+        }
+      }
+      // Most example sentences are short enough to build.
+      expect(wordOrders, level).toBeGreaterThan(1200);
+    }
+  }, 120_000);
+});
+
+describe("exercise difficulty by level", () => {
+  const b2 = buildUpperIntermediateB2().items.map((i) => ({ id: i.sourceRef, word: i.word, translation: i.translation, partOfSpeech: i.partOfSpeech, example: i.example }));
+  const stage = b2.slice(0, 100);
+  const ctxAt = (level: string, seed = 1) => ({ stagePool: stage, fullPool: b2, rng: seededRng(seed), profile: exerciseProfile(level) });
+
+  it("maps levels to tiers; Beginner keeps the original eight types, once each", () => {
+    expect(exerciseProfile("A1")).toBe(EXERCISE_PROFILES[1]);
+    expect(exerciseProfile(null)).toBe(EXERCISE_PROFILES[1]);
+    expect(exerciseProfile("B1+").tier).toBe(4);
+    expect(exerciseProfile("C1").tier).toBe(5);
+    expect(typeDeck(EXERCISE_PROFILES[1])).toEqual([...BASE_EXERCISE_TYPES]);
+    const b2deck = typeDeck(EXERCISE_PROFILES[5]);
+    expect(b2deck).not.toContain("en_uz");
+    expect(b2deck).not.toContain("recognition");
+    expect(b2deck.filter((t) => t === "gap").length).toBeGreaterThan(b2deck.filter((t) => t === "meaning").length);
+  });
+
+  it("higher levels get more options and same-part-of-speech wrong options", () => {
+    const target = stage.find((v) => v.partOfSpeech === "adj")!;
+    for (let seed = 1; seed <= 20; seed++) {
+      const a1 = generateQuestion("uz_en", target, ctxAt("A1", seed))!;
+      const top = generateQuestion("uz_en", target, ctxAt("B2", seed))!;
+      expect(a1.options).toHaveLength(4);
+      expect(top.options).toHaveLength(6);
+      expect(generateQuestion("recognition", target, ctxAt("B2", seed))!.options).toHaveLength(8);
+      // All wrong options share the target's part of speech (the stage has plenty).
+      const posOf = new Map(b2.map((v) => [v.word.toLowerCase(), v.partOfSpeech]));
+      for (const o of top.options!) expect(posOf.get(o.toLowerCase())).toBe("adj");
+    }
+  });
+
+  it("typing hints shrink and meaning hints hide as the level rises", () => {
+    const target = stage.find((v) => v.word === "meticulous")!;
+    expect(generateQuestion("gap", target, ctxAt("A1"))!.hint).toEqual({ first: "m", length: 10 });
+    const mid = generateQuestion("gap", target, ctxAt("B1+"))!;
+    expect(mid.hint).toEqual({ length: 10 });
+    expect(mid.hintOnDemand).toBe(true);
+    const top = generateQuestion("gap", target, ctxAt("B2"))!;
+    expect(top.hint).toBeUndefined();
+    expect(generateQuestion("spelling", target, ctxAt("B2"))!.hint).toEqual({ first: "m" });
+    expect(generateQuestion("sentence", target, ctxAt("A1"))!.hintOnDemand).toBeUndefined();
+  });
+
+  it("word order: shuffled tiles of the example, graded word by word", () => {
+    expect(sentenceWords("She is {meticulous} about checking every detail.")).toEqual({
+      words: ["she", "is", "meticulous", "about", "checking", "every", "detail"],
+      suffix: ".",
+    });
+    expect(sentenceWords("I'm {fed up} with this rain.").words[0]).toBe("I'm");
+    const target = stage.find((v) => v.word === "meticulous")!;
+    const q = generateQuestion("word_order", target, ctxAt("B2"))!;
+    expect([...q.tiles!].sort()).toEqual(sentenceWords(target.example).words.sort());
+    expect(q.tiles!.join(" ")).not.toBe(q.answer);
+    expect(gradeAnswer(q, "She is METICULOUS about checking every detail.").correct).toBe(true);
+    expect(gradeAnswer(q, "is she meticulous about checking every detail").correct).toBe(false);
+    expect(gradeAnswer(q, 3).correct).toBe(false);
+    expect(gradeAnswer(q, q.answer).correctAnswer).toBe("she is meticulous about checking every detail.");
+    expect(sameSentence("a b", "a b c")).toBe(false);
+    // Off for Beginner.
+    expect(generateQuestion("word_order", target, ctxAt("A1"))).toBeNull();
+  });
+
+  it("cloze: sentences with gaps and a bank with extra words, graded per gap", () => {
+    expect(generateCloze(stage.slice(0, 5), ctxAt("A2"))).toBeNull();
+    const q = generateCloze(stage.slice(0, 5), ctxAt("B2"))!;
+    expect(q.left).toHaveLength(5);
+    expect(q.right).toHaveLength(7);
+    expect(q.hints).toHaveLength(5);
+    expect(new Set(q.right).size).toBe(7);
+    for (const s of q.left!) expect(s).toContain("___");
+    const key = q.answer as number[];
+    expect(new Set(key).size).toBe(5);
+    expect(gradeAnswer(q, key)).toMatchObject({ correct: true });
+    const g = gradeAnswer(q, [key[1], key[0], ...key.slice(2)]);
+    expect(g.correct).toBe(false);
+    expect(g.perItem.filter((p) => p.correct)).toHaveLength(3);
+    const pub = toPublic(q, 0) as Record<string, unknown>;
+    expect(pub.answer).toBeUndefined();
+  });
+
+  it("a Beginner set is unchanged; an Upper-Intermediate set leans on producing words", () => {
+    const counts = new Map<string, number>();
+    for (let seed = 1; seed <= 20; seed++) {
+      for (const q of buildExerciseSet({ targets: stage.slice(0, 30), ctx: ctxAt("B2", seed), count: 10 })) {
+        counts.set(q.type, (counts.get(q.type) ?? 0) + 1);
+      }
+    }
+    expect(counts.get("en_uz")).toBeUndefined();
+    expect(counts.get("recognition")).toBeUndefined();
+    expect(counts.get("cloze")).toBeGreaterThan(0);
+    expect(counts.get("word_order")).toBeGreaterThan(0);
+    const typed = (counts.get("gap") ?? 0) + (counts.get("spelling") ?? 0);
+    expect(typed).toBeGreaterThan((counts.get("meaning") ?? 0) + (counts.get("uz_en") ?? 0));
+  });
 });
 
 describe("course levels", () => {
@@ -246,7 +412,7 @@ describe("exercise generation", () => {
 
   it("generates every exercise type from the same vocabulary rows", () => {
     const apple = stage1.find((v) => v.word === "Apple")!;
-    for (const type of EXERCISE_TYPES) {
+    for (const type of BASE_EXERCISE_TYPES) {
       const q = type === "matching" ? generateMatching([apple], ctx()) : generateQuestion(type, apple, ctx());
       expect(q, type).not.toBeNull();
       expect(q!.type).toBe(type);

@@ -7,7 +7,12 @@
 export const XP = {
   flashcard: 2,
   correct: 10,
+  /** Correct, but after opening a hint that the level hides (B1+ and up). */
+  correctWithHint: 6,
   wrong: 2,
+  /** Per correct pair in matching, per correct gap in a cloze text. */
+  matchPair: 3,
+  clozeGap: 5,
   /** Finishing an exercise set with ≥ 80% correct. */
   setBonus: 20,
 } as const;

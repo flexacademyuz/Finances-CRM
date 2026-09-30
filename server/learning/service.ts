@@ -33,6 +33,7 @@ import {
   type VocabLite,
 } from "@shared/learning/exercises";
 import { displayWord } from "@shared/learning/text";
+import { exerciseProfile } from "@shared/learning/difficulty";
 import { levelRank, resolveVocabSettings, type AttemptMode, type ExerciseType, type PracticeSource, type VocabSettings } from "@shared/learning/types";
 import { ACHIEVEMENTS, XP, achievementsFor, currentStreak, longestStreak, type AchievementCode } from "@shared/learning/gamification";
 import { httpError } from "../routes/helpers";
@@ -596,7 +597,8 @@ export async function createExerciseSession(
     targets,
     count,
     types: opts.types,
-    ctx: { stagePool, fullPool: pool, rng: seededRng((Date.now() ^ targets.length * 7919) >>> 0) },
+    // The set's level decides how hard questions are (options, distractors, hints, types).
+    ctx: { stagePool, fullPool: pool, rng: seededRng((Date.now() ^ targets.length * 7919) >>> 0), profile: exerciseProfile(resource.level) },
   });
   if (questions.length === 0) throw httpError(409, "nothing_to_practise", "No words to practise here yet.");
   const [session] = await db
@@ -644,7 +646,7 @@ export async function getSession(learnerId: string, sessionId: string) {
   };
 }
 
-export async function answerQuestion(learnerId: string, sessionId: string, index: number, answer: unknown) {
+export async function answerQuestion(learnerId: string, sessionId: string, index: number, answer: unknown, opts: { hintUsed?: boolean } = {}) {
   return db.transaction(async (tx) => {
     const s = await lockSession(tx, learnerId, sessionId);
     if (s.finishedAt) throw httpError(409, "session_finished", "This practice is already finished.");
@@ -656,7 +658,12 @@ export async function answerQuestion(learnerId: string, sessionId: string, index
     const answerText = typeof answer === "string" ? answer : JSON.stringify(answer ?? null);
     let xp = 0;
     for (const p of grade.perItem) {
-      const itemXp = q.type === "matching" ? (p.correct ? 3 : 0) : p.correct ? XP.correct : XP.wrong;
+      // Pairs in matching / cloze earn a little each; a hidden hint that was opened costs XP.
+      const itemXp =
+        q.type === "matching" ? (p.correct ? XP.matchPair : 0)
+        : q.type === "cloze" ? (p.correct ? (q.hintOnDemand && opts.hintUsed ? XP.matchPair : XP.clozeGap) : 0)
+        : p.correct ? (q.hintOnDemand && opts.hintUsed ? XP.correctWithHint : XP.correct)
+        : XP.wrong;
       xp += itemXp;
       await recordAnswer(tx, learnerId, p.itemId, p.correct, q.type, { sessionId, answer: answerText, xp: itemXp });
     }

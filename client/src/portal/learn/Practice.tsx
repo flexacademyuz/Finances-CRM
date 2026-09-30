@@ -4,12 +4,14 @@
  * here can be gamed from the client.
  *
  * Choice questions submit on tap (fast in Telegram); typed questions have a
- * Check button; matching pairs by tapping a word then its meaning.
+ * Check button; matching pairs by tapping a word then its meaning; cloze
+ * fills gaps from a word bank; word order builds a sentence from tiles.
+ * From B1+ up the Uzbek hint is hidden behind a tap and costs XP if opened.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, X, Volume2, Trophy, ArrowRight, RotateCcw, Eye } from "lucide-react";
+import { Check, X, Volume2, Trophy, ArrowRight, RotateCcw, Eye, Lightbulb, Undo2 } from "lucide-react";
 import type { PublicQuestion } from "@shared/learning/exercises";
 import type { PracticeSource } from "@shared/learning/types";
 import type { ApiError } from "../../lib/api";
@@ -36,6 +38,7 @@ export function PracticePage() {
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [chosen, setChosen] = useState<number | string | number[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [hintShown, setHintShown] = useState(false);
   const [summary, setSummary] = useState<FinishResult | null>(null);
   const [run, setRun] = useState(0);
   const started = useRef(-1);
@@ -48,6 +51,7 @@ export function PracticePage() {
     setI(0);
     setResult(null);
     setChosen(null);
+    setHintShown(false);
     setSummary(null);
     startSession({ source, unitId: unit })
       .then(setSession)
@@ -91,7 +95,7 @@ export function PracticePage() {
     setBusy(true);
     setChosen(value);
     try {
-      const r = await sendAnswer(session.id, q.index, value);
+      const r = await sendAnswer(session.id, q.index, value, !!q.hintOnDemand && hintShown);
       haptic(r.correct ? "success" : "error");
       setResult(r);
     } catch (e) {
@@ -107,6 +111,7 @@ export function PracticePage() {
       setI(i + 1);
       setResult(null);
       setChosen(null);
+      setHintShown(false);
       return;
     }
     setBusy(true);
@@ -150,6 +155,14 @@ export function PracticePage() {
   }
 
   const answered = i + (result ? 1 : 0);
+  // Opening a hidden hint is remembered for this question (it lowers the XP).
+  const hint: HintState = {
+    shown: hintShown || !q.hintOnDemand || !!result,
+    onShow: () => {
+      haptic("light");
+      setHintShown(true);
+    },
+  };
   return (
     <PlayerShell progress={(answered / total) * 100}>
       <div className="px-1 text-xs font-semibold text-muted">
@@ -159,10 +172,14 @@ export function PracticePage() {
       <div key={q.index} className="learn-pop mt-3 flex flex-1 flex-col">
         {q.type === "matching" ? (
           <Matching q={q} result={result} onSubmit={submit} disabled={!!me.preview} />
+        ) : q.type === "cloze" ? (
+          <Cloze q={q} result={result} onSubmit={submit} disabled={!!me.preview} hint={hint} />
+        ) : q.type === "word_order" ? (
+          <WordOrder q={q} result={result} onSubmit={submit} disabled={!!me.preview || busy} hint={hint} />
         ) : q.type === "gap" || q.type === "spelling" ? (
-          <Typed q={q} result={result} onSubmit={submit} busy={busy} />
+          <Typed q={q} result={result} onSubmit={submit} busy={busy} hint={hint} />
         ) : (
-          <Choice q={q} result={result} chosen={chosen as number | null} onPick={submit} />
+          <Choice q={q} result={result} chosen={chosen as number | null} onPick={submit} hint={hint} />
         )}
       </div>
 
@@ -184,7 +201,20 @@ function Blanked({ text }: { text: string }) {
   );
 }
 
-function Prompt({ q }: { q: PublicQuestion }) {
+type HintState = { shown: boolean; onShow: () => void };
+
+/** The Uzbek hint: shown, or (B1+ and up) a button that reveals it. */
+function MeaningHint({ text, hint, many }: { text: ReactNode; hint: HintState; many?: boolean }) {
+  const { t } = useLT();
+  if (hint.shown) return <>{text}</>;
+  return (
+    <button onClick={hint.onShow} className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-3 py-1 text-xs font-bold text-warning">
+      <Lightbulb size={14} /> {t(many ? "showHints" : "showHint")} <span className="font-semibold opacity-70">({t("hintCostsXp")})</span>
+    </button>
+  );
+}
+
+function Prompt({ q, hint }: { q: PublicQuestion; hint: HintState }) {
   const english = q.type === "en_uz" || q.type === "meaning";
   let body: ReactNode;
   if (q.type === "meaning" && q.context && q.highlight) {
@@ -213,7 +243,7 @@ function Prompt({ q }: { q: PublicQuestion }) {
       {body}
       {q.hintMeaning && (
         <div className="mt-3">
-          <span className="chip">{q.hintMeaning}</span>
+          <MeaningHint text={<span className="chip">{q.hintMeaning}</span>} hint={hint} />
         </div>
       )}
       {english && canSpeak() && (
@@ -231,12 +261,24 @@ function Prompt({ q }: { q: PublicQuestion }) {
 
 /* ───────────────────────────── choice ───────────────────────────── */
 
-function Choice({ q, result, chosen, onPick }: { q: PublicQuestion; result: AnswerResult | null; chosen: number | null; onPick: (i: number) => void }) {
+function Choice({
+  q,
+  result,
+  chosen,
+  onPick,
+  hint,
+}: {
+  q: PublicQuestion;
+  result: AnswerResult | null;
+  chosen: number | null;
+  onPick: (i: number) => void;
+  hint: HintState;
+}) {
   const grid = q.type === "recognition";
   const right = result ? (result.correctAnswer as number) : -1;
   return (
     <>
-      <Prompt q={q} />
+      <Prompt q={q} hint={hint} />
       <div className={`mt-4 ${grid ? "grid grid-cols-2 gap-2.5" : "space-y-2.5"}`}>
         {q.options!.map((o, k) => {
           let cls = "bg-surface ring-1 ring-border";
@@ -270,7 +312,19 @@ function Choice({ q, result, chosen, onPick }: { q: PublicQuestion; result: Answ
 
 /* ───────────────────────────── typed ───────────────────────────── */
 
-function Typed({ q, result, onSubmit, busy }: { q: PublicQuestion; result: AnswerResult | null; onSubmit: (v: string) => void; busy: boolean }) {
+function Typed({
+  q,
+  result,
+  onSubmit,
+  busy,
+  hint,
+}: {
+  q: PublicQuestion;
+  result: AnswerResult | null;
+  onSubmit: (v: string) => void;
+  busy: boolean;
+  hint: HintState;
+}) {
   const { t } = useLT();
   const [v, setV] = useState("");
   const ref = useRef<HTMLInputElement>(null);
@@ -278,8 +332,16 @@ function Typed({ q, result, onSubmit, busy }: { q: PublicQuestion; result: Answe
   const ring = result ? (result.correct ? "border-status-paid ring-2 ring-status-paid/30" : "border-danger ring-2 ring-danger/30") : "";
   return (
     <>
-      <Prompt q={q} />
-      {q.hint && <div className="mt-3 text-center text-sm text-muted">{t("hintLetters", { f: q.hint.first, n: q.hint.length })}</div>}
+      <Prompt q={q} hint={hint} />
+      {q.hint && (q.hint.first || q.hint.length) && (
+        <div className="mt-3 text-center text-sm text-muted">
+          {q.hint.first && q.hint.length
+            ? t("hintLetters", { f: q.hint.first, n: q.hint.length })
+            : q.hint.first
+              ? t("hintFirst", { f: q.hint.first })
+              : t("hintLength", { n: q.hint.length! })}
+        </div>
+      )}
       <form
         className="mt-3"
         onSubmit={(e) => {
@@ -391,6 +453,196 @@ function Matching({ q, result, onSubmit, disabled }: { q: PublicQuestion; result
           <BigButton disabled={!complete || disabled} onClick={() => onSubmit(pairs as number[])}>
             {t("check")}
           </BigButton>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ───────────────────────────── cloze ───────────────────────────── */
+
+/** Several sentences with gaps; tap a gap, then a word from the bank (some words are extra). */
+function Cloze({
+  q,
+  result,
+  onSubmit,
+  disabled,
+  hint,
+}: {
+  q: PublicQuestion;
+  result: AnswerResult | null;
+  onSubmit: (v: number[]) => void;
+  disabled: boolean;
+  hint: HintState;
+}) {
+  const { t } = useLT();
+  const sentences = q.left!;
+  const bank = q.right!;
+  const [fill, setFill] = useState<(number | null)[]>(() => sentences.map(() => null));
+  const [sel, setSel] = useState(0);
+  const key = result ? (result.correctAnswer as number[]) : null;
+  const used = new Set(fill.filter((f): f is number => f != null));
+
+  const pickGap = (k: number) => {
+    if (result) return;
+    haptic("light");
+    if (fill[k] != null) setFill((f) => f.map((x, j) => (j === k ? null : x)));
+    setSel(k);
+  };
+  const pickWord = (w: number) => {
+    if (result || used.has(w)) return;
+    haptic("light");
+    const next = fill.map((x, j) => (j === sel ? w : x));
+    setFill(next);
+    const free = next.findIndex((x) => x == null);
+    if (free >= 0) setSel(free);
+  };
+
+  return (
+    <>
+      <div className="text-center text-xs font-semibold text-muted">{t("clozeHelp")}</div>
+      {q.hints && !hint.shown && (
+        <div className="mt-2 text-center">
+          <MeaningHint text={null} hint={hint} many />
+        </div>
+      )}
+      <ol className="mt-3 space-y-2.5">
+        {sentences.map((s, k) => {
+          const [a, b] = s.split("___");
+          const f = fill[k];
+          const ok = key ? f === key[k] : null;
+          const cls =
+            ok === true
+              ? "bg-status-paid/15 text-status-paid"
+              : ok === false
+                ? "bg-danger/10 text-danger line-through"
+                : sel === k && !result
+                  ? "bg-primary text-white"
+                  : f != null
+                    ? "bg-primary-soft text-primary"
+                    : "border-b-[3px] border-primary/60 text-muted";
+          return (
+            <li key={k} className="rounded-2xl bg-surface px-4 py-3 text-[15px] font-semibold leading-relaxed shadow-card ring-1 ring-dark/[0.04]">
+              {a}
+              <button
+                onClick={() => pickGap(k)}
+                className={`mx-1 inline-flex min-w-[72px] items-center justify-center rounded-lg px-2 py-0.5 align-baseline text-[15px] font-extrabold ${cls}`}
+              >
+                {f != null ? bank[f] : " "}
+              </button>
+              {key && ok === false && <b className="mr-1 text-status-paid">{bank[key[k]]}</b>}
+              {b}
+              {hint.shown && q.hints?.[k] && <div className="mt-1 text-xs font-medium text-muted">{q.hints[k]}</div>}
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        {bank.map((w, k) => (
+          <button
+            key={k}
+            disabled={!!result || used.has(k)}
+            onClick={() => pickWord(k)}
+            className={`rounded-xl px-3 py-2 text-[15px] font-bold transition active:scale-[0.97] ${
+              used.has(k) ? "bg-bg text-muted opacity-50" : "bg-surface ring-1 ring-border"
+            }`}
+          >
+            {w}
+          </button>
+        ))}
+      </div>
+      {!result && (
+        <div className="mt-4">
+          <BigButton disabled={fill.some((f) => f == null) || disabled} onClick={() => onSubmit(fill as number[])}>
+            {t("check")}
+          </BigButton>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ───────────────────────────── word order ───────────────────────────── */
+
+/** Build the example sentence from shuffled word tiles. */
+function WordOrder({
+  q,
+  result,
+  onSubmit,
+  disabled,
+  hint,
+}: {
+  q: PublicQuestion;
+  result: AnswerResult | null;
+  onSubmit: (v: string) => void;
+  disabled: boolean;
+  hint: HintState;
+}) {
+  const { t } = useLT();
+  const tiles = q.tiles!;
+  const [order, setOrder] = useState<number[]>([]);
+  const placed = new Set(order);
+  const ring = result ? (result.correct ? "ring-2 ring-status-paid" : "ring-2 ring-danger") : "ring-1 ring-dark/[0.04]";
+
+  return (
+    <>
+      <div className="rounded-[24px] bg-surface px-5 py-4 text-center shadow-card ring-1 ring-dark/[0.04]">
+        <div className="text-xs font-semibold text-muted">{t("wordOrderHelp")}</div>
+        <div className="mt-1 text-2xl font-extrabold">{q.prompt}</div>
+        {q.hintMeaning && (
+          <div className="mt-2">
+            <MeaningHint text={<span className="chip">{q.hintMeaning}</span>} hint={hint} />
+          </div>
+        )}
+      </div>
+      <div className={`mt-3 flex min-h-[64px] flex-wrap content-start items-end gap-2 rounded-2xl bg-surface p-3 shadow-card ${ring}`}>
+        {order.map((k, pos) => (
+          <button
+            key={`${k}-${pos}`}
+            disabled={!!result}
+            onClick={() => {
+              haptic("light");
+              setOrder((o) => o.filter((_, j) => j !== pos));
+            }}
+            className="rounded-xl bg-primary-soft px-3 py-2 text-[15px] font-bold text-primary"
+          >
+            {tiles[k]}
+          </button>
+        ))}
+        {order.length === tiles.length && q.suffix && <span className="pb-2 text-lg font-bold">{q.suffix}</span>}
+      </div>
+      <div className="mt-3 flex flex-wrap justify-center gap-2">
+        {tiles.map((w, k) => (
+          <button
+            key={k}
+            disabled={!!result || placed.has(k)}
+            onClick={() => {
+              haptic("light");
+              setOrder((o) => [...o, k]);
+            }}
+            className={`rounded-xl px-3 py-2 text-[15px] font-bold transition active:scale-[0.97] ${
+              placed.has(k) ? "bg-bg text-transparent" : "bg-surface ring-1 ring-border"
+            }`}
+          >
+            {w}
+          </button>
+        ))}
+      </div>
+      {!result && (
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={() => setOrder((o) => o.slice(0, -1))}
+            disabled={order.length === 0}
+            aria-label={t("clear")}
+            className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-surface text-muted ring-1 ring-border disabled:opacity-40"
+          >
+            <Undo2 size={20} />
+          </button>
+          <div className="flex-1">
+            <BigButton disabled={order.length !== tiles.length || disabled} onClick={() => onSubmit(order.map((k) => tiles[k]).join(" "))}>
+              {t("check")}
+            </BigButton>
+          </div>
         </div>
       )}
     </>

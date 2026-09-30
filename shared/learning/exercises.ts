@@ -13,10 +13,24 @@
  *  - prefer words from the same stage (what the learner is studying), and the
  *    same part of speech for sentence gaps (so grammar alone doesn't give it
  *    away — the Uzbek hint makes the answer unique).
+ *
+ * How hard a question is depends on the course level (difficulty.ts): more
+ * options, same-part-of-speech and look-alike distractors, fewer hints, and
+ * from A2/B1 up two more types — sentence building and multi-gap cloze texts.
  */
 import type { ExerciseType } from "./types";
-import { EXERCISE_TYPES } from "./types";
-import { answerMatches, blankedExample, displayWord, exampleFitsWord, meaningsOverlap, parseExample, plainExample, sameWord } from "./text";
+import { EXERCISE_PROFILES, typeDeck, type ExerciseProfile } from "./difficulty";
+import {
+  answerMatches,
+  blankedExample,
+  displayWord,
+  exampleFitsWord,
+  meaningsOverlap,
+  normalizeAnswer,
+  parseExample,
+  plainExample,
+  sameWord,
+} from "./text";
 
 export type VocabLite = {
   id: string;
@@ -38,11 +52,20 @@ export type Question = {
   highlight?: string;
   /** Uzbek hint shown under sentence/gap prompts. */
   hintMeaning?: string;
+  /** Hints (hintMeaning / hints) start hidden; the learner taps to see them. */
+  hintOnDemand?: boolean;
   options?: string[];
+  /** Matching: English words. Cloze: sentences with ___. */
   left?: string[];
+  /** Matching: meanings. Cloze: the word bank. */
   right?: string[];
-  /** Typed answers: first letter + length help. */
-  hint?: { first: string; length: number };
+  /** Cloze: the Uzbek meaning of each sentence's missing word. */
+  hints?: string[];
+  /** Word order: the shuffled words, and the punctuation that ends the sentence. */
+  tiles?: string[];
+  suffix?: string;
+  /** Typed answers: first letter and/or length help (none at the top levels). */
+  hint?: { first?: string; length?: number };
   /** Choice: option index. Matching: right-index for each left row. Typed: the word. */
   answer: number | number[] | string;
   /** Typed answers: every accepted spelling/word. */
@@ -94,12 +117,17 @@ export function pickDistractors(
   pool: readonly VocabLite[],
   n: number,
   rng: Rng,
-  prefer: (v: VocabLite) => boolean = () => false,
+  /** Higher first (true = 1). Ties stay shuffled. */
+  prefer: (v: VocabLite) => boolean | number = () => false,
 ): VocabLite[] {
+  // Score each candidate once (prefer can be costly), then a stable sort keeps the shuffle within ties.
   const cands = shuffle(
     pool.filter((v) => v.id !== target.id),
     rng,
-  ).sort((a, b) => Number(prefer(b)) - Number(prefer(a)));
+  )
+    .map((v) => ({ v, score: Number(prefer(v)) }))
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.v);
   const out: VocabLite[] = [];
   for (const c of cands) {
     if (out.length >= n) break;
@@ -138,12 +166,66 @@ export type GenContext = {
   /** Fallback pool (the whole resource) when the stage is too small. */
   fullPool: readonly VocabLite[];
   rng: Rng;
+  /** How hard to make questions (default: Beginner, the original behaviour). */
+  profile?: ExerciseProfile;
 };
 
+const profileOf = (ctx: GenContext) => ctx.profile ?? EXERCISE_PROFILES[1];
+
 /** Does this item support this exercise type? */
-export function supports(type: ExerciseType, v: VocabLite): boolean {
-  if (type === "sentence" || type === "gap" || type === "meaning") return exampleFitsWord(v.example, v.word);
+export function supports(type: ExerciseType, v: VocabLite, profile: ExerciseProfile = EXERCISE_PROFILES[1]): boolean {
+  if (type === "sentence" || type === "gap" || type === "meaning" || type === "cloze") return exampleFitsWord(v.example, v.word);
+  if (type === "word_order") {
+    if (profile.wordOrderMaxWords < 4 || !exampleFitsWord(v.example, v.word)) return false;
+    const n = sentenceWords(v.example).words.length;
+    return n >= 4 && n <= profile.wordOrderMaxWords;
+  }
   return true;
+}
+
+/**
+ * Do two words look alike (a harder wrong option)? Same first three letters
+ * ("consist" / "constant") or the same last three ("attention" / "ambition").
+ */
+const normCache = new Map<string, string>();
+const normCached = (s: string) => {
+  let n = normCache.get(s);
+  if (n === undefined) {
+    if (normCache.size > 50_000) normCache.clear();
+    n = normalizeAnswer(s);
+    normCache.set(s, n);
+  }
+  return n;
+};
+
+export function looksAlike(a: string, b: string): boolean {
+  const x = normCached(a);
+  const y = normCached(b);
+  if (x.length < 4 || y.length < 4 || x === y) return false;
+  return x.slice(0, 3) === y.slice(0, 3) || x.slice(-3) === y.slice(-3);
+}
+
+/**
+ * The example as words for sentence building: "Put your coat on." →
+ * words ["put", "your", "coat", "on"], suffix ".". The first word loses its
+ * capital (it would give the start away) unless it is "I…" or an acronym.
+ */
+export function sentenceWords(example: string | null | undefined): { words: string[]; suffix: string } {
+  const plain = plainExample(example).trim();
+  const m = /^(.*?)([.!?…]+["”']?)?$/.exec(plain)!;
+  const words = m[1].split(/\s+/).filter(Boolean);
+  if (words.length && !/^I(\b|')/.test(words[0]) && !/^[A-Z]{2,}/.test(words[0])) {
+    words[0] = words[0][0].toLowerCase() + words[0].slice(1);
+  }
+  return { words, suffix: m[2] ?? "" };
+}
+
+/** Are two sentences the same words in the same order (case / punctuation ignored)? */
+export function sameSentence(a: string, b: string): boolean {
+  const toks = (s: string) => s.split(/\s+/).map(normalizeAnswer).filter(Boolean);
+  const x = toks(a);
+  const y = toks(b);
+  return x.length > 0 && x.length === y.length && x.every((t, i) => t === y[i]);
 }
 
 function poolFor(ctx: GenContext): VocabLite[] {
@@ -154,15 +236,23 @@ function poolFor(ctx: GenContext): VocabLite[] {
 
 /** Generate one question of `type` about `target` (null if unsupported / too few distractors). */
 export function generateQuestion(type: ExerciseType, target: VocabLite, ctx: GenContext): Question | null {
-  if (!supports(type, target)) return null;
+  const profile = profileOf(ctx);
+  if (!supports(type, target, profile)) return null;
   const pool = poolFor(ctx);
   const inStage = new Set(ctx.stagePool.map((v) => v.id));
-  const preferStage = (v: VocabLite) => inStage.has(v.id);
   const rng = ctx.rng;
+  const samePos = (v: VocabLite) => !!target.partOfSpeech && v.partOfSpeech === target.partOfSpeech;
+  // Beginner: stage words first. Higher levels also weigh same part of speech, then look-alikes.
+  const preferStage = (v: VocabLite) =>
+    (inStage.has(v.id) ? 4 : 0) +
+    (profile.samePosDistractors && samePos(v) ? 2 : 0) +
+    (profile.lookalikeDistractors && looksAlike(v.word, target.word) ? 1 : 0);
+  const wrong = profile.choiceOptions - 1;
+  const hidden = profile.hintOnDemand ? { hintOnDemand: true } : {};
 
   switch (type) {
     case "meaning": {
-      const d = pickDistractors(target, pool, 3, rng, preferStage);
+      const d = pickDistractors(target, pool, wrong, rng, preferStage);
       if (d.length < 3) return null;
       return choice(type, target, d, (v) => v.translation, rng, {
         context: plainExample(target.example),
@@ -170,23 +260,23 @@ export function generateQuestion(type: ExerciseType, target: VocabLite, ctx: Gen
       }, displayWord(target.word, target.example, target.partOfSpeech));
     }
     case "en_uz": {
-      const d = pickDistractors(target, pool, 3, rng, preferStage);
+      const d = pickDistractors(target, pool, wrong, rng, preferStage);
       if (d.length < 3) return null;
       return choice(type, target, d, (v) => v.translation, rng, {}, displayWord(target.word, target.example, target.partOfSpeech));
     }
     case "uz_en": {
-      const d = pickDistractors(target, pool, 3, rng, preferStage);
+      const d = pickDistractors(target, pool, wrong, rng, preferStage);
       if (d.length < 3) return null;
       return choice(type, target, d, (v) => displayWord(v.word, v.example, v.partOfSpeech), rng, {}, target.translation);
     }
     case "recognition": {
-      const d = pickDistractors(target, pool, 5, rng, preferStage);
+      const d = pickDistractors(target, pool, profile.recognitionOptions - 1, rng, preferStage);
       if (d.length < 5) return null;
       return choice(type, target, d, (v) => displayWord(v.word, v.example, v.partOfSpeech), rng, {}, target.translation);
     }
     case "sentence": {
-      const samePos = (v: VocabLite) => preferStage(v) && !!target.partOfSpeech && v.partOfSpeech === target.partOfSpeech;
-      const d = pickDistractors(target, pool, 3, rng, samePos);
+      // Same part of speech from the stage always first, so grammar alone never gives it away.
+      const d = pickDistractors(target, pool, wrong, rng, (v) => (inStage.has(v.id) && samePos(v) ? 8 : 0) + preferStage(v));
       if (d.length < 3) return null;
       const gap = parseExample(target.example)!.gap;
       // Option shown for the target is the exact gap text (keeps the sentence's casing).
@@ -201,20 +291,41 @@ export function generateQuestion(type: ExerciseType, target: VocabLite, ctx: Gen
           return parseExample(target.example)!.before.trim() === "" ? w[0].toUpperCase() + w.slice(1) : w;
         },
         rng,
-        { hintMeaning: target.translation },
+        { hintMeaning: target.translation, ...hidden },
         blankedExample(target.example)!,
       );
     }
     case "gap": {
       const gap = parseExample(target.example)!.gap;
+      const hint =
+        profile.gapHint === "letters" ? { first: gap[0], length: gap.length } : profile.gapHint === "length" ? { length: gap.length } : null;
       return {
         type,
         itemIds: [target.id],
         prompt: blankedExample(target.example)!,
         hintMeaning: target.translation,
-        hint: { first: gap[0], length: gap.length },
+        ...hidden,
+        ...(hint ? { hint } : {}),
         answer: gap,
         accept: [gap, target.word],
+      };
+    }
+    case "word_order": {
+      const { words, suffix } = sentenceWords(target.example);
+      const key = words.join(" ");
+      // Reshuffle until the order actually changes.
+      let tiles = shuffle(words, rng);
+      for (let k = 0; k < 6 && tiles.join(" ") === key; k++) tiles = shuffle(words, rng);
+      if (tiles.join(" ") === key) return null;
+      return {
+        type,
+        itemIds: [target.id],
+        prompt: displayWord(target.word, target.example, target.partOfSpeech),
+        hintMeaning: target.translation,
+        tiles,
+        suffix,
+        answer: key,
+        accept: [key],
       };
     }
     case "spelling": {
@@ -226,13 +337,15 @@ export function generateQuestion(type: ExerciseType, target: VocabLite, ctx: Gen
         type,
         itemIds: [target.id],
         prompt: target.translation,
-        hint: { first: target.word[0], length: target.word.length },
+        hint: profile.spellingHint === "letters" ? { first: target.word[0], length: target.word.length } : { first: target.word[0] },
         answer: target.word,
         accept: [target.word, ...synonyms.map((s) => s.word)],
       };
     }
     case "matching":
-      return null; // built by generateMatching (needs several targets)
+      return generateMatching([target], ctx);
+    case "cloze":
+      return generateCloze([target], ctx);
   }
 }
 
@@ -241,7 +354,7 @@ function senseSetEqual(a: string, b: string): boolean {
 }
 
 /** Match `size` English words with their meanings; targets first, topped up from the pool. */
-export function generateMatching(targets: readonly VocabLite[], ctx: GenContext, size = 5): Question | null {
+export function generateMatching(targets: readonly VocabLite[], ctx: GenContext, size = profileOf(ctx).matchingSize): Question | null {
   const chosen: VocabLite[] = [];
   const fits = (c: VocabLite) =>
     !chosen.some((o) => o.id === c.id || sameWord(o.word, c.word) || meaningsOverlap(o.translation, c.translation));
@@ -266,9 +379,47 @@ export function generateMatching(targets: readonly VocabLite[], ctx: GenContext,
 }
 
 /**
+ * Cloze: several example sentences with gaps and a bank of the missing words
+ * plus extra ones that belong nowhere. Targets first, topped up from the pool.
+ * Needs at least 3 sentences; null where cloze is off (A1/A2).
+ */
+export function generateCloze(targets: readonly VocabLite[], ctx: GenContext): Question | null {
+  const profile = profileOf(ctx);
+  if (profile.clozeSize < 3) return null;
+  const chosen: VocabLite[] = [];
+  const clashes = (list: VocabLite[], c: VocabLite) =>
+    list.some((o) => o.id === c.id || sameWord(o.word, c.word) || meaningsOverlap(o.translation, c.translation));
+  for (const c of [...targets, ...shuffle(poolFor(ctx), ctx.rng)]) {
+    if (chosen.length >= profile.clozeSize) break;
+    if (supports("cloze", c, profile) && !clashes(chosen, c)) chosen.push(c);
+  }
+  if (chosen.length < 3) return null;
+  // Extra words, same parts of speech first so grammar doesn't rule them out.
+  const posSet = new Set(chosen.map((c) => c.partOfSpeech));
+  const extras: VocabLite[] = [];
+  const cands = shuffle(poolFor(ctx), ctx.rng).sort((a, b) => Number(posSet.has(b.partOfSpeech)) - Number(posSet.has(a.partOfSpeech)));
+  for (const c of cands) {
+    if (extras.length >= profile.clozeExtras) break;
+    if (!clashes(chosen, c) && !clashes(extras, c)) extras.push(c);
+  }
+  const bank = shuffle([...chosen, ...extras], ctx.rng);
+  return {
+    type: "cloze",
+    itemIds: chosen.map((c) => c.id),
+    prompt: "",
+    left: chosen.map((c) => blankedExample(c.example)!),
+    hints: chosen.map((c) => c.translation),
+    ...(profile.hintOnDemand ? { hintOnDemand: true } : {}),
+    right: bank.map((c) => displayWord(c.word, c.example, c.partOfSpeech)),
+    answer: chosen.map((c) => bank.findIndex((b) => b.id === c.id)),
+  };
+}
+
+/**
  * Build a practice set of `count` questions about `targets`, cycling through
- * the allowed types so a set mixes recall directions. Each target is used at
- * most once per set while there are enough targets.
+ * the allowed types (weighted by the level's profile) so a set mixes recall
+ * directions. Each target is used at most once per set while there are
+ * enough targets.
  */
 export function buildExerciseSet(opts: {
   targets: readonly VocabLite[];
@@ -277,9 +428,10 @@ export function buildExerciseSet(opts: {
   types?: readonly ExerciseType[];
 }): Question[] {
   const { ctx } = opts;
-  const types = (opts.types?.length ? opts.types : EXERCISE_TYPES).filter((t) => EXERCISE_TYPES.includes(t));
+  const profile = profileOf(ctx);
+  const types = typeDeck(profile, opts.types);
   const queue = shuffle(opts.targets, ctx.rng);
-  if (queue.length === 0) return [];
+  if (queue.length === 0 || types.length === 0) return [];
   const out: Question[] = [];
   let ti = 0;
   let typeOrder = shuffle(types, ctx.rng);
@@ -287,13 +439,14 @@ export function buildExerciseSet(opts: {
   while (out.length < opts.count && guard++ < opts.count * 12) {
     if (typeOrder.length === 0) typeOrder = shuffle(types, ctx.rng);
     const type = typeOrder.shift()!;
-    if (type === "matching") {
+    if (type === "matching" || type === "cloze") {
+      const size = type === "matching" ? profile.matchingSize : profile.clozeSize;
       const slice: VocabLite[] = [];
-      for (let k = 0; k < 5; k++) slice.push(queue[(ti + k) % queue.length]);
-      const q = generateMatching(slice, ctx);
+      for (let k = 0; k < size; k++) slice.push(queue[(ti + k) % queue.length]);
+      const q = type === "matching" ? generateMatching(slice, ctx) : generateCloze(slice, ctx);
       if (q) {
         out.push(q);
-        ti += Math.min(5, queue.length);
+        ti += Math.min(size, queue.length);
       }
       continue;
     }
@@ -319,11 +472,16 @@ export type Grade = {
 
 /** Grade a client answer against a stored question. Invalid shapes are wrong, never errors. */
 export function gradeAnswer(q: Question, answer: unknown): Grade {
-  if (q.type === "matching") {
+  if (q.type === "matching" || q.type === "cloze") {
     const key = q.answer as number[];
     const given = Array.isArray(answer) ? answer.map(Number) : [];
     const perItem = q.itemIds.map((id, i) => ({ itemId: id, correct: given[i] === key[i] }));
     return { correct: perItem.every((p) => p.correct), perItem, correctAnswer: key };
+  }
+  if (q.type === "word_order") {
+    const typed = typeof answer === "string" ? answer.slice(0, 400) : "";
+    const ok = sameSentence(typed, q.answer as string);
+    return { correct: ok, perItem: [{ itemId: q.itemIds[0], correct: ok }], correctAnswer: `${q.answer as string}${q.suffix ?? ""}` };
   }
   if (q.type === "gap" || q.type === "spelling") {
     const typed = typeof answer === "string" ? answer.slice(0, 80) : "";

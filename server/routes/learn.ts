@@ -171,13 +171,15 @@ router.post(
   "/sessions/:id/answer",
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) return res.status(404).json(notFound);
-    const { index, answer } = z
+    const { index, answer, hintUsed } = z
       .object({
         index: z.number().int().min(0).max(100),
-        answer: z.union([z.number().int(), z.string().max(80), z.array(z.number().int()).max(10)]),
+        // Strings: typed words, or a whole sentence for word order.
+        answer: z.union([z.number().int(), z.string().max(400), z.array(z.number().int()).max(10)]),
+        hintUsed: z.boolean().optional(),
       })
       .parse(req.body);
-    res.json(await answerQuestion(learner(req), req.params.id, index, answer));
+    res.json(await answerQuestion(learner(req), req.params.id, index, answer, { hintUsed }));
   }),
 );
 

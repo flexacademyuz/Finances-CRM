@@ -27,6 +27,16 @@ import {
   PRE_INTERMEDIATE_B1_VERSION,
   buildPreIntermediateB1,
 } from "./content/pre-intermediate-b1";
+import {
+  INTERMEDIATE_B1PLUS_SLUG,
+  INTERMEDIATE_B1PLUS_VERSION,
+  buildIntermediateB1Plus,
+} from "./content/intermediate-b1plus";
+import {
+  UPPER_INTERMEDIATE_B2_SLUG,
+  UPPER_INTERMEDIATE_B2_VERSION,
+  buildUpperIntermediateB2,
+} from "./content/upper-intermediate-b2";
 
 export type VocabSetDef = {
   slug: string;
@@ -75,6 +85,28 @@ export const VOCAB_SETS: VocabSetDef[] = [
     initialStatus: "draft",
     position: 3,
     build: buildPreIntermediateB1,
+  },
+  {
+    slug: INTERMEDIATE_B1PLUS_SLUG,
+    version: INTERMEDIATE_B1PLUS_VERSION,
+    level: "B1+",
+    title: "Intermediate Vocabulary (1500 words)",
+    titleUz: "Intermediate lug'at (1500 so'z)",
+    description: "B1+ words for relationships, work, media, science, health, law, society and more — none repeated from easier levels.",
+    initialStatus: "draft",
+    position: 4,
+    build: buildIntermediateB1Plus,
+  },
+  {
+    slug: UPPER_INTERMEDIATE_B2_SLUG,
+    version: UPPER_INTERMEDIATE_B2_VERSION,
+    level: "B2",
+    title: "Upper-Intermediate Vocabulary (1500 words)",
+    titleUz: "Upper-Intermediate lug'at (1500 so'z)",
+    description: "B2 words for argument, academic study, economics, the arts, law and global issues, plus phrasal verbs and idioms.",
+    initialStatus: "draft",
+    position: 5,
+    build: buildUpperIntermediateB2,
   },
 ];
 

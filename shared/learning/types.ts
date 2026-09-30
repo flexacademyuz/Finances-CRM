@@ -66,16 +66,23 @@ export function levelRank(code: string | null | undefined): number {
 export const RESOURCE_STATUSES = ["draft", "published", "archived"] as const;
 export type ResourceStatus = (typeof RESOURCE_STATUSES)[number];
 
-/** Exercise types generated from vocabulary items (see exercises.ts). */
-export const EXERCISE_TYPES = [
+/** The original exercise types, used at every level (see exercises.ts). */
+export const BASE_EXERCISE_TYPES = [
   "meaning", // 1. word shown in its example sentence → pick the Uzbek meaning
   "en_uz", // 2. English word → pick the Uzbek translation
   "uz_en", // 3. Uzbek meaning → pick the English word
   "sentence", // 4. sentence with a gap → pick the missing English word
-  "matching", // 5. match 5 English words with their Uzbek meanings
+  "matching", // 5. match English words with their Uzbek meanings
   "gap", // 6. sentence with a gap → TYPE the missing word
-  "recognition", // 7. "Which word means X?" — quick 6-tile grid
+  "recognition", // 7. "Which word means X?" — quick tile grid
   "spelling", // 8. Uzbek meaning → type the English word
+] as const;
+
+/** Every exercise type. The last two only appear from A2/B1 up (see difficulty.ts). */
+export const EXERCISE_TYPES = [
+  ...BASE_EXERCISE_TYPES,
+  "word_order", // 9. put the shuffled words of the example sentence in order
+  "cloze", // 10. several sentences with gaps + a word bank with extra words
 ] as const;
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 

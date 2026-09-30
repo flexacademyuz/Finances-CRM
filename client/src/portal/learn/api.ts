@@ -128,8 +128,8 @@ export const toggleBookmark = (id: string, bookmarked: boolean) =>
   lapi<{ itemId: string; bookmarked: boolean }>(`/bookmarks/${id}`, { method: "PUT", body: { bookmarked } });
 export const startSession = (body: { source: PracticeSource; unitId?: string; count?: number; types?: ExerciseType[] }) =>
   lapi<Session>("/sessions", { method: "POST", body });
-export const answer = (sessionId: string, index: number, value: number | string | number[]) =>
-  lapi<AnswerResult>(`/sessions/${sessionId}/answer`, { method: "POST", body: { index, answer: value } });
+export const answer = (sessionId: string, index: number, value: number | string | number[], hintUsed = false) =>
+  lapi<AnswerResult>(`/sessions/${sessionId}/answer`, { method: "POST", body: { index, answer: value, hintUsed } });
 export const finish = (sessionId: string) => lapi<FinishResult>(`/sessions/${sessionId}/finish`, { method: "POST" });
 
 /** Speak an English word with the device's voice (no audio files needed). */
