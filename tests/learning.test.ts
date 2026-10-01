@@ -25,6 +25,8 @@ import { buildElementaryA2, NEW_SENSES } from "../server/learning/content/elemen
 import { buildPreIntermediateB1 } from "../server/learning/content/pre-intermediate-b1";
 import { buildIntermediateB1Plus } from "../server/learning/content/intermediate-b1plus";
 import { buildUpperIntermediateB2 } from "../server/learning/content/upper-intermediate-b2";
+import { buildAdvancedC1 } from "../server/learning/content/advanced-c1";
+import { buildProficiencyC2 } from "../server/learning/content/proficiency-c2";
 import { periodStart, publicName, rankRows, ratingPoints } from "@shared/leaderboard";
 import { achievementsFor, currentStreak, longestStreak } from "@shared/learning/gamification";
 
@@ -142,10 +144,12 @@ describe("elementary additions + pre-intermediate (B1) content", () => {
   }, 60_000);
 });
 
-describe("intermediate (B1+) and upper-intermediate (B2) content", () => {
+describe("intermediate (B1+) … proficiency (C2) content", () => {
   const sets = {
     "B1+": buildIntermediateB1Plus(),
     B2: buildUpperIntermediateB2(),
+    C1: buildAdvancedC1(),
+    C2: buildProficiencyC2(),
   };
 
   it("each has 1500 items in 15 stages of 100 with valid examples", () => {
@@ -162,7 +166,7 @@ describe("intermediate (B1+) and upper-intermediate (B2) content", () => {
     }
   });
 
-  it("no word repeats across all five levels", () => {
+  it("no word repeats across all seven levels", () => {
     // A1 lists two homonyms twice (stop, may); A2's first 700 words predate the rule.
     const seen = new Map<string, string>(items.map((i) => [i.word.toLowerCase(), "A1"]));
     const all: [string, { word: string }[]][] = [
@@ -170,6 +174,8 @@ describe("intermediate (B1+) and upper-intermediate (B2) content", () => {
       ["B1", buildPreIntermediateB1().items],
       ["B1+", sets["B1+"].items],
       ["B2", sets.B2.items],
+      ["C1", sets.C1.items],
+      ["C2", sets.C2.items],
     ];
     for (const [level, list] of all) {
       for (const it of list) {
@@ -203,7 +209,7 @@ describe("intermediate (B1+) and upper-intermediate (B2) content", () => {
       // Most example sentences are short enough to build.
       expect(wordOrders, level).toBeGreaterThan(1200);
     }
-  }, 120_000);
+  }, 240_000);
 });
 
 describe("exercise difficulty by level", () => {
@@ -215,7 +221,17 @@ describe("exercise difficulty by level", () => {
     expect(exerciseProfile("A1")).toBe(EXERCISE_PROFILES[1]);
     expect(exerciseProfile(null)).toBe(EXERCISE_PROFILES[1]);
     expect(exerciseProfile("B1+").tier).toBe(4);
-    expect(exerciseProfile("C1").tier).toBe(5);
+    expect(exerciseProfile("B2").tier).toBe(5);
+    expect(exerciseProfile("C1").tier).toBe(6);
+    expect(exerciseProfile("C2").tier).toBe(7);
+    // Each level up asks for at least as much as the one below.
+    for (let t = 2; t <= 7; t++) {
+      const [lo, hi] = [EXERCISE_PROFILES[(t - 1) as 1], EXERCISE_PROFILES[t as 1]];
+      expect(hi.choiceOptions).toBeGreaterThanOrEqual(lo.choiceOptions);
+      expect(hi.matchingSize).toBeGreaterThanOrEqual(lo.matchingSize);
+      expect(hi.clozeSize).toBeGreaterThanOrEqual(lo.clozeSize);
+      expect(hi.wordOrderMaxWords).toBeGreaterThanOrEqual(lo.wordOrderMaxWords);
+    }
     expect(typeDeck(EXERCISE_PROFILES[1])).toEqual([...BASE_EXERCISE_TYPES]);
     const b2deck = typeDeck(EXERCISE_PROFILES[5]);
     expect(b2deck).not.toContain("en_uz");
@@ -313,6 +329,8 @@ describe("course levels", () => {
     expect(levelRank("A1")).toBeLessThan(levelRank("A2"));
     expect(isLearningLevel("B1")).toBe(true);
     expect(isLearningLevel("Z9")).toBe(false);
+    expect(levelLabel("C2")).toBe("Proficiency · C2");
+    expect(levelRank("C1")).toBeLessThan(levelRank("C2"));
   });
 });
 

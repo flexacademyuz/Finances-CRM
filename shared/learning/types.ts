@@ -37,6 +37,7 @@ export const LEARNING_LEVELS = [
   { code: "B1+", en: "Intermediate", uz: "O'rta" },
   { code: "B2", en: "Upper-Intermediate", uz: "O'rtadan yuqori" },
   { code: "C1", en: "Advanced", uz: "Yuqori" },
+  { code: "C2", en: "Proficiency", uz: "Proficiency" },
 ] as const;
 export type LearningLevel = (typeof LEARNING_LEVELS)[number]["code"];
 export const LEVEL_CODES = LEARNING_LEVELS.map((l) => l.code) as unknown as readonly [LearningLevel, ...LearningLevel[]];

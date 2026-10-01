@@ -495,6 +495,16 @@ describe("course levels (assigned by group)", () => {
     }
     expect(types.has("en_uz")).toBe(false);
     expect(types.has("recognition")).toBe(false);
+    // Advanced (C1) and Proficiency (C2) import as drafts too; C2 is a valid group level.
+    for (const [level, slug] of [["C1", "advanced-c1"], ["C2", "proficiency-c2"]] as const) {
+      const def = VOCAB_SETS.find((d) => d.level === level)!;
+      expect(await importVocabSet(def)).toMatchObject({ slug, inserted: 1500, stages: 15 });
+    }
+    const all = (await call("/api/learning/resources", { auth: S.ceo })).body as Json[];
+    expect(all.map((s) => s.level)).toEqual(["A1", "A2", "B1", "B1+", "B2", "C1", "C2"]);
+    expect(all.find((s) => s.level === "C2")).toMatchObject({ status: "draft", words: 1500 });
+    expect((await call(`/api/classes/${S.classB}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "C2" } })).status).toBe(200);
+    await call(`/api/classes/${S.classB}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: null } });
     // Put everything back (later tests rely on group A being A2 and B2 unpublished).
     await call(`/api/classes/${S.classA}`, { method: "PATCH", auth: S.ceo, body: { learningLevel: "A2" } });
     await call(`/api/learning/resources/${b2.id}`, { method: "PATCH", auth: S.ceo, body: { status: "draft" } });

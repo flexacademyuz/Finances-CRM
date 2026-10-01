@@ -37,6 +37,8 @@ import {
   UPPER_INTERMEDIATE_B2_VERSION,
   buildUpperIntermediateB2,
 } from "./content/upper-intermediate-b2";
+import { ADVANCED_C1_SLUG, ADVANCED_C1_VERSION, buildAdvancedC1 } from "./content/advanced-c1";
+import { PROFICIENCY_C2_SLUG, PROFICIENCY_C2_VERSION, buildProficiencyC2 } from "./content/proficiency-c2";
 
 export type VocabSetDef = {
   slug: string;
@@ -107,6 +109,28 @@ export const VOCAB_SETS: VocabSetDef[] = [
     initialStatus: "draft",
     position: 5,
     build: buildUpperIntermediateB2,
+  },
+  {
+    slug: ADVANCED_C1_SLUG,
+    version: ADVANCED_C1_VERSION,
+    level: "C1",
+    title: "Advanced Vocabulary (1500 words)",
+    titleUz: "Advanced lug'at (1500 so'z)",
+    description: "C1 words for rhetoric, academic writing, strategy, law, science, the arts and society, plus idioms.",
+    initialStatus: "draft",
+    position: 6,
+    build: buildAdvancedC1,
+  },
+  {
+    slug: PROFICIENCY_C2_SLUG,
+    version: PROFICIENCY_C2_VERSION,
+    level: "C2",
+    title: "Proficiency Vocabulary (1500 words)",
+    titleUz: "Proficiency lug'at (1500 so'z)",
+    description: "C2 literary, formal and specialist words, plus expressions like status quo and ad hoc.",
+    initialStatus: "draft",
+    position: 7,
+    build: buildProficiencyC2,
   },
 ];
 

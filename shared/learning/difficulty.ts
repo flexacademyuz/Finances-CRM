@@ -15,8 +15,8 @@
 import { EXERCISE_TYPES, type ExerciseType } from "./types";
 
 export type ExerciseProfile = {
-  /** 1 (Beginner) … 5 (Upper-Intermediate and above). */
-  tier: 1 | 2 | 3 | 4 | 5;
+  /** 1 (Beginner) … 7 (Proficiency). */
+  tier: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   /** Options in meaning / en_uz / uz_en / sentence questions. */
   choiceOptions: number;
   /** Tiles in a recognition grid. */
@@ -129,9 +129,41 @@ export const EXERCISE_PROFILES: Record<ExerciseProfile["tier"], ExerciseProfile>
     clozeExtras: 2,
     weights: { meaning: 1, uz_en: 1, sentence: 1, matching: 0.75, gap: 2, spelling: 2, word_order: 1.5, cloze: 2 },
   },
+  // Advanced: bigger sets, longer sentences, even more gap-filling and building.
+  6: {
+    tier: 6,
+    choiceOptions: 6,
+    recognitionOptions: 8,
+    matchingSize: 8,
+    gapHint: "none",
+    spellingHint: "first",
+    hintOnDemand: true,
+    samePosDistractors: true,
+    lookalikeDistractors: true,
+    wordOrderMaxWords: 16,
+    clozeSize: 5,
+    clozeExtras: 3,
+    weights: { meaning: 1, uz_en: 0.75, sentence: 1, matching: 0.5, gap: 2, spelling: 2, word_order: 2, cloze: 2.5 },
+  },
+  // Proficiency: mostly producing words in context.
+  7: {
+    tier: 7,
+    choiceOptions: 6,
+    recognitionOptions: 8,
+    matchingSize: 8,
+    gapHint: "none",
+    spellingHint: "first",
+    hintOnDemand: true,
+    samePosDistractors: true,
+    lookalikeDistractors: true,
+    wordOrderMaxWords: 20,
+    clozeSize: 6,
+    clozeExtras: 3,
+    weights: { meaning: 0.75, uz_en: 0.5, sentence: 1, matching: 0.5, gap: 2.5, spelling: 2, word_order: 2, cloze: 3 },
+  },
 };
 
-const TIER_BY_LEVEL: Record<string, ExerciseProfile["tier"]> = { A1: 1, A2: 2, B1: 3, "B1+": 4, B2: 5, C1: 5 };
+const TIER_BY_LEVEL: Record<string, ExerciseProfile["tier"]> = { A1: 1, A2: 2, B1: 3, "B1+": 4, B2: 5, C1: 6, C2: 7 };
 
 /** The profile for a course level (unknown / no level → Beginner). */
 export function exerciseProfile(level: string | null | undefined): ExerciseProfile {
