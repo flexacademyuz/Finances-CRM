@@ -13,7 +13,6 @@ import {
   index,
   unique,
   uniqueIndex,
-  customType,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -1292,18 +1291,13 @@ export const learnerAchievements = pgTable(
 
 /* ─────────────────────────────── Homework ─────────────────────────────── */
 
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType: () => "bytea",
-});
 
 /**
- * Homework assigned to a whole group. `kind`:
- *   task        free-form work; students submit text / photos / a link and a
- *               checker (the teacher or an assistant) accepts or returns it.
- *   vocabulary  "learn stage N": completes itself once the student has learned
- *               `targetPercent`% of the stage's words in the vocabulary app.
- * `maxScore` set = checkers give a mark, which is also written to the
- * student's scores (category "homework") so it counts everywhere scores do.
+ * Homework set for a whole group (a checklist item): the teacher or an
+ * assistant ticks each student who did it (see homework_submissions). Students
+ * don't hand anything in through the app. kind / link_url / resource_id /
+ * unit_id / target_percent / max_score / due_report_sent_at are left over from
+ * the first (hand-in) version and are no longer used.
  */
 export const homework = pgTable(
   "homework",
@@ -1342,11 +1336,9 @@ export const homework = pgTable(
 );
 
 /**
- * One student's work on one homework. status:
- *   draft      files attached but not handed in yet (checkers don't see it)
- *   submitted  handed in, waiting to be checked
- *   returned   checked, sent back for revision (student may resubmit)
- *   accepted   checked and accepted (vocabulary homework: completed — `auto`)
+ * A tick: this student did this homework (status "done"; unticking deletes
+ * the row). checked_by / checked_at record who ticked it and when. The other
+ * columns are left over from the first (hand-in) version and are unused.
  */
 export const homeworkSubmissions = pgTable(
   "homework_submissions",
@@ -1385,34 +1377,6 @@ export const homeworkSubmissions = pgTable(
     uniqHwStudent: uniqueIndex("homework_submissions_hw_student_uniq").on(t.homeworkId, t.studentId),
     byStatus: index("homework_submissions_status_idx").on(t.status, t.branchId),
     byStudent: index("homework_submissions_student_idx").on(t.studentId),
-  }),
-);
-
-/**
- * Files attached to homework: by staff to the assignment (submissionId null)
- * or by a student to their submission. Stored in Postgres (small, compressed
- * photos/PDFs) so no external storage is needed; served only through
- * authenticated routes.
- */
-export const homeworkFiles = pgTable(
-  "homework_files",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    homeworkId: uuid("homework_id")
-      .notNull()
-      .references(() => homework.id, { onDelete: "cascade" }),
-    submissionId: uuid("submission_id").references(() => homeworkSubmissions.id, { onDelete: "cascade" }),
-    name: text("name"),
-    mime: text("mime").notNull(),
-    size: integer("size").notNull(),
-    data: bytea("data").notNull(),
-    uploadedByUser: uuid("uploaded_by_user").references(() => users.id, { onDelete: "set null" }),
-    uploadedByStudent: uuid("uploaded_by_student").references(() => students.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    byHomework: index("homework_files_homework_idx").on(t.homeworkId),
-    bySubmission: index("homework_files_submission_idx").on(t.submissionId),
   }),
 );
 

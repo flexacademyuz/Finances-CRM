@@ -41,7 +41,7 @@ import { AttendanceAnalyticsPage } from "./pages/AttendanceAnalytics";
 import { StudentPortalAdminPage } from "./pages/ceo/StudentPortalAdmin";
 import { LearningPage } from "./pages/ceo/Learning";
 import { LeaderboardPage } from "./pages/Leaderboard";
-import { HomeworkPage, HomeworkDetailPage } from "./pages/Homework";
+import { HomeworkPage } from "./pages/Homework";
 
 /** Logged-out web visitors get the marketing page; its "Log in" leads to /login.
  *  Telegram users and pending/other auth states go straight to the gate. */
@@ -88,7 +88,6 @@ function Routes({ me }: { me: Me }) {
         {a.learning && <Route path="/learning" component={LearningPage} />}
         <Route path="/leaderboard" component={LeaderboardPage} />
         {a.homework && <Route path="/homework" component={HomeworkPage} />}
-        {a.homework && <Route path="/homework/:id" component={HomeworkDetailPage} />}
         <Route path="/account" component={AccountPage} />
         <Route><Redirect to="/" /></Route>
       </Switch>

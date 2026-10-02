@@ -212,7 +212,7 @@ export function startStudentScheduler(): void {
     }
     try {
       const hw = await runHomeworkJobs();
-      if (hw.dueSoon || hw.reports) console.log("[notify] homework:", JSON.stringify(hw));
+      if (hw.dueSoon) console.log("[notify] homework:", JSON.stringify(hw));
     } catch (err) {
       console.error("[notify] homework jobs failed:", (err as Error).message);
     }

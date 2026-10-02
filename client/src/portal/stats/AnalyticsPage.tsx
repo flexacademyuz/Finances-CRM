@@ -41,7 +41,7 @@ type Analytics = {
   achievements: { code: AchievementCode; earnedAt: string | null }[];
   levels: { resourceId: string; level: string | null; title: string; words: number; studied: number; learned: number; mastered: number; percent: number; stagesCompleted: number; stages: number }[];
   calendar: Day[];
-  homework: { assigned: number; done: number; submitted: number; overdue: number; onTime: number; late: number; averagePercent: number | null };
+  homework: { assigned: number; done: number; missed: number; todo: number; rate: number | null };
 };
 
 const S = {
@@ -74,9 +74,8 @@ const S = {
   byType: { en: "By exercise type", uz: "Mashq turlari bo'yicha" },
   homework: { en: "Homework", uz: "Uy vazifasi" },
   hwDone: { en: "Done", uz: "Bajarilgan" },
-  hwOnTime: { en: "On time", uz: "O'z vaqtida" },
-  hwAvg: { en: "Average mark", uz: "O'rtacha baho" },
-  hwOverdue: { en: "{n} overdue", uz: "{n} ta muddati o'tgan" },
+  hwMissed: { en: "Not done", uz: "Bajarilmagan" },
+  hwRate: { en: "Done rate", uz: "Bajarish darajasi" },
   achievements: { en: "Achievements", uz: "Yutuqlar" },
   xp: { en: "XP", uz: "XP" },
   newWords: { en: "{n} new words", uz: "{n} ta yangi so'z" },
@@ -235,14 +234,9 @@ export function AnalyticsPage() {
           <PCard>
             <div className="grid grid-cols-3 gap-2 text-center">
               <Mini label={t("hwDone")} value={`${a.homework.done}/${a.homework.assigned}`} icon={<ClipboardCheck size={14} />} />
-              <Mini
-                label={t("hwOnTime")}
-                value={a.homework.onTime + a.homework.late ? `${Math.round((a.homework.onTime / (a.homework.onTime + a.homework.late)) * 100)}%` : "—"}
-                icon={<CalendarDays size={14} />}
-              />
-              <Mini label={t("hwAvg")} value={a.homework.averagePercent == null ? "—" : `${a.homework.averagePercent}%`} icon={<Target size={14} />} />
+              <Mini label={t("hwMissed")} value={a.homework.missed} icon={<CalendarDays size={14} />} />
+              <Mini label={t("hwRate")} value={a.homework.rate == null ? "—" : `${a.homework.rate}%`} icon={<Target size={14} />} />
             </div>
-            {a.homework.overdue > 0 && <div className="mt-2 text-center text-xs font-semibold text-danger">{t("hwOverdue", { n: a.homework.overdue })}</div>}
           </PCard>
         </>
       )}

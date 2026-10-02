@@ -3,10 +3,10 @@
  * and the real Express routes:
  *  - stage progress moves as soon as words are studied (not only when mastered);
  *  - app time is capped by real elapsed time and never fakes a streak day;
- *  - homework: assign → hand in (text + photo) → assistant checks with a mark
- *    (mirrored into scores) → student and teacher are told; returns and
- *    resubmits; vocabulary homework completes itself; the deadline report;
- *  - access: other students, other groups' teachers and the accountant are kept out.
+ *  - homework is a checklist: the teacher adds it, the assistant (or teacher)
+ *    ticks who did it, the teacher gets a Telegram summary when someone else
+ *    ticked, students only see it;
+ *  - access: other groups' teachers and the accountant are kept out.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createHmac } from "node:crypto";
@@ -72,7 +72,6 @@ async function call(path: string, opts: { method?: string; body?: unknown; auth?
 }
 const ALICE = `tma ${initData(6001)}`;
 const BOB = `tma ${initData(6002)}`;
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]);
 
 async function notificationsOf(studentId: string) {
   return M.db.select().from(M.schema.notifications).where(M.eq(M.schema.notifications.studentId, studentId));
@@ -221,187 +220,112 @@ describe("app time + analytics", () => {
   });
 });
 
-describe("homework (task)", () => {
+describe("homework (checklist)", () => {
   let hwId = "";
-  let fileId = "";
 
-  it("the group's teacher sets homework; students are notified", async () => {
-    const due = new Date(Date.now() + 3 * 86_400_000).toISOString();
+  it("the group's teacher adds homework; students are told", async () => {
     const r = await call(`/api/groups/${S.classA}/homework`, {
       auth: S.teacher1,
       method: "POST",
-      body: { kind: "task", title: "Essay: my family", instructions: "120 words", dueAt: due, maxScore: 10 },
+      body: { title: "Workbook p. 12-13", instructions: "Exercises 1-4", dueAt: new Date(Date.now() + 2 * 86_400_000).toISOString() },
     });
     expect(r.status).toBe(201);
     hwId = r.body.id;
     await new Promise((res) => setTimeout(res, 300));
-    const n = await notificationsOf(S.alice);
-    expect(n.some((x: Json) => x.type === "homework_assigned")).toBe(true);
+    expect((await notificationsOf(S.alice)).some((x: Json) => x.type === "homework_assigned")).toBe(true);
   });
 
-  it("another group's teacher and the accountant can't set or see it", async () => {
-    const r = await call(`/api/groups/${S.classA}/homework`, {
-      auth: S.teacher2,
-      method: "POST",
-      body: { kind: "task", title: "x", dueAt: new Date(Date.now() + 86_400_000).toISOString() },
-    });
-    expect(r.status).toBe(403);
-    expect((await call(`/api/homework/${hwId}`, { auth: S.teacher2 })).status).toBe(403);
-    expect((await call(`/api/homework`, { auth: S.accountant })).status).toBe(403);
-    // The assistant may check but not set homework.
-    const a = await call(`/api/groups/${S.classA}/homework`, {
-      auth: S.assistant,
-      method: "POST",
-      body: { kind: "task", title: "x", dueAt: new Date(Date.now() + 86_400_000).toISOString() },
-    });
-    expect(a.status).toBe(403);
+  it("only the teacher (or CEO) adds homework; other teachers and the accountant are kept out", async () => {
+    const body = { title: "x", dueAt: new Date(Date.now() + 86_400_000).toISOString() };
+    expect((await call(`/api/groups/${S.classA}/homework`, { auth: S.teacher2, method: "POST", body })).status).toBe(403);
+    expect((await call(`/api/groups/${S.classA}/homework`, { auth: S.assistant, method: "POST", body })).status).toBe(403);
+    expect((await call(`/api/groups/${S.classA}/homework`, { auth: S.ceo, method: "POST", body: { ...body, notify: false } })).status).toBe(201);
+    expect((await call(`/api/groups/${S.classA}/homework`, { auth: S.teacher2 })).status).toBe(403);
+    expect((await call(`/api/groups/${S.classA}/homework`, { auth: S.accountant })).status).toBe(403);
+    expect((await call(`/api/homework/groups`, { auth: S.accountant })).status).toBe(403);
+    expect((await call(`/api/homework/${hwId}/marks`, { auth: S.teacher2, method: "POST", body: { studentIds: [S.alice], done: true } })).status).toBe(403);
   });
 
-  it("students of the group see it; the same person's other group does not", async () => {
-    const mine = await call("/api/student/homework", asAliceA());
-    expect(mine.body.map((h: Json) => h.id)).toContain(hwId);
-    expect(mine.body.find((h: Json) => h.id === hwId).state).toBe("todo");
-    const other = await call("/api/student/homework", { auth: ALICE, headers: { "X-Student-Id": S.alice2 } });
-    expect(other.body).toHaveLength(0);
-    expect((await call(`/api/student/homework/${hwId}`, { auth: ALICE, headers: { "X-Student-Id": S.alice2 } })).status).toBe(404);
+  it("the assistant sees every group, can tick but not add", async () => {
+    const g = await call(`/api/homework/groups`, { auth: S.assistant });
+    const a = g.body.find((x: Json) => x.id === S.classA);
+    expect(a.canAssign).toBe(false);
+    expect(a.canCheck).toBe(true);
+    expect(g.body.some((x: Json) => x.id === S.classB)).toBe(true);
+    const t = await call(`/api/homework/groups`, { auth: S.teacher1 });
+    expect(t.body.map((x: Json) => x.id)).toEqual([S.classA]);
   });
 
-  it("an empty hand-in is refused; files are type-checked by their bytes", async () => {
-    const e = await call(`/api/student/homework/${hwId}/submit`, { ...asAliceA(), method: "POST", body: {} });
-    expect(e.status).toBe(400);
-    expect(e.body.error).toBe("empty_submission");
-    const bad = await call(`/api/student/homework/${hwId}/files`, { ...asAliceA(), method: "POST", raw: Buffer.from("not an image at all") });
-    expect(bad.status).toBe(415);
-    const ok = await call(`/api/student/homework/${hwId}/files`, { ...asAliceA(), method: "POST", raw: PNG, headers: { "X-Student-Id": S.alice, "X-File-Name": "page1.png" } });
-    expect(ok.status).toBe(201);
-    expect(ok.body.mime).toBe("image/png");
-    fileId = ok.body.id;
-  });
-
-  it("a draft (files only) is invisible to checkers until handed in", async () => {
-    const q = await call("/api/homework/queue", { auth: S.assistant });
-    expect(q.body).toHaveLength(0);
-    const s = await call(`/api/student/homework/${hwId}/submit`, { ...asAliceA(), method: "POST", body: { text: "My family is big." } });
-    expect(s.status).toBe(200);
-    expect(s.body.status).toBe("submitted");
-    expect(s.body.late).toBe(false);
-    const q2 = await call("/api/homework/queue", { auth: S.assistant });
-    expect(q2.body).toHaveLength(1);
-    expect(q2.body[0].files).toBe(1);
-  });
-
-  it("files are private: another student gets 404, staff of the group get the bytes", async () => {
-    expect((await call(`/api/student/homework/files/${fileId}`, { auth: BOB })).status).toBe(404);
-    expect((await call(`/api/homework/files/${fileId}`, { auth: S.teacher2 })).status).toBe(403);
-    const t = await call(`/api/homework/files/${fileId}`, { auth: S.teacher1 });
-    expect(t.status).toBe(200);
-    expect(t.ct).toContain("image/png");
-  });
-
-  it("the assistant accepts with a mark: scores, student notice, teacher report", async () => {
-    const detail = await call(`/api/homework/${hwId}`, { auth: S.assistant });
-    expect(detail.status).toBe(200);
-    expect(detail.body.canEdit).toBe(false);
-    expect(detail.body.canCheck).toBe(true);
-    const subId = detail.body.students.find((s: Json) => s.studentId === S.alice).submission.id;
-    const over = await call(`/api/homework/submissions/${subId}/check`, { auth: S.assistant, method: "POST", body: { decision: "accept", score: 11 } });
-    expect(over.status).toBe(400);
-    const r = await call(`/api/homework/submissions/${subId}/check`, {
-      auth: S.assistant,
-      method: "POST",
-      body: { decision: "accept", score: 8, feedback: "Good work" },
-    });
+  it("ticking is idempotent and only reaches the group's own students", async () => {
+    const r = await call(`/api/homework/${hwId}/marks`, { auth: S.assistant, method: "POST", body: { studentIds: [S.alice, S.alice2], done: true } });
     expect(r.status).toBe(200);
-    expect(r.body.status).toBe("accepted");
-    const scores = await M.db.select().from(M.schema.studentScores).where(M.eq(M.schema.studentScores.studentId, S.alice));
-    expect(scores).toHaveLength(1);
-    expect(scores[0].category).toBe("homework");
-    expect(Number(scores[0].score)).toBe(8);
-    const n = await notificationsOf(S.alice);
-    expect(n.some((x: Json) => x.type === "homework_checked")).toBe(true);
-    // Re-checking with a new mark updates the same score row.
-    await call(`/api/homework/submissions/${subId}/check`, { auth: S.assistant, method: "POST", body: { decision: "accept", score: 9 } });
-    const again = await M.db.select().from(M.schema.studentScores).where(M.eq(M.schema.studentScores.studentId, S.alice));
-    expect(again).toHaveLength(1);
-    expect(Number(again[0].score)).toBe(9);
-    // The group's teacher hears about it (batched; flushed here).
+    expect(r.body.changed).toEqual([S.alice]); // alice2 is the Math record, not in this group
+    const again = await call(`/api/homework/${hwId}/marks`, { auth: S.assistant, method: "POST", body: { studentIds: [S.alice], done: true } });
+    expect(again.body.changed).toEqual([]);
+    const grid = await call(`/api/groups/${S.classA}/homework`, { auth: S.teacher1 });
+    expect(grid.body.ticks[hwId]).toEqual([S.alice]);
+    expect(grid.body.homework.find((h: Json) => h.id === hwId).done).toBe(1);
+    expect(grid.body.students).toHaveLength(2);
+  });
+
+  it("the teacher gets one summary when the assistant ticked", async () => {
     sent.length = 0;
     await M.hw.flushTeacherReports();
     const msg = sent.find((m) => m.chat === 2003);
     expect(msg?.text).toContain("Homework checked");
     expect(msg?.text).toContain("Dilnoza Assistant");
-    // Accepted work can't be changed by the student any more.
-    const s = await call(`/api/student/homework/${hwId}/submit`, { ...asAliceA(), method: "POST", body: { text: "edit" } });
-    expect(s.status).toBe(409);
+    expect(msg?.text).toContain("Done: <b>1/2</b>");
+    expect(msg?.text).toContain("Karimov Bob");
   });
 
-  it("returned work: the student is told and can hand in again", async () => {
-    await call(`/api/student/homework/${hwId}/submit`, { auth: BOB, method: "POST", body: { text: "short" } });
-    const d = await call(`/api/homework/${hwId}`, { auth: S.teacher1 });
-    const subId = d.body.students.find((s: Json) => s.studentId === S.bob).submission.id;
-    const r = await call(`/api/homework/submissions/${subId}/check`, { auth: S.teacher1, method: "POST", body: { decision: "return", feedback: "Write 120 words" } });
-    expect(r.body.status).toBe("returned");
-    const n = await notificationsOf(S.bob);
-    expect(n.some((x: Json) => x.type === "homework_returned")).toBe(true);
-    const mine = await call(`/api/student/homework/${hwId}`, { auth: BOB });
-    expect(mine.body.state).toBe("returned");
-    expect(mine.body.submission.feedback).toBe("Write 120 words");
-    const again = await call(`/api/student/homework/${hwId}/submit`, { auth: BOB, method: "POST", body: { text: "longer answer" } });
-    expect(again.body.status).toBe("submitted");
-    expect(again.body.attempt).toBe(2);
-    // Checked by the group's own teacher: no extra report to themselves.
+  it("the teacher's own ticks don't message the teacher", async () => {
+    await call(`/api/homework/${hwId}/marks`, { auth: S.teacher1, method: "POST", body: { studentIds: [S.bob], done: true } });
+    await call(`/api/homework/${hwId}/marks`, { auth: S.teacher1, method: "POST", body: { studentIds: [S.bob], done: false } });
     sent.length = 0;
     await M.hw.flushTeacherReports();
     expect(sent).toHaveLength(0);
   });
 
-  it("when the deadline passes the teacher gets one status report", async () => {
+  it("students only see their homework and whether it was ticked", async () => {
+    const a = await call("/api/student/homework", asAliceA());
+    expect(a.body.find((h: Json) => h.id === hwId).state).toBe("done");
+    const b = await call("/api/student/homework", { auth: BOB });
+    expect(b.body.find((h: Json) => h.id === hwId).state).toBe("todo");
+    const other = await call("/api/student/homework", { auth: ALICE, headers: { "X-Student-Id": S.alice2 } });
+    expect(other.body).toHaveLength(0);
+    // Nothing can be handed in.
+    expect((await call(`/api/student/homework/${hwId}/submit`, { auth: BOB, method: "POST", body: { text: "x" } })).status).toBe(404);
+  });
+
+  it("after the deadline an unticked student shows as not done", async () => {
     await M.db.update(M.schema.homework).set({ dueAt: new Date(Date.now() - 60_000) }).where(M.eq(M.schema.homework.id, hwId));
-    sent.length = 0;
-    const t1 = await M.hw.runHomeworkJobs();
-    expect(t1.reports).toBe(1);
-    const msg = sent.find((m) => m.chat === 2003);
-    expect(msg?.text).toContain("deadline passed");
-    expect(msg?.text).toContain("2/2");
-    // The assistant is told there is work to check (Bob's resubmission).
-    expect(sent.some((m) => m.chat === 2005 && m.text.includes("to check"))).toBe(true);
-    const t2 = await M.hw.runHomeworkJobs();
-    expect(t2.reports).toBe(0);
+    const b = await call("/api/student/homework", { auth: BOB });
+    expect(b.body.find((h: Json) => h.id === hwId).state).toBe("missed");
+    const prof = await call(`/api/students/${S.bob}/homework`, { auth: S.teacher1 });
+    expect(prof.body.summary.missed).toBeGreaterThanOrEqual(1);
+    const aprof = await call(`/api/students/${S.alice}/homework`, { auth: S.teacher1 });
+    expect(aprof.body.summary.done).toBe(1);
   });
 
-  it("the student profile shows the homework record", async () => {
-    const r = await call(`/api/students/${S.alice}/homework`, { auth: S.teacher1 });
-    expect(r.status).toBe(200);
-    expect(r.body.summary.done).toBe(1);
-    expect(r.body.summary.averagePercent).toBe(90);
-  });
-});
-
-describe("homework (vocabulary)", () => {
-  it("completes itself once the stage target is reached", async () => {
-    const meta = await call("/api/homework/meta", { auth: S.teacher1 });
-    const g = meta.body.groups.find((x: Json) => x.id === S.classA);
-    const stage2 = g.stages[1];
+  it("reminds unticked students the day before the deadline, once", async () => {
     const r = await call(`/api/groups/${S.classA}/homework`, {
       auth: S.teacher1,
       method: "POST",
-      body: { kind: "vocabulary", title: "Stage 2 words", dueAt: new Date(Date.now() + 86_400_000).toISOString(), unitId: stage2.id, targetPercent: 10 },
+      body: { title: "Learn 20 words", dueAt: new Date(Date.now() + 12 * 3600_000).toISOString(), notify: false },
     });
-    expect(r.status).toBe(201);
-    const before = await call(`/api/student/homework/${r.body.id}`, asAliceA());
-    expect(before.body.state).toBe("todo");
-    expect(before.body.vocab.percent).toBe(0);
-    const deck = await call(`/api/student/learn/deck?mode=learn&unit=${stage2.id}&limit=10`, asAliceA());
-    for (const c of deck.body.cards) await call(`/api/student/learn/cards/${c.id}/review`, { ...asAliceA(), method: "POST", body: { known: true } });
-    // Completion runs right after the answer; give it a moment.
-    let state = "";
-    for (let i = 0; i < 20 && state !== "done"; i++) {
-      await new Promise((res) => setTimeout(res, 100));
-      state = (await call(`/api/student/homework/${r.body.id}`, asAliceA())).body.state;
-    }
-    expect(state).toBe("done");
-    // Vocabulary homework never shows up in the check queue.
-    const q = await call("/api/homework/queue", { auth: S.assistant });
-    expect(q.body.every((x: Json) => x.homeworkId !== r.body.id)).toBe(true);
+    await M.db.update(M.schema.homework).set({ createdAt: new Date(Date.now() - 24 * 3600_000) }).where(M.eq(M.schema.homework.id, r.body.id));
+    await call(`/api/homework/${r.body.id}/marks`, { auth: S.teacher1, method: "POST", body: { studentIds: [S.alice], done: true } });
+    const first = await M.hw.runHomeworkJobs();
+    expect(first.dueSoon).toBe(1); // Bob only
+    expect((await M.hw.runHomeworkJobs()).dueSoon).toBe(0);
+  });
+
+  it("archive hides it from the current view; delete removes it", async () => {
+    await call(`/api/homework/${hwId}`, { auth: S.teacher1, method: "PATCH", body: { status: "archived" } });
+    const g = await call(`/api/groups/${S.classA}/homework`, { auth: S.teacher1 });
+    expect(g.body.homework.some((h: Json) => h.id === hwId)).toBe(false);
+    const all = await call(`/api/groups/${S.classA}/homework?view=all`, { auth: S.teacher1 });
+    expect(all.body.homework.some((h: Json) => h.id === hwId)).toBe(true);
+    expect((await call(`/api/homework/${hwId}`, { auth: S.teacher1, method: "DELETE" })).status).toBe(200);
   });
 });

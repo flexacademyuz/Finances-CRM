@@ -232,6 +232,13 @@
       "when": 1795000013000,
       "tag": "0032_homework_app_time",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795000014000,
+      "tag": "0033_homework_checklist",
+      "breakpoints": true
     }
   ]
 }

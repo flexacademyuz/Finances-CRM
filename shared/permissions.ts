@@ -23,8 +23,8 @@ export const PERMISSIONS = [
   // Learning content: add/edit/move/remove vocabulary, manage stages and view
   // centre-wide learning statistics. CEO-only by default.
   "manage_learning",
-  // Homework: set homework for ANY group (teachers always can for their own
-  // groups), and check / mark students' submissions for any group.
+  // Homework (a checklist per group): add homework for ANY group (teachers
+  // always can for their own groups), and tick who did it in any group.
   "assign_homework",
   "check_homework",
 ] as const;
@@ -45,8 +45,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   manage_attendance: "Manage attendance (all groups)",
   manage_scores: "Manage scores (all groups)",
   manage_learning: "Manage learning content (vocabulary)",
-  assign_homework: "Set homework (all groups)",
-  check_homework: "Check homework (all groups)",
+  assign_homework: "Add homework (all groups)",
+  check_homework: "Tick homework (all groups)",
 };
 
 /** Abilities each role has by default, before any per-user grants. */
@@ -67,7 +67,7 @@ export const ROLE_DEFAULTS: Record<Role, Permission[]> = {
   teacher: ["add_student", "edit_student", "approve_leads"],
   // Assistants handle the front desk: recording payments and registering /
   // approving new students. The CEO can grant more per-user.
-  // They also check homework for every group in their branches.
+  // They also tick homework for every group in their branches.
   assistant: ["record_payment", "add_student", "edit_student", "approve_leads", "check_homework"],
 };
 

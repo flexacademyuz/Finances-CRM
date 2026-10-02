@@ -35,13 +35,10 @@ import {
   settingsOf,
 } from "../learning/service";
 import { EXERCISE_TYPES, PRACTICE_SOURCES } from "@shared/learning/types";
-import { syncVocabHomework, studentHomeworkSummary } from "../services/homework";
+import { studentHomeworkSummary } from "../services/homework";
 import { personRecordIds } from "../learning/learner";
 
-/** Vocabulary homework may have just been reached: complete it (best-effort). */
-function syncHomework(req: Request) {
-  void syncVocabHomework(req.student!).catch((err) => console.warn("[homework] vocab sync failed:", (err as Error).message));
-}
+// Student analytics include their homework record (see /analytics).
 
 const router = Router();
 
@@ -131,7 +128,6 @@ router.post(
     if (!UUID_RE.test(req.params.itemId)) return res.status(404).json(notFound);
     const { known } = z.object({ known: z.boolean() }).parse(req.body);
     res.json(await reviewCard(learner(req), resourceOf(req), req.params.itemId, known));
-    syncHomework(req);
   }),
 );
 
@@ -198,7 +194,6 @@ router.post(
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) return res.status(404).json(notFound);
     res.json(await finishSession(learner(req), resourceOf(req), req.params.id));
-    syncHomework(req);
   }),
 );
 

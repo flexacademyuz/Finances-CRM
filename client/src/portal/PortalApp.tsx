@@ -35,7 +35,7 @@ import { PracticePage } from "./learn/Practice";
 import { BookmarksPage } from "./learn/Bookmarks";
 import { AnalyticsPage } from "./stats/AnalyticsPage";
 import { useAppTime } from "./stats/useAppTime";
-import { HomeworkListPage, HomeworkDetailPage } from "./homework/HomeworkPages";
+import { HomeworkListPage } from "./homework/HomeworkPages";
 import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 
 initPreviewFromUrl();
@@ -153,7 +153,6 @@ export function PortalApp() {
             </Route>
             <Route path="/stats" component={AnalyticsPage} />
             <Route path="/homework" component={HomeworkListPage} />
-            <Route path="/homework/:id" component={HomeworkDetailPage} />
             <Route path="/leaderboard" component={LeaderboardPage} />
             <Route>
               <Redirect to="/" />
