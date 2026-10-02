@@ -4,7 +4,7 @@
  * long does a payment cover the student for".
  */
 
-import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore } from "./date";
+import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey } from "./date";
 import type { StudentStatus } from "./schema";
 
 /**
@@ -111,6 +111,49 @@ export function computePaidThrough(args: {
     paidThrough = addMonths(base, 1);
   }
   return args.frozenDays ? addDays(paidThrough, args.frozenDays) : paidThrough;
+}
+
+/**
+ * The billing month a NEW payment pays for, as `YYYY-MM-01`: the month in which
+ * the coverage window it buys STARTS. Same base as `computePaidThrough` (the
+ * later of current coverage and the billing anchor on or before today), so the
+ * label always matches the dates:
+ *
+ *  - start 4 Sep, never paid, pays 2 Oct → covers 4 Sep–4 Oct → **September**
+ *    (next due stays 4 Oct). Labelling it by the calendar month (October) put
+ *    the month grid, salary month, revenue month and "Covers" text one month off.
+ *  - paid to 4 Nov, pays ahead on 20 Oct → covers 4 Nov–4 Dec → November.
+ *  - lapsed since June, pays 2 Oct → covers 4 Sep–4 Oct → September (missed
+ *    months are written off, not back-billed — same as coverage).
+ *
+ * `paymentDates` = fully-paid months only, as for `computePaidThrough`. Freeze
+ * days are left out on purpose: they extend the end date, not the period paid for.
+ */
+export function billingMonthFor(args: { startDate: string; paymentDates: string[]; today: Date }): string {
+  const start = atMidnight(parseDate(args.startDate));
+  const paidThrough = computePaidThrough({ startDate: args.startDate, paymentDates: args.paymentDates });
+  const todayAnchor = anchorOnOrBefore(atMidnight(args.today), start.getUTCDate());
+  const base = todayAnchor.getTime() > paidThrough.getTime() ? todayAnchor : paidThrough;
+  return monthKey(base);
+}
+
+/**
+ * Replay a student's payments in the order they were made and return the
+ * billing month each one actually paid for (see `billingMonthFor`). A partly
+ * paid month doesn't advance coverage, so its top-ups stay on the same month.
+ * Used to repair payments that were recorded under the wrong month.
+ */
+export function replayBillingMonths(
+  startDate: string,
+  payments: { id: string; paidAt: Date; settled: boolean }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  const settledDates: string[] = [];
+  for (const p of [...payments].sort((a, b) => a.paidAt.getTime() - b.paidAt.getTime())) {
+    out.set(p.id, billingMonthFor({ startDate, paymentDates: settledDates, today: p.paidAt }));
+    if (p.settled) settledDates.push(p.paidAt.toISOString().slice(0, 10));
+  }
+  return out;
 }
 
 /**

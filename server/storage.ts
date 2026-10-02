@@ -30,7 +30,7 @@ import {
   type ScheduleSlot,
 } from "@shared/schema";
 import { monthKey, shiftMonth, atMidnight, toIso } from "@shared/date";
-import { computePaidThrough, decideStudentStatus, isMonthSettled } from "@shared/billing";
+import { billingMonthFor, computePaidThrough, decideStudentStatus, isMonthSettled } from "@shared/billing";
 import { env } from "./env";
 
 /* ─────────────────────────────── Branches ──────────────────────────── */
@@ -634,9 +634,14 @@ export async function nextUnpaidBillingMonth(studentId: string, now: Date = new 
       voided: payments.voided,
       amount: payments.amount,
       amountDue: payments.amountDue,
+      createdAt: payments.createdAt,
     })
     .from(payments)
     .where(eq(payments.studentId, studentId));
+  const [st] = await db
+    .select({ start: sql<string>`coalesce(${students.billingStartDate}, ${students.enrolledAt})` })
+    .from(students)
+    .where(eq(students.id, studentId));
 
   // Group each month's state: is there a live (non-voided) row, is it settled,
   // and is the slot otherwise blocked by a voided row (the unique index counts
@@ -653,7 +658,14 @@ export async function nextUnpaidBillingMonth(studentId: string, now: Date = new 
     byMonth.set(r.month, s);
   }
 
-  let m = monthKey(now);
+  // Start from the period this payment actually pays for: the month in which
+  // the coverage window it buys begins (an overdue student paying in October
+  // for the 4 Sep–4 Oct window pays for SEPTEMBER, not October). See
+  // shared/billing.billingMonthFor — the same base the coverage dates use.
+  const settledDates = rows
+    .filter((r) => !r.voided && isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue)))
+    .map((r) => r.createdAt.toISOString().slice(0, 10));
+  let m = st?.start ? billingMonthFor({ startDate: String(st.start), paymentDates: settledDates, today: now }) : monthKey(now);
   for (;;) {
     const s = byMonth.get(m);
     // Target this month unless it already has a fully-settled ACTIVE payment. A

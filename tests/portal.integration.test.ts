@@ -622,7 +622,8 @@ describe("telegram linking", () => {
     const { processQueue } = await import("../server/notifications/queue");
     const msg = await waitFor(async () => {
       await processQueue(1000);
-      return tg.sent.find((m) => m.chatId === 6001);
+      // Other queued messages (e.g. "account linked") may reach this chat in the same pass.
+      return tg.sent.find((m) => m.chatId === 6001 && m.text.includes("10 UZS"));
     });
     expect(msg.text).toContain("<i>SAT</i>");
   });
