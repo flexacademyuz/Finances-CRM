@@ -6,7 +6,7 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { Route, Switch, Link, useLocation, Redirect } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Home, Wallet, TrendingUp, CalendarCheck, Bell, Eye, Link2, X, GraduationCap } from "lucide-react";
+import { Home, Wallet, TrendingUp, Bell, Eye, Link2, X, GraduationCap, ClipboardList } from "lucide-react";
 import type { ApiError } from "../lib/api";
 import { haptic, tg, isTelegram } from "../lib/telegram";
 import { initials, avatarColor } from "../lib/format";
@@ -33,7 +33,9 @@ import { WordsPage } from "./learn/WordsPage";
 import { FlashcardsPage } from "./learn/Flashcards";
 import { PracticePage } from "./learn/Practice";
 import { BookmarksPage } from "./learn/Bookmarks";
-import { StatsPage } from "./learn/Stats";
+import { AnalyticsPage } from "./stats/AnalyticsPage";
+import { useAppTime } from "./stats/useAppTime";
+import { HomeworkListPage, HomeworkDetailPage } from "./homework/HomeworkPages";
 import { LeaderboardPage } from "./leaderboard/LeaderboardPage";
 
 initPreviewFromUrl();
@@ -57,6 +59,8 @@ export function PortalApp() {
   // Flashcard / exercise players run full-screen: no header, tabs or group switcher.
   const immersive = loc.startsWith("/learn/cards") || loc.startsWith("/learn/practice");
   const langSynced = useRef(false);
+  // Count time in the app (not for staff previews, which are read-only).
+  useAppTime(!!me.data && !me.data.preview);
 
   // Adopt the student's saved notification language once (Telegram users).
   useEffect(() => {
@@ -144,7 +148,12 @@ export function PortalApp() {
             <Route path="/learn/cards" component={FlashcardsPage} />
             <Route path="/learn/practice" component={PracticePage} />
             <Route path="/learn/bookmarks" component={BookmarksPage} />
-            <Route path="/learn/stats" component={StatsPage} />
+            <Route path="/learn/stats">
+              <Redirect to="/stats" />
+            </Route>
+            <Route path="/stats" component={AnalyticsPage} />
+            <Route path="/homework" component={HomeworkListPage} />
+            <Route path="/homework/:id" component={HomeworkDetailPage} />
             <Route path="/leaderboard" component={LeaderboardPage} />
             <Route>
               <Redirect to="/" />
@@ -177,6 +186,8 @@ function Header({ me }: { me: Me }) {
     "/profile": "profile",
     "/learn": "learn",
     "/leaderboard": "leaderboard",
+    "/homework": "homework",
+    "/stats": "myStats",
   };
   const title = titles[loc];
   return (
@@ -261,8 +272,9 @@ const TABS: { href: string; key: PKey; icon: ReactNode }[] = [
   // Learning sits next to Home: it's the daily habit. Notifications stay one tap
   // away via the header bell.
   { href: "/learn", key: "learn", icon: <GraduationCap size={22} /> },
+  // Homework is a weekly must; attendance stays one tap away from Home.
+  { href: "/homework", key: "homework", icon: <ClipboardList size={22} /> },
   { href: "/progress", key: "progress", icon: <TrendingUp size={22} /> },
-  { href: "/attendance", key: "attendance", icon: <CalendarCheck size={22} /> },
   { href: "/payments", key: "payments", icon: <Wallet size={22} /> },
 ];
 

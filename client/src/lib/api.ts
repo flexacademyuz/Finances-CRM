@@ -107,3 +107,44 @@ export async function downloadCsv(path: string, filename: string, query?: Record
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+function baseHeaders(extra?: Record<string, string>): Record<string, string> {
+  const branch = getSelectedBranch();
+  return {
+    Authorization: authHeader(),
+    ...(branch ? { "X-Branch-Id": branch } : {}),
+    ...impersonationHeader(),
+    ...(extra ?? {}),
+  };
+}
+
+async function failure(res: Response): Promise<ApiError> {
+  let code = "error";
+  let message = res.statusText;
+  try {
+    const data = await res.json();
+    code = data.error ?? code;
+    message = data.message ?? message;
+  } catch {
+    /* non-JSON error */
+  }
+  return new ApiError(res.status, code, message);
+}
+
+/** Upload one file as a raw body (the server sniffs its real type). */
+export async function apiUpload<T = unknown>(path: string, file: Blob, name: string, headers?: Record<string, string>): Promise<T> {
+  const res = await fetch(new URL(path, window.location.origin).toString(), {
+    method: "POST",
+    headers: baseHeaders({ "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(name), ...(headers ?? {}) }),
+    body: file,
+  });
+  if (!res.ok) throw await failure(res);
+  return res.json() as Promise<T>;
+}
+
+/** Fetch an authenticated file and return an object URL (caller revokes it). */
+export async function apiBlobUrl(path: string, headers?: Record<string, string>): Promise<string> {
+  const res = await fetch(new URL(path, window.location.origin).toString(), { headers: baseHeaders(headers) });
+  if (!res.ok) throw await failure(res);
+  return URL.createObjectURL(await res.blob());
+}

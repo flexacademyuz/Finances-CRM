@@ -13,6 +13,7 @@ import {
   index,
   unique,
   uniqueIndex,
+  customType,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -1266,6 +1267,11 @@ export const learnerDailyActivity = pgTable(
     exercisesAnswered: integer("exercises_answered").notNull().default(0),
     correct: integer("correct").notNull().default(0),
     newWords: integer("new_words").notNull().default(0),
+    // Seconds the student had the app open and in use that day (client
+    // heartbeats, capped server-side by real elapsed time). App time alone does
+    // NOT count as a streak day — only xp/cards/exercises do.
+    activeSeconds: integer("active_seconds").notNull().default(0),
+    lastPingAt: timestamp("last_ping_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({ pk: uniqueIndex("learner_daily_activity_pk").on(t.studentId, t.day) }),
@@ -1283,6 +1289,135 @@ export const learnerAchievements = pgTable(
   },
   (t) => ({ pk: uniqueIndex("learner_achievements_pk").on(t.studentId, t.code) }),
 );
+
+/* ─────────────────────────────── Homework ─────────────────────────────── */
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
+/**
+ * Homework assigned to a whole group. `kind`:
+ *   task        free-form work; students submit text / photos / a link and a
+ *               checker (the teacher or an assistant) accepts or returns it.
+ *   vocabulary  "learn stage N": completes itself once the student has learned
+ *               `targetPercent`% of the stage's words in the vocabulary app.
+ * `maxScore` set = checkers give a mark, which is also written to the
+ * student's scores (category "homework") so it counts everywhere scores do.
+ */
+export const homework = pgTable(
+  "homework",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
+    // The group's teacher when it was set (gets status reports).
+    teacherId: uuid("teacher_id").references(() => teachers.id, { onDelete: "set null" }),
+    kind: text("kind").notNull().default("task"),
+    title: text("title").notNull(),
+    instructions: text("instructions"),
+    linkUrl: text("link_url"),
+    resourceId: uuid("resource_id").references(() => learningResources.id, { onDelete: "set null" }),
+    unitId: uuid("unit_id").references(() => learningUnits.id, { onDelete: "set null" }),
+    targetPercent: integer("target_percent"),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    maxScore: numeric("max_score", { precision: 8, scale: 2 }),
+    // active | archived
+    status: text("status").notNull().default("active"),
+    // When the "deadline passed" report went to the teacher (once).
+    dueReportSentAt: timestamp("due_report_sent_at", { withTimezone: true }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byClassDue: index("homework_class_due_idx").on(t.classId, t.dueAt),
+    byBranchDue: index("homework_branch_due_idx").on(t.branchId, t.dueAt),
+  }),
+);
+
+/**
+ * One student's work on one homework. status:
+ *   draft      files attached but not handed in yet (checkers don't see it)
+ *   submitted  handed in, waiting to be checked
+ *   returned   checked, sent back for revision (student may resubmit)
+ *   accepted   checked and accepted (vocabulary homework: completed — `auto`)
+ */
+export const homeworkSubmissions = pgTable(
+  "homework_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id, { onDelete: "cascade" }),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("draft"),
+    answerText: text("answer_text"),
+    linkUrl: text("link_url"),
+    attempt: integer("attempt").notNull().default(0),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    late: boolean("late").notNull().default(false),
+    auto: boolean("auto").notNull().default(false),
+    score: numeric("score", { precision: 8, scale: 2 }),
+    feedback: text("feedback"),
+    checkedBy: uuid("checked_by").references(() => users.id, { onDelete: "set null" }),
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
+    // The student_scores row this mark was written to (kept in sync on re-check).
+    scoreId: uuid("score_id").references(() => studentScores.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqHwStudent: uniqueIndex("homework_submissions_hw_student_uniq").on(t.homeworkId, t.studentId),
+    byStatus: index("homework_submissions_status_idx").on(t.status, t.branchId),
+    byStudent: index("homework_submissions_student_idx").on(t.studentId),
+  }),
+);
+
+/**
+ * Files attached to homework: by staff to the assignment (submissionId null)
+ * or by a student to their submission. Stored in Postgres (small, compressed
+ * photos/PDFs) so no external storage is needed; served only through
+ * authenticated routes.
+ */
+export const homeworkFiles = pgTable(
+  "homework_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    homeworkId: uuid("homework_id")
+      .notNull()
+      .references(() => homework.id, { onDelete: "cascade" }),
+    submissionId: uuid("submission_id").references(() => homeworkSubmissions.id, { onDelete: "cascade" }),
+    name: text("name"),
+    mime: text("mime").notNull(),
+    size: integer("size").notNull(),
+    data: bytea("data").notNull(),
+    uploadedByUser: uuid("uploaded_by_user").references(() => users.id, { onDelete: "set null" }),
+    uploadedByStudent: uuid("uploaded_by_student").references(() => students.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byHomework: index("homework_files_homework_idx").on(t.homeworkId),
+    bySubmission: index("homework_files_submission_idx").on(t.submissionId),
+  }),
+);
+
+export type Homework = typeof homework.$inferSelect;
+export type HomeworkSubmission = typeof homeworkSubmissions.$inferSelect;
 
 export type LearningResource = typeof learningResources.$inferSelect;
 export type LearningUnit = typeof learningUnits.$inferSelect;

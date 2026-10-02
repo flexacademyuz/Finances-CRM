@@ -5,6 +5,8 @@ const dict = {
   home: { en: "Home", uz: "Asosiy" },
   learn: { en: "Learn", uz: "O'rganish" },
   leaderboard: { en: "Leaderboard", uz: "Reyting" },
+  homework: { en: "Homework", uz: "Vazifalar" },
+  myStats: { en: "My stats", uz: "Statistikam" },
   payments: { en: "Payments", uz: "To'lovlar" },
   progress: { en: "Progress", uz: "Natijalar" },
   attendance: { en: "Attendance", uz: "Davomat" },

@@ -68,13 +68,18 @@ export function exitPreview(): void {
   window.location.href = id ? `/student/${id}` : "/";
 }
 
-export function papi<T>(path: string, opts: { method?: string; body?: unknown; query?: Record<string, string | undefined> } = {}) {
+/** Which student (preview) or group record (profile) the request is for. */
+export function portalHeaders(): Record<string, string> {
   const pid = previewStudentId();
   const profile = pid ? null : selectedProfile();
   const headers: Record<string, string> = {};
   if (pid) headers["X-Portal-Student"] = pid;
   if (profile) headers["X-Student-Id"] = profile;
-  return api<T>(`/api/student${path}`, { ...opts, headers });
+  return headers;
+}
+
+export function papi<T>(path: string, opts: { method?: string; body?: unknown; query?: Record<string, string | undefined> } = {}) {
+  return api<T>(`/api/student${path}`, { ...opts, headers: portalHeaders() });
 }
 
 /* ─────────────────────────────── types ─────────────────────────────── */

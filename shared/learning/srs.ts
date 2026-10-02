@@ -19,6 +19,33 @@ import type { WordStatus } from "./types";
 export const MAX_BOX = 5;
 /** A word counts as MASTERED from this box on (survived 1-day + 3-day reviews). */
 export const MASTERED_BOX = 4;
+/**
+ * A word counts as LEARNED from this box on: answered correctly and not missed
+ * since. Mastery takes days of spaced reviews; "learned" is what a student
+ * achieves in one sitting, so counts and badges move as soon as they study.
+ */
+export const LEARNED_BOX = 2;
+
+/**
+ * Progress share (0–1) a word contributes to a stage/level percentage: each box
+ * up to MASTERED_BOX is a quarter. Studying a word correctly once = 50%, its
+ * 1-day review = 75%, mastered = 100% — so the percentage moves every session
+ * instead of sitting at 0% until the first words survive the 3-day review.
+ */
+export function progressWeight(box: number): number {
+  return Math.min(Math.max(box, 0), MASTERED_BOX) / MASTERED_BOX;
+}
+
+/**
+ * Percent from summed box points (each word's box capped at MASTERED_BOX).
+ * Any progress shows at least 1%; only a fully mastered set reads 100%.
+ */
+export function progressPercent(boxPoints: number, total: number, mastered: number): number {
+  if (total <= 0 || boxPoints <= 0) return 0;
+  if (mastered >= total) return 100;
+  const raw = (boxPoints / (MASTERED_BOX * total)) * 100;
+  return Math.min(99, Math.max(1, Math.round(raw)));
+}
 
 const MINUTE = 60_000;
 const DAY = 86_400_000;
@@ -102,3 +129,8 @@ export function masteryLevel(p: Pick<ProgressState, "box" | "lastResult"> | null
  * in sync with `wordStatus` (unit-tested).
  */
 export const SQL_MASTERED_BOX = MASTERED_BOX;
+
+/** Is this word learned (see LEARNED_BOX)? Mirrors the SQL filters. */
+export function isLearned(p: Pick<ProgressState, "box" | "lastResult"> | null | undefined): boolean {
+  return !!p && p.box >= LEARNED_BOX && p.lastResult !== false;
+}

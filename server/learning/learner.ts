@@ -67,6 +67,11 @@ export async function learnerLevels(
   return { levels, preferred: own };
 }
 
+/** Every student record (one per group) of the same person, this one included. */
+export async function personRecordIds(student: Pick<Student, "id" | "fullName" | "phone" | "createdAt">): Promise<string[]> {
+  return (await person(student)).recordIds;
+}
+
 /** Test hook. */
 export function clearLearnerCache(): void {
   cache.clear();

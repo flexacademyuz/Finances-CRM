@@ -38,6 +38,7 @@ export type Stage = {
   titleUz: string | null;
   total: number;
   seen: number;
+  learned: number;
   mastered: number;
   learning: number;
   needPractice: number;
@@ -45,6 +46,7 @@ export type Stage = {
   bookmarked: number;
   due: number;
   percent: number;
+  points: number;
   completed: boolean;
   toComplete: number;
 };
@@ -58,7 +60,7 @@ export type LearnHome = {
   settings: VocabSettings;
   currentStage: Stage | null;
   stages: Stage[];
-  totals: { words: number; learned: number; seen: number; needPractice: number; bookmarked: number; percent: number };
+  totals: { words: number; learned: number; mastered: number; seen: number; needPractice: number; bookmarked: number; percent: number };
   today: { reviewDue: number; newWords: number; exercises: number; done: number; goal: number; goalMet: boolean; xp: number };
   streak: number;
   xp: number;

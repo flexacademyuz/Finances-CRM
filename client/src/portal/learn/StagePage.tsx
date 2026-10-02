@@ -57,10 +57,11 @@ export function StagePage() {
         </div>
         <div className="mt-4">
           <StageBar stage={s} height={12} />
-          <div className="mt-2 text-sm font-bold">{t("wordsLearnedOf", { a: s.mastered, b: s.total })}</div>
+          <div className="mt-2 text-sm font-bold">{t("learnedMastered", { l: s.learned, m: s.mastered, t: s.total })}</div>
           <div className="text-[11px] text-muted">
             {threshold}% {t("mastered").toLowerCase()} → {t("completed").toLowerCase()}
           </div>
+          <p className="mt-2 rounded-xl bg-bg px-3 py-2 text-[11.5px] leading-snug text-muted">{t("progressExplain")}</p>
         </div>
         <div className="mt-4">
           <StageLegend stage={s} />

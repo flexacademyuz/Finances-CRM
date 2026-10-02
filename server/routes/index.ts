@@ -19,6 +19,7 @@ import scoresRouter from "./scores";
 import portalAdminRouter from "./portal-admin";
 import learningAdminRouter from "./learning-admin";
 import leaderboardRouter from "./leaderboard";
+import homeworkRouter from "./homework";
 
 const api = Router();
 
@@ -55,5 +56,6 @@ api.use(scoresRouter);
 api.use(portalAdminRouter);
 api.use(learningAdminRouter);
 api.use(leaderboardRouter);
+api.use(homeworkRouter);
 
 export default api;

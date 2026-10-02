@@ -15,6 +15,12 @@ import { levelLabel } from "@shared/learning/types";
 const L = {
   vocab: { en: "Vocabulary", uz: "Lug'at" },
   learned: { en: "learned", uz: "o'rganildi" },
+  mastered: { en: "mastered", uz: "o'zlashtirildi" },
+  progress: { en: "Progress", uz: "Natija" },
+  time7: { en: "Time (7 d)", uz: "Vaqt (7 kun)" },
+  timeInApp: { en: "In the app", uz: "Ilovada" },
+  today: { en: "today", uz: "bugun" },
+  week: { en: "7 days", uz: "7 kun" },
   studied: { en: "studied", uz: "ko'rilgan" },
   needPractice: { en: "need practice", uz: "mashq kerak" },
   accuracy: { en: "Accuracy", uz: "Aniqlik" },
@@ -34,16 +40,44 @@ const L = {
   words: { en: "words", uz: "so'z" },
 } as const;
 
-type Stage = { id: string; position: number; total: number; mastered: number; learning: number; needPractice: number; percent: number; completed: boolean };
+type Stage = {
+  id: string;
+  position: number;
+  total: number;
+  seen: number;
+  learned: number;
+  mastered: number;
+  learning: number;
+  needPractice: number;
+  percent: number;
+  completed: boolean;
+};
 type StudentLearning =
   | { available: false }
   | {
       available: true;
       sets: { resourceId: string; level: string | null; title: string; stages: Stage[] }[];
       stages: Stage[];
-      stats: { wordsSeen: number; wordsLearned: number; needPractice: number; accuracy: number | null; streak: number; xp: number };
+      stats: {
+        wordsSeen: number;
+        wordsLearned: number;
+        wordsMastered: number;
+        needPractice: number;
+        accuracy: number | null;
+        streak: number;
+        xp: number;
+        secondsToday: number;
+        seconds7d: number;
+      };
       difficult: { id: string; word: string; translation: string; stage: number; correct: number; incorrect: number }[];
     };
+
+/** "1h 25m" / "12m" / "0m". */
+export function fmtMinutes(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const h = Math.floor(m / 60);
+  return h ? `${h}h ${m % 60}m` : `${m}m`;
+}
 
 function useL() {
   const { locale } = useI18n();
@@ -73,10 +107,13 @@ export function StudentLearningPanel({ studentId }: { studentId: string }) {
           <>
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
               <span>
+                <b className="figure text-lg">{s.wordsSeen}</b> {l("studied")}
+              </span>
+              <span>
                 <b className="figure text-lg">{s.wordsLearned}</b> {l("learned")}
               </span>
               <span>
-                <b className="figure text-lg">{s.wordsSeen}</b> {l("studied")}
+                <b className="figure text-lg">{s.wordsMastered}</b> {l("mastered")}
               </span>
               <span className={s.needPractice ? "text-danger" : ""}>
                 <b className="figure text-lg">{s.needPractice}</b> {l("needPractice")}
@@ -86,6 +123,9 @@ export function StudentLearningPanel({ studentId }: { studentId: string }) {
               </span>
               <span>
                 {l("streak")}: <b>{s.streak}</b> {l("days")}
+              </span>
+              <span>
+                {l("timeInApp")}: <b>{fmtMinutes(s.secondsToday)}</b> {l("today")} · <b>{fmtMinutes(s.seconds7d)}</b> {l("week")}
               </span>
             </div>
             {d.sets.map((set) => (
@@ -100,8 +140,16 @@ export function StudentLearningPanel({ studentId }: { studentId: string }) {
                         </span>
                         <span className={st.completed ? "text-status-paid" : ""}>{st.percent}%</span>
                       </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-dark/[0.07]">
-                        <div className="h-full rounded-full bg-status-paid" style={{ width: `${st.percent}%` }} />
+                      <div
+                        className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-dark/[0.07]"
+                        title={`${st.seen} ${l("studied")} · ${st.learned} ${l("learned")} · ${st.mastered} ${l("mastered")} / ${st.total}`}
+                      >
+                        <div className="bg-status-paid" style={{ width: `${(st.mastered / Math.max(1, st.total)) * 100}%` }} />
+                        <div className="bg-primary/60" style={{ width: `${((st.learned - st.mastered) / Math.max(1, st.total)) * 100}%` }} />
+                        <div className="bg-warning/60" style={{ width: `${((st.seen - st.learned) / Math.max(1, st.total)) * 100}%` }} />
+                      </div>
+                      <div className="mt-1 text-[10px] text-muted">
+                        {st.learned}/{st.total} {l("learned")}
                       </div>
                     </div>
                   ))}
@@ -131,8 +179,11 @@ type GroupRow = {
   studentId: string;
   fullName: string;
   seen?: number;
+  learned?: number;
   mastered?: number;
   needPractice?: number;
+  seconds7d?: number;
+  practisedDays7d?: number;
   accuracy30?: number | null;
   lastActiveAt?: string | null;
   percent: number;
@@ -175,9 +226,10 @@ export function GroupLearning({ classId }: { classId: string }) {
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-muted">
             <th className="px-4 py-2.5">{l("student")}</th>
-            <th className="px-2 py-2.5">{l("learned")}</th>
+            <th className="px-2 py-2.5">{l("progress")}</th>
             <th className="px-2 py-2.5">{l("needPractice")}</th>
             <th className="px-2 py-2.5">{l("last30")}</th>
+            <th className="px-2 py-2.5">{l("time7")}</th>
             <th className="hidden px-2 py-2.5 sm:table-cell">{l("lastActive")}</th>
           </tr>
         </thead>
@@ -195,10 +247,17 @@ export function GroupLearning({ classId }: { classId: string }) {
                 )}
               </td>
               <td className="px-2 py-2.5">
-                <b>{r.mastered ?? 0}</b> <span className="text-muted">({r.percent}%)</span>
+                <b>{r.percent}%</b>{" "}
+                <span className="whitespace-nowrap text-xs text-muted">
+                  {r.learned ?? 0} {l("learned")} · {r.mastered ?? 0} {l("mastered")}
+                </span>
               </td>
               <td className={`px-2 py-2.5 ${(r.needPractice ?? 0) > 0 ? "font-bold text-danger" : "text-muted"}`}>{r.needPractice ?? 0}</td>
               <td className="px-2 py-2.5">{r.accuracy30 == null ? "—" : `${r.accuracy30}%`}</td>
+              <td className="whitespace-nowrap px-2 py-2.5">
+                {fmtMinutes(r.seconds7d ?? 0)}
+                {r.practisedDays7d ? <span className="text-xs text-muted"> · {r.practisedDays7d}/7</span> : null}
+              </td>
               <td className="hidden px-2 py-2.5 text-muted sm:table-cell">
                 {r.lastActiveAt ? formatDate(r.lastActiveAt.slice(0, 10), locale) : l("never")}
               </td>

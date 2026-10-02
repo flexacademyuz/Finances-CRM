@@ -36,6 +36,7 @@ import { listForStudent, unreadCount, markAsRead, markAllRead } from "../notific
 import { setAccountLanguage, unlinkAccount } from "../services/telegram-link";
 import { isMonthSettled } from "@shared/billing";
 import learnRouter from "./learn";
+import studentHomeworkRouter from "./student-homework";
 import { studentLeaderboardRouter } from "./leaderboard";
 
 const router = Router();
@@ -418,6 +419,9 @@ router.post(
 
 // Vocabulary & practice (inherits the student auth + preview guard above).
 router.use("/learn", learnRouter);
+
+// Homework: see, hand in, get feedback (own group record only).
+router.use("/homework", studentHomeworkRouter);
 
 // Group + centre leaderboards (read-only; public names for other students).
 router.use("/leaderboard", studentLeaderboardRouter);

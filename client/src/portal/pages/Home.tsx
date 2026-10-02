@@ -5,6 +5,7 @@ import { renderNotification } from "@shared/notifications";
 import { categoryLabel } from "@shared/scores";
 import { papi, amountDueNow, type Dashboard } from "../api";
 import { usePT } from "../i18n";
+import { HomeworkHomeCard } from "../homework/HomeworkPages";
 import {
   PCard,
   SectionTitle,
@@ -82,6 +83,9 @@ export function HomePage() {
 
       {/* Today's vocabulary practice: the daily learning habit, one tap to start. */}
       <TodayCard compact />
+
+      {/* Homework due next (hidden when the group has none). */}
+      <HomeworkHomeCard />
 
       {/* Weekly rank in my group (and the whole centre). */}
       <RankCard />

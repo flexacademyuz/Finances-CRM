@@ -9,6 +9,7 @@
 import type { StudentPortalSettings } from "./schema";
 import { categoryLabel } from "./scores";
 import { DEFAULT_LEADERBOARD_SETTINGS } from "./leaderboard";
+import { fmtDue } from "./homework";
 
 export type Locale = "en" | "uz";
 
@@ -28,6 +29,7 @@ export const NOTIFICATION_PREF_GROUPS = [
   "schedule_changes",
   "announcements",
   "learning",
+  "homework",
 ] as const;
 export type PrefGroup = (typeof NOTIFICATION_PREF_GROUPS)[number];
 
@@ -41,6 +43,7 @@ export const PREF_GROUP_LABELS: Record<PrefGroup, { en: string; uz: string }> = 
   schedule_changes: { en: "Schedule changes", uz: "Jadval o'zgarishlari" },
   announcements: { en: "Announcements", uz: "E'lonlar" },
   learning: { en: "Vocabulary practice", uz: "Lug'at mashqlari" },
+  homework: { en: "Homework", uz: "Uy vazifalari" },
 };
 
 type P = Record<string, unknown>;
@@ -421,6 +424,53 @@ export const NOTIFICATION_TYPES = {
       l === "uz"
         ? { title: "Bosqich yakuniga oz qoldi", body: `${s(p.stage)}-bosqichni yakunlashga ${s(p.left)} ta so'z qoldi.` }
         : { title: "Almost there", body: `You are ${s(p.left)} words away from completing Stage ${s(p.stage)}.` },
+  },
+  homework_assigned: {
+    category: "academic",
+    prefGroup: "homework",
+    icon: "pencil",
+    tone: "info",
+    render: (p, l) =>
+      l === "uz"
+        ? { title: "Yangi uy vazifasi", body: `${s(p.title)}\nMuddat: ${fmtDue(s(p.dueAt), l)}` }
+        : { title: "New homework", body: `${s(p.title)}\nDue: ${fmtDue(s(p.dueAt), l)}` },
+  },
+  homework_due_soon: {
+    category: "academic",
+    prefGroup: "homework",
+    icon: "clock",
+    tone: "warning",
+    render: (p, l) =>
+      l === "uz"
+        ? { title: "Uy vazifasi muddati yaqin", body: `«${s(p.title)}» ${fmtDue(s(p.dueAt), l)} gacha topshirilishi kerak.` }
+        : { title: "Homework due soon", body: `"${s(p.title)}" is due ${fmtDue(s(p.dueAt), l)}.` },
+  },
+  homework_checked: {
+    category: "academic",
+    prefGroup: "homework",
+    icon: "check",
+    tone: "success",
+    render: (p, l) => {
+      const mark = p.score != null && p.maxScore != null ? `\n${s(p.score)} / ${s(p.maxScore)}` : "";
+      const c = p.feedback ? `\n\n${l === "uz" ? "Izoh" : "Feedback"}: "${s(p.feedback)}"` : "";
+      return l === "uz"
+        ? { title: "Uy vazifasi qabul qilindi", body: `${s(p.title)}${mark}${c}` }
+        : { title: "Homework accepted", body: `${s(p.title)}${mark}${c}` };
+    },
+  },
+  homework_returned: {
+    category: "academic",
+    prefGroup: "homework",
+    // A returned homework needs action: always delivered.
+    mandatory: true,
+    icon: "alert",
+    tone: "warning",
+    render: (p, l) => {
+      const c = p.feedback ? `\n\n${l === "uz" ? "Izoh" : "Feedback"}: "${s(p.feedback)}"` : "";
+      return l === "uz"
+        ? { title: "Uy vazifasini qayta bajaring", body: `«${s(p.title)}» qayta ishlash uchun qaytarildi.${c}` }
+        : { title: "Homework returned", body: `"${s(p.title)}" was sent back for revision.${c}` };
+    },
   },
   learning_stage_complete: {
     category: "academic",

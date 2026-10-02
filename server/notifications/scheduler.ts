@@ -15,6 +15,7 @@ import { getSettings } from "../storage";
 import { createMany, portalSettings, type CreateNotificationInput } from "./service";
 import { monthEnd } from "./listeners";
 import { runLearningReminders } from "../learning/reminders";
+import { runHomeworkJobs } from "../services/homework";
 
 /** Send reminders for lessons starting ≈ h hours from now (for each h). */
 export async function runLessonReminders(now: Date = new Date()): Promise<number> {
@@ -208,6 +209,12 @@ export function startStudentScheduler(): void {
       if (n) console.log(`[notify] lesson reminders: ${n}`);
     } catch (err) {
       console.error("[notify] lesson reminders failed:", (err as Error).message);
+    }
+    try {
+      const hw = await runHomeworkJobs();
+      if (hw.dueSoon || hw.reports) console.log("[notify] homework:", JSON.stringify(hw));
+    } catch (err) {
+      console.error("[notify] homework jobs failed:", (err as Error).message);
     }
     const now = new Date();
     const tDay = tashkentDate(now);

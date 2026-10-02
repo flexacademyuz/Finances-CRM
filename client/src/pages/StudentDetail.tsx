@@ -19,6 +19,7 @@ import { Button, Card, Empty, Field, Input, Modal, Spinner, StatusBadge, MethodT
 import { StudentActions } from "../components/StudentActions";
 import { StudentAttendancePanel, StudentScoresPanel, StudentTelegramPanel } from "../components/StudentPortalPanels";
 import { StudentLearningPanel } from "../components/LearningPanels";
+import { StudentHomeworkPanel } from "./Homework";
 
 /** Full student profile: start date, next-due, and complete payment history. */
 export function StudentDetail() {
@@ -209,6 +210,7 @@ export function StudentDetail() {
       <StudentAttendancePanel studentId={student.id} />
       <StudentScoresPanel studentId={student.id} isOwnTeacher={user.role === "teacher"} />
       <StudentLearningPanel studentId={student.id} />
+      <StudentHomeworkPanel studentId={student.id} />
       <StudentTelegramPanel studentId={student.id} isOwnTeacher={user.role === "teacher"} />
 
       {/* Parent SMS (finance staff only) */}

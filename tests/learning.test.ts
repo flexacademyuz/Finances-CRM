@@ -563,8 +563,8 @@ describe("gamification & settings", () => {
   });
 
   it("awards badges by thresholds", () => {
-    expect(achievementsFor({ reviewed: 1, mastered: 0, streak: 0 })).toEqual(["first_steps"]);
-    expect(achievementsFor({ reviewed: 120, mastered: 100, streak: 7 })).toEqual(
+    expect(achievementsFor({ reviewed: 1, learned: 0, streak: 0 })).toEqual(["first_steps"]);
+    expect(achievementsFor({ reviewed: 120, learned: 100, streak: 7 })).toEqual(
       expect.arrayContaining(["words_50", "words_100", "streak_3", "streak_7"]),
     );
   });

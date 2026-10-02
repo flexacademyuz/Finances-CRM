@@ -526,6 +526,8 @@ const dict = {
   perm_manage_attendance: { en: "Manage attendance (all groups)", uz: "Davomatni boshqarish (barcha guruhlar)" },
   perm_manage_scores: { en: "Manage scores (all groups)", uz: "Baholarni boshqarish (barcha guruhlar)" },
   perm_manage_learning: { en: "Manage learning content (vocabulary)", uz: "O'quv kontentini boshqarish (lug'at)" },
+  perm_assign_homework: { en: "Set homework (all groups)", uz: "Uy vazifasi berish (barcha guruhlar)" },
+  perm_check_homework: { en: "Check homework (all groups)", uz: "Uy vazifasini tekshirish (barcha guruhlar)" },
   today: { en: "Today", uz: "Bugun" },
   todaysLessons: { en: "Today's lessons", uz: "Bugungi darslar" },
   takeAttendance: { en: "Take attendance", uz: "Davomat olish" },
@@ -586,6 +588,7 @@ const dict = {
   studentPortal: { en: "Student portal", uz: "O'quvchi kabineti" },
   learning: { en: "Learning", uz: "Ta'lim" },
   leaderboard: { en: "Leaderboard", uz: "Reyting" },
+  homework: { en: "Homework", uz: "Uy vazifasi" },
   studentPortalSubtitle: {
     en: "The students' Telegram Mini-App: who's connected, notifications and announcements.",
     uz: "O'quvchilarning Telegram ilovasi: kim ulangan, bildirishnomalar va e'lonlar.",

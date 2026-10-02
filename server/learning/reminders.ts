@@ -12,7 +12,7 @@ import { learnerLevels } from "./learner";
 import { tashkentDate, addDaysIso } from "@shared/lesson-schedule";
 import { currentStreak } from "@shared/learning/gamification";
 import { createMany, type CreateNotificationInput } from "../notifications/service";
-import { defaultVocabResource, resourcesForLevels, stageSummaries, currentStage } from "./service";
+import { defaultVocabResource, resourcesForLevels, stageSummaries, currentStage, PRACTICE_DAY_SQL } from "./service";
 
 const STREAK_MILESTONES = new Set([3, 7, 14, 30, 50, 100]);
 
@@ -24,7 +24,7 @@ export async function runLearningReminders(now: Date = new Date()): Promise<Reco
 
   const activity = await db.execute(sql`
     select student_id, array_agg(day::text) as days
-    from ${learnerDailyActivity} where day >= ${since}
+    from ${learnerDailyActivity} where day >= ${since} and ${PRACTICE_DAY_SQL}
     group by student_id`);
   const rows = activity.rows as unknown as { student_id: string; days: string[] }[];
   if (rows.length === 0) return {};

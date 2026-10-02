@@ -30,6 +30,8 @@ export type Access = {
   studentPortal: boolean;
   /** Learning content (vocabulary) management + learning statistics. */
   learning: boolean;
+  /** Homework: teachers (own groups), checkers/assigners (all groups in branch). */
+  homework: boolean;
 };
 
 export function accessFor(user: User): Access {
@@ -61,5 +63,6 @@ export function accessFor(user: User): Access {
     attendance: true,
     studentPortal: ceo || accountant,
     learning: can(user, "manage_learning"),
+    homework: role === "teacher" || can(user, "check_homework") || can(user, "assign_homework"),
   };
 }

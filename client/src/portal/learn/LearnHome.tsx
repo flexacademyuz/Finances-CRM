@@ -22,15 +22,19 @@ export function LearnHomePage() {
       <TodayCard />
 
       {/* Overall progress */}
-      <Link href="/learn/stats" className="block">
+      <Link href="/stats" className="block">
         <PCard className="flex items-center gap-4">
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold text-muted">{t("overall")}</div>
-            <div className="mt-0.5 font-extrabold">
-              {t("wordsLearnedOf", { a: d.totals.learned, b: d.totals.words })}
+            <div className="mt-0.5 flex items-baseline justify-between gap-2">
+              <span className="font-extrabold">{t("wordsLearnedOf", { a: d.totals.learned, b: d.totals.words })}</span>
+              <span className="figure text-sm font-extrabold text-primary">{d.totals.percent}%</span>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-dark/[0.07]">
-              <div className="h-full rounded-full bg-status-paid" style={{ width: `${d.totals.percent}%` }} />
+              <div className="h-full rounded-full bg-status-paid transition-[width] duration-700" style={{ width: `${d.totals.percent}%` }} />
+            </div>
+            <div className="mt-1 text-[11px] text-muted">
+              {d.totals.mastered} {t("mastered").toLowerCase()} · {d.totals.seen} {t("wordsSeen").toLowerCase()}
             </div>
           </div>
           <div className="text-right">
@@ -60,7 +64,7 @@ export function LearnHomePage() {
       {/* Stages */}
       <SectionTitle
         action={
-          <Link href="/learn/stats" className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
+          <Link href="/stats" className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
             <BarChart3 size={15} /> {t("stats")}
           </Link>
         }
@@ -90,7 +94,7 @@ export function LearnHomePage() {
                       <StageBar stage={s} height={8} />
                     </div>
                     <div className="mt-1 text-[11px] text-muted">
-                      {s.completed ? t("completed") : t("wordsLearnedOf", { a: s.mastered, b: s.total })}
+                      {s.completed ? t("completed") : t("learnedMastered", { l: s.learned, m: s.mastered, t: s.total })}
                     </div>
                   </div>
                 </div>

@@ -70,16 +70,17 @@ export function longestStreak(activeDays: readonly string[]): number {
 /** Badges earned for the given totals (the caller inserts the new ones). */
 export function achievementsFor(s: {
   reviewed: number;
-  mastered: number;
+  /** Words learned (answered right, not missed since) — see LEARNED_BOX. */
+  learned: number;
   streak: number;
   perfectSet?: boolean;
   stageCompleted?: boolean;
 }): AchievementCode[] {
   const out: AchievementCode[] = [];
   if (s.reviewed >= 1) out.push("first_steps");
-  if (s.mastered >= 50) out.push("words_50");
-  if (s.mastered >= 100) out.push("words_100");
-  if (s.mastered >= 300) out.push("words_300");
+  if (s.learned >= 50) out.push("words_50");
+  if (s.learned >= 100) out.push("words_100");
+  if (s.learned >= 300) out.push("words_300");
   if (s.streak >= 3) out.push("streak_3");
   if (s.streak >= 7) out.push("streak_7");
   if (s.streak >= 30) out.push("streak_30");

@@ -22,8 +22,10 @@ import {
   deck,
   finishSession,
   getSession,
+  learnerAnalytics,
   learnerHome,
   learnerStats,
+  recordAppTime,
   loadUnit,
   resourcesForLevels,
   reviewCard,
@@ -33,6 +35,13 @@ import {
   settingsOf,
 } from "../learning/service";
 import { EXERCISE_TYPES, PRACTICE_SOURCES } from "@shared/learning/types";
+import { syncVocabHomework, studentHomeworkSummary } from "../services/homework";
+import { personRecordIds } from "../learning/learner";
+
+/** Vocabulary homework may have just been reached: complete it (best-effort). */
+function syncHomework(req: Request) {
+  void syncVocabHomework(req.student!).catch((err) => console.warn("[homework] vocab sync failed:", (err as Error).message));
+}
 
 const router = Router();
 
@@ -122,6 +131,7 @@ router.post(
     if (!UUID_RE.test(req.params.itemId)) return res.status(404).json(notFound);
     const { known } = z.object({ known: z.boolean() }).parse(req.body);
     res.json(await reviewCard(learner(req), resourceOf(req), req.params.itemId, known));
+    syncHomework(req);
   }),
 );
 
@@ -188,6 +198,7 @@ router.post(
   asyncHandler(async (req, res) => {
     if (!UUID_RE.test(req.params.id)) return res.status(404).json(notFound);
     res.json(await finishSession(learner(req), resourceOf(req), req.params.id));
+    syncHomework(req);
   }),
 );
 
@@ -195,6 +206,30 @@ router.get(
   "/stats",
   asyncHandler(async (req, res) => {
     res.json(await learnerStats(learner(req)));
+  }),
+);
+
+/** The student's analytics page: time, words per level, streak calendar, homework. */
+router.get(
+  "/analytics",
+  asyncHandler(async (req, res) => {
+    const [a, hw] = await Promise.all([
+      learnerAnalytics(learner(req), req.learnSets!.allowed),
+      studentHomeworkSummary(await personRecordIds(req.student!)),
+    ]);
+    res.json({ ...a, homework: hw });
+  }),
+);
+
+/**
+ * Heartbeat while the app is open and in use (about every 30 s). The server
+ * caps the credit by real elapsed time; see recordAppTime.
+ */
+router.post(
+  "/ping",
+  asyncHandler(async (req, res) => {
+    const { seconds } = z.object({ seconds: z.coerce.number().min(0).max(600) }).parse(req.body ?? {});
+    res.json({ todaySeconds: await recordAppTime(learner(req), seconds) });
   }),
 );
 

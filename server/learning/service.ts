@@ -22,7 +22,16 @@ import {
   type LearningResource,
 } from "@shared/schema";
 import { tashkentDate, addDaysIso } from "@shared/lesson-schedule";
-import { applyReview, EMPTY_PROGRESS, MASTERED_BOX, masteryLevel, wordStatus, type ProgressState } from "@shared/learning/srs";
+import {
+  applyReview,
+  EMPTY_PROGRESS,
+  LEARNED_BOX,
+  MASTERED_BOX,
+  masteryLevel,
+  progressPercent,
+  wordStatus,
+  type ProgressState,
+} from "@shared/learning/srs";
 import {
   buildExerciseSet,
   gradeAnswer,
@@ -140,13 +149,18 @@ export type StageSummary = {
   titleUz: string | null;
   total: number;
   seen: number;
+  /** Answered correctly and not missed since (box >= LEARNED_BOX). Includes mastered. */
+  learned: number;
   mastered: number;
   learning: number;
   needPractice: number;
   newCount: number;
   bookmarked: number;
   due: number;
+  /** Weighted progress (see progressWeight): moves with every studied word. */
   percent: number;
+  /** Summed capped boxes, for combining stages into a level percentage. */
+  points: number;
   completed: boolean;
   /** Mastered words still needed to complete the stage. */
   toComplete: number;
@@ -158,7 +172,9 @@ export async function stageSummaries(learnerId: string, resource: LearningResour
     select u.id, u.position, u.title, u.title_uz,
       count(i.id) as total,
       count(p.item_id) filter (where p.box > 0) as seen,
+      count(p.item_id) filter (where p.box >= ${LEARNED_BOX} and p.last_result is not false) as learned,
       count(p.item_id) filter (where p.box >= ${MASTERED_BOX} and p.last_result is not false) as mastered,
+      coalesce(sum(least(coalesce(p.box, 0), ${MASTERED_BOX})), 0) as points,
       count(p.item_id) filter (where p.box between 1 and ${MASTERED_BOX - 1} and p.last_result is not false) as learning,
       count(p.item_id) filter (where p.box > 0 and p.last_result = false) as need_practice,
       count(p.item_id) filter (where p.bookmarked) as bookmarked,
@@ -180,13 +196,15 @@ export async function stageSummaries(learnerId: string, resource: LearningResour
       titleUz: (r.title_uz as string | null) ?? null,
       total,
       seen: n(r.seen),
+      learned: n(r.learned),
       mastered,
       learning: n(r.learning),
       needPractice: n(r.need_practice),
       newCount: total - n(r.seen),
       bookmarked: n(r.bookmarked),
       due: n(r.due),
-      percent: total ? Math.round((mastered / total) * 100) : 0,
+      percent: progressPercent(n(r.points), total, mastered),
+      points: n(r.points),
       completed: total > 0 && mastered >= need,
       toComplete: Math.max(0, need - mastered),
     };
@@ -725,7 +743,27 @@ async function activityOn(learnerId: string, day: string) {
   return a ?? { xp: 0, cardsReviewed: 0, exercisesAnswered: 0, correct: 0, newWords: 0 };
 }
 
-async function activeDays(learnerId: string, sinceDays = 400): Promise<{ day: string; xp: number; cards: number; exercises: number; correct: number }[]> {
+/**
+ * A day counts towards streaks only when the learner actually practised.
+ * Merely opening the app creates an activity row too (time tracking), and must
+ * not keep a streak alive.
+ */
+export const PRACTICE_DAY_SQL = sql`(xp > 0 or cards_reviewed > 0 or exercises_answered > 0)`;
+
+export type ActivityDay = {
+  day: string;
+  xp: number;
+  cards: number;
+  exercises: number;
+  correct: number;
+  newWords: number;
+  seconds: number;
+  /** Practised (counts for the streak), not just opened the app. */
+  practised: boolean;
+};
+
+/** Every activity row since N days ago, including app-time-only days. */
+async function activityRows(learnerId: string, sinceDays = 400): Promise<ActivityDay[]> {
   const since = addDaysIso(tashkentDate(), -sinceDays);
   const rows = await db
     .select()
@@ -738,7 +776,41 @@ async function activeDays(learnerId: string, sinceDays = 400): Promise<{ day: st
     cards: r.cardsReviewed,
     exercises: r.exercisesAnswered,
     correct: r.correct,
+    newWords: r.newWords,
+    seconds: r.activeSeconds,
+    practised: r.xp > 0 || r.cardsReviewed > 0 || r.exercisesAnswered > 0,
   }));
+}
+
+/** Days with real practice (streaks, history). */
+async function activeDays(learnerId: string, sinceDays = 400): Promise<ActivityDay[]> {
+  return (await activityRows(learnerId, sinceDays)).filter((d) => d.practised);
+}
+
+/** Longest time one heartbeat may add (the client pings about every 30 s). */
+export const MAX_PING_SECONDS = 60;
+
+/**
+ * Add time spent in the app today. The credit is capped by the claimed
+ * seconds, MAX_PING_SECONDS, and the real time since the previous ping, so a
+ * modified client can't inflate it (two tabs share one clock).
+ */
+export async function recordAppTime(learnerId: string, claimedSeconds: number): Promise<number> {
+  const claim = Math.max(0, Math.min(Math.floor(claimedSeconds), MAX_PING_SECONDS));
+  if (claim === 0) return 0;
+  const day = tashkentDate();
+  const res = await db.execute(sql`
+    insert into ${learnerDailyActivity} (student_id, day, active_seconds, last_ping_at, updated_at)
+    values (${learnerId}, ${day}, ${claim}, now(), now())
+    on conflict (student_id, day) do update set
+      active_seconds = ${learnerDailyActivity}.active_seconds + least(
+        ${claim},
+        coalesce(greatest(floor(extract(epoch from now() - ${learnerDailyActivity}.last_ping_at))::int, 0), ${claim})
+      ),
+      last_ping_at = now(),
+      updated_at = now()
+    returning active_seconds`);
+  return n(rowsOf<{ active_seconds: number }>(res)[0]?.active_seconds);
 }
 
 async function totals(learnerId: string) {
@@ -746,6 +818,7 @@ async function totals(learnerId: string) {
     await db.execute(sql`
       select
         count(*) filter (where box > 0) as seen,
+        count(*) filter (where box >= ${LEARNED_BOX} and last_result is not false) as learned,
         count(*) filter (where box >= ${MASTERED_BOX} and last_result is not false) as mastered,
         count(*) filter (where box > 0 and last_result = false) as need_practice,
         count(*) filter (where bookmarked) as bookmarked,
@@ -767,6 +840,7 @@ async function totals(learnerId: string) {
   );
   return {
     seen: n(p?.seen),
+    learned: n(p?.learned),
     mastered: n(p?.mastered),
     needPractice: n(p?.need_practice),
     bookmarked: n(p?.bookmarked),
@@ -794,7 +868,7 @@ export async function refreshAchievements(
   const completed = stages.filter((s) => s.completed);
   const codes = achievementsFor({
     reviewed: t.seen,
-    mastered: t.mastered,
+    learned: t.learned,
     streak,
     perfectSet: extra.perfectSet,
     stageCompleted: completed.length > 0,
@@ -824,9 +898,9 @@ export async function refreshAchievements(
 }
 
 export async function learnerStats(learnerId: string) {
-  const [t, days, achievements, byMode] = await Promise.all([
+  const [t, rows, achievements, byMode] = await Promise.all([
     totals(learnerId),
-    activeDays(learnerId),
+    activityRows(learnerId),
     db
       .select()
       .from(learnerAchievements)
@@ -837,11 +911,15 @@ export async function learnerStats(learnerId: string) {
       from ${learningAttempts} where student_id = ${learnerId} group by mode`),
   ]);
   const today = tashkentDate();
+  const days = rows.filter((d) => d.practised);
   const dayList = days.map((d) => d.day);
   const since30 = addDaysIso(today, -29);
+  const since7 = addDaysIso(today, -6);
+  const secondsSince = (from: string) => rows.filter((d) => d.day >= from).reduce((a, d) => a + d.seconds, 0);
   return {
     wordsSeen: t.seen,
-    wordsLearned: t.mastered,
+    wordsLearned: t.learned,
+    wordsMastered: t.mastered,
     needPractice: t.needPractice,
     bookmarked: t.bookmarked,
     dueNow: t.due,
@@ -854,7 +932,11 @@ export async function learnerStats(learnerId: string) {
     streak: currentStreak(dayList, today),
     longestStreak: longestStreak(dayList),
     practisedToday: dayList.includes(today),
-    history: days.filter((d) => d.day >= since30),
+    activeDays: dayList.length,
+    secondsToday: secondsSince(today),
+    seconds7d: secondsSince(since7),
+    seconds30d: secondsSince(since30),
+    history: rows.filter((d) => d.day >= since30),
     byMode: rowsOf<Record<string, unknown>>(byMode).map((r) => ({
       mode: String(r.mode),
       total: n(r.total),
@@ -863,6 +945,65 @@ export async function learnerStats(learnerId: string) {
     achievements: (Object.keys(ACHIEVEMENTS) as AchievementCode[]).map((code) => ({
       code,
       earnedAt: achievements.find((a) => a.code === code)?.earnedAt ?? null,
+    })),
+  };
+}
+
+/**
+ * The student's personal analytics page: time in the app, words, a year of
+ * daily activity for the streak calendar, accuracy and badges. `sets` are the
+ * levels the learner studies (word counts per level).
+ */
+export async function learnerAnalytics(learnerId: string, sets: LearningResource[]) {
+  const [stats, calendarRows, allTime, levels] = await Promise.all([
+    learnerStats(learnerId),
+    activityRows(learnerId, 371),
+    db.execute(sql`
+      select coalesce(sum(active_seconds), 0) as seconds, count(*) filter (where ${PRACTICE_DAY_SQL}) as days
+      from ${learnerDailyActivity} where student_id = ${learnerId}`),
+    Promise.all(
+      sets.map(async (r) => {
+        const st = await stageSummaries(learnerId, r);
+        const sum = (k: "total" | "seen" | "learned" | "mastered" | "points") => st.reduce((a, x) => a + x[k], 0);
+        const total = sum("total");
+        return {
+          resourceId: r.id,
+          level: r.level,
+          title: r.title,
+          titleUz: r.titleUz,
+          words: total,
+          studied: sum("seen"),
+          learned: sum("learned"),
+          mastered: sum("mastered"),
+          percent: progressPercent(sum("points"), total, sum("mastered")),
+          stagesCompleted: st.filter((x) => x.completed).length,
+          stages: st.length,
+        };
+      }),
+    ),
+  ]);
+  const [all] = rowsOf<Record<string, unknown>>(allTime);
+  const { history: _h, ...summary } = stats;
+  const practised30 = stats.history.filter((d) => d.practised).length;
+  return {
+    ...summary,
+    secondsTotal: n(all?.seconds),
+    activeDaysTotal: n(all?.days),
+    // Average over days the app was actually used in the last 30 days.
+    avgSecondsPerDay30: (() => {
+      const used = stats.history.filter((d) => d.seconds > 0).length;
+      return used ? Math.round(stats.seconds30d / used) : 0;
+    })(),
+    practisedDays30: practised30,
+    levels,
+    calendar: calendarRows.map((d) => ({
+      day: d.day,
+      xp: d.xp,
+      seconds: d.seconds,
+      answers: d.cards + d.exercises,
+      correct: d.correct,
+      newWords: d.newWords,
+      practised: d.practised,
     })),
   };
 }
@@ -878,9 +1019,10 @@ export async function learnerHome(learnerId: string, resource: LearningResource,
   ]);
   const cur = currentStage(stages);
   // Word counts are for THIS level's set; streak/XP/accuracy are the learner's overall.
-  const sum = (k: "total" | "mastered" | "seen" | "needPractice" | "bookmarked" | "due") => stages.reduce((a, x) => a + x[k], 0);
+  const sum = (k: "total" | "learned" | "mastered" | "seen" | "needPractice" | "bookmarked" | "due" | "points") =>
+    stages.reduce((a, x) => a + x[k], 0);
   const totalWords = sum("total");
-  const learned = sum("mastered");
+  const mastered = sum("mastered");
   const reviewDue = Math.min(sum("due"), s.dailyReviewWords);
   const newLeft = Math.max(0, Math.min(s.dailyNewWords - today.newWords, cur?.newCount ?? 0));
   const goal = s.dailyNewWords + s.dailyExercises;
@@ -894,11 +1036,12 @@ export async function learnerHome(learnerId: string, resource: LearningResource,
     stages,
     totals: {
       words: totalWords,
-      learned,
+      learned: sum("learned"),
+      mastered,
       seen: sum("seen"),
       needPractice: sum("needPractice"),
       bookmarked: sum("bookmarked"),
-      percent: totalWords ? Math.round((learned / totalWords) * 100) : 0,
+      percent: progressPercent(sum("points"), totalWords, mastered),
     },
     today: {
       reviewDue,
@@ -929,7 +1072,9 @@ export async function learnersSummary(learnerIds: string[], resourceId?: string 
     await db.execute(sql`
       select student_id,
         count(*) filter (where box > 0) as seen,
+        count(*) filter (where box >= ${LEARNED_BOX} and last_result is not false) as learned,
         count(*) filter (where box >= ${MASTERED_BOX} and last_result is not false) as mastered,
+        coalesce(sum(least(coalesce(box, 0), ${MASTERED_BOX})), 0) as points,
         count(*) filter (where box > 0 and last_result = false) as need_practice
       from ${learnerVocabProgress} where student_id = any(${sql.param(ids)}::uuid[]) ${scope} group by student_id`),
   );
@@ -940,13 +1085,27 @@ export async function learnersSummary(learnerIds: string[], resourceId?: string 
       where student_id = any(${sql.param(ids)}::uuid[]) and created_at >= now() - interval '30 days'
       group by student_id`),
   );
+  const since7 = addDaysIso(tashkentDate(), -6);
+  const time = rowsOf<Record<string, unknown>>(
+    await db.execute(sql`
+      select student_id, coalesce(sum(active_seconds), 0) as seconds,
+             count(*) filter (where ${PRACTICE_DAY_SQL}) as days
+      from ${learnerDailyActivity}
+      where student_id = any(${sql.param(ids)}::uuid[]) and day >= ${since7}
+      group by student_id`),
+  );
   const out = new Map<string, Record<string, number | string | null>>();
   for (const id of ids) {
     const p = prog.find((r) => r.student_id === id);
     const a = acc.find((r) => r.student_id === id);
+    const tm = time.find((r) => r.student_id === id);
     out.set(id, {
       seen: n(p?.seen),
+      learned: n(p?.learned),
       mastered: n(p?.mastered),
+      points: n(p?.points),
+      seconds7d: n(tm?.seconds),
+      practisedDays7d: n(tm?.days),
       needPractice: n(p?.need_practice),
       attempts30: n(a?.attempts),
       accuracy30: n(a?.attempts) ? Math.round((n(a?.correct) / n(a?.attempts)) * 100) : null,

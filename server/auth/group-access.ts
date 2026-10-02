@@ -16,7 +16,7 @@ import { getClassById, getStudentById } from "../storage";
 import { assertBranchAccess } from "./middleware";
 import { httpError } from "../routes/helpers";
 
-export type GroupNeed = "view" | "attendance" | "scores";
+export type GroupNeed = "view" | "attendance" | "scores" | "homework" | "assign_homework";
 
 export function canOnGroup(req: Request, cls: Class, need: GroupNeed): boolean {
   const u = req.authUser!;
@@ -24,6 +24,9 @@ export function canOnGroup(req: Request, cls: Class, need: GroupNeed): boolean {
   if (own) return true;
   if (need === "attendance") return can(u, "manage_attendance");
   if (need === "scores") return can(u, "manage_scores");
+  // See + check submissions.
+  if (need === "homework") return can(u, "check_homework") || can(u, "assign_homework");
+  if (need === "assign_homework") return can(u, "assign_homework");
   // view
   if (u.role !== "teacher") return true;
   return can(u, "manage_attendance") || can(u, "manage_scores");

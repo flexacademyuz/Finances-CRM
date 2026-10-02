@@ -9,6 +9,7 @@ import {
   BookOpen,
   BadgeDollarSign,
   ClipboardList,
+  ClipboardCheck,
   UserCog,
   UserPlus,
   KeyRound,
@@ -66,12 +67,15 @@ const BOTTOM_NAV: Record<Role, BottomItem[]> = {
   ],
   teacher: [
     { href: "/", label: "myClasses", icon: <Users size={22} /> },
+    { href: "/homework", label: "homework", icon: <ClipboardCheck size={22} /> },
     { href: "#create", label: "add", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
+    { href: "/attendance", label: "attendance", icon: <CalendarCheck size={22} /> },
     { href: "/salary", label: "mySalary", icon: <BadgeDollarSign size={22} /> },
   ],
   assistant: [
     { href: "/students", label: "students", icon: <GraduationCap size={22} /> },
-    { href: "/leads", label: "leads", icon: <UserPlus size={22} /> },
+    // Assistants check homework daily; leads stay in the side menu.
+    { href: "/homework", label: "homework", icon: <ClipboardCheck size={22} /> },
     { href: "/", label: "recordPayment", icon: <Plus size={28} strokeWidth={2.5} />, center: true },
     { href: "/payments", label: "payments", icon: <ClipboardList size={22} /> },
     { href: "/awaiting", label: "awaiting", icon: <Clock size={22} /> },
@@ -107,6 +111,7 @@ function buildNav(user: User): NavItem[] {
   items.push({ href: "/leads", label: "leads", icon: <UserPlus size={18} /> });
   if (a.groups) items.push({ href: a.groupsPath, label: "groups", icon: <BookOpen size={18} /> });
   if (a.attendance) items.push({ href: "/attendance", label: "attendance", icon: <CalendarCheck size={18} /> });
+  if (a.homework) items.push({ href: "/homework", label: "homework", icon: <ClipboardCheck size={18} /> });
   // Timetable is a web-only planning view (CEO), not shown in the Telegram app.
   if (a.role === "ceo" && !isTelegram()) items.push({ href: "/timetable", label: "timetable", icon: <CalendarDays size={18} /> });
   if (a.payroll) items.push({ href: "/payroll", label: "payroll", icon: <BadgeDollarSign size={18} /> });
@@ -139,7 +144,7 @@ type NavSection = "overview" | "people" | "money" | "admin" | "account";
 /** Which section each nav item belongs to (groups the sidebar/drawer). */
 const SECTION_OF: Partial<Record<StringKey, NavSection>> = {
   dashboard: "overview", myClasses: "overview", recordPayment: "overview",
-  students: "people", leads: "people", groups: "people", timetable: "people", attendance: "people",
+  students: "people", leads: "people", groups: "people", timetable: "people", attendance: "people", homework: "people",
   payments: "money", awaiting: "money", payroll: "money",
   expenses: "money", finances: "money", analytics: "money", mySalary: "money",
   users: "admin", branches: "admin", sms: "admin", studentPortal: "admin", learning: "people", leaderboard: "people",

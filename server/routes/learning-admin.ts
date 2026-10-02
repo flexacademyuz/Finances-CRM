@@ -18,6 +18,7 @@ import { db } from "../db";
 import { learningResources, learningSessions, learningUnits, students, vocabItems } from "@shared/schema";
 import { LEVEL_CODES, RESOURCE_STATUSES, levelRank, resolveVocabSettings } from "@shared/learning/types";
 import { displayWord, parseExample } from "@shared/learning/text";
+import { progressPercent } from "@shared/learning/srs";
 import { learnerIdFor, learnerLevels } from "../learning/learner";
 import {
   publishedVocabResources,
@@ -447,7 +448,8 @@ router.get(
           studentId: s.id,
           fullName: s.fullName,
           ...m,
-          percent: totalWords ? Math.round((mastered / totalWords) * 100) : 0,
+          // Same weighted progress the student sees (moves with every studied word).
+          percent: progressPercent(Number(m.points ?? 0), totalWords, mastered),
           // Flag learners who miss a lot or have gone quiet.
           struggling: needPractice >= 15 || (m.accuracy30 != null && Number(m.accuracy30) < 60),
         };
