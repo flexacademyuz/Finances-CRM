@@ -1,4 +1,4 @@
-import { recomputeStatuses, repairBillingMonthsOnce } from "./services/billing";
+import { recomputeStatuses, undoBillingMonthRepairOnce } from "./services/billing";
 import { sendAwaitingDigest, sendTodaySummary } from "./bot/notifications";
 import { notifyOverdueParents } from "./sms/service";
 import { ensureSponsoredComps } from "./services/sponsored";
@@ -27,10 +27,10 @@ function parseSummaryHours(raw: string | null | undefined): Set<number> {
 export function startJobs(): void {
   const HOUR = 60 * 60 * 1000;
 
-  // One-off: move payments filed under the calendar month back to the month
-  // they actually paid for (see repairBillingMonths). No-op once it has run.
+  // One-off: undo the 2026-10-02 billing-month repair that moved payments into
+  // earlier months (see undoBillingMonthRepair). No-op once it has run.
   setTimeout(() => {
-    repairBillingMonthsOnce().catch((err) => console.error("[jobs] billing month repair failed:", (err as Error).message));
+    undoBillingMonthRepairOnce().catch((err) => console.error("[jobs] billing month repair undo failed:", (err as Error).message));
   }, 3_000);
 
   const tick = async () => {

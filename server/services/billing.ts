@@ -1,8 +1,8 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../db";
 import { students, payments, paymentFreezes, type PaymentEdit } from "@shared/schema";
-import { monthKey, parseDate, atMidnight, toIso } from "@shared/date";
-import { computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled, replayBillingMonths } from "@shared/billing";
+import { monthKey, parseDate, atMidnight, toIso, shiftMonth } from "@shared/date";
+import { BILLING_EPOCH, computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
 import { auditLogs } from "@shared/schema";
 import { getSettings, setStudentsStatus, setStudentsPaidThrough } from "../storage";
 import { freshMonthPricing, proratedTeacherCredit } from "./payment-context";
@@ -29,105 +29,114 @@ export function decideStatus(args: {
   return args.dayOfMonth > args.gracePeriodDays ? "overdue" : "awaiting_payment";
 }
 
-export type MonthRepair = { paymentId: string; studentId: string; studentName: string; from: string; to: string };
+export type MonthMove = { paymentId: string; studentId: string; from: string; to: string };
 
 /**
- * Re-label payments that were recorded under a LATER month than the period
- * they actually paid for. Until 2026-10 the month picker started from the
- * calendar month, so an overdue student (start 4 Sep) paying on 2 Oct was
- * filed under October although the payment covered 4 Sep–4 Oct — and every
- * later payment of theirs then sat one month ahead too. Coverage dates were
- * always right (they come from payment dates); only the month label was off,
- * which skewed the group month grid, revenue per month and "Covers".
+ * Undo the 2026-10-02 one-off "billing month repair" (marker
+ * `billing.month_repair_v1`). It re-derived each payment's month from the
+ * student's start date and moved payments to EARLIER months — so a student
+ * whose start date was in late August had their September payment moved to
+ * August (no August column in the group grid → the tick vanished) and their
+ * October payment to September. Teacher payroll is summed per billing month,
+ * so salaries dropped too. The labels staff recorded were right.
  *
- * Replays each student's payments (shared/billing.replayBillingMonths) and
- * moves a payment only to an EARLIER month that is still free. Payments filed
- * later than expected on purpose are never touched the other way, sponsored
- * comps are skipped, salary is unaffected (teacher credit is snapshotted per
- * payment and payroll cycles run on payment time). Every move is audited.
+ * 1. Every audited `payment.month_relabelled` move is put back, newest month
+ *    first (so Sep→Oct frees September before Aug→Sep). A payment that has
+ *    since been voided or re-labelled by hand is left alone, as is one whose
+ *    original month now holds another active payment (reported as a conflict:
+ *    usually the same money recorded twice — the CEO voids the duplicate).
+ * 2. The platform started in September 2026 (BILLING_EPOCH): any remaining
+ *    active payment filed before it is moved to the student's first free month
+ *    from September on.
+ *
+ * Coverage dates and teacher credits are untouched (they don't depend on the
+ * month label). Every move is audited.
  */
-export async function repairBillingMonths(opts: { apply: boolean; actorUserId?: string | null }): Promise<MonthRepair[]> {
-  const studs = await db
-    .select({
-      id: students.id,
-      fullName: students.fullName,
-      sponsored: students.sponsored,
-      start: sql<string>`coalesce(${students.billingStartDate}, ${students.enrolledAt})`,
-    })
-    .from(students);
-  const rows = await db
-    .select({
-      id: payments.id,
-      studentId: payments.studentId,
-      month: payments.billingMonth,
-      createdAt: payments.createdAt,
-      amount: payments.amount,
-      amountDue: payments.amountDue,
-      sponsored: payments.sponsored,
-      branchId: payments.branchId,
-    })
+export async function undoBillingMonthRepair(): Promise<{ restored: MonthMove[]; lifted: MonthMove[]; conflicts: MonthMove[] }> {
+  const restored: MonthMove[] = [];
+  const lifted: MonthMove[] = [];
+  const conflicts: MonthMove[] = [];
+
+  const active = await db
+    .select({ id: payments.id, studentId: payments.studentId, month: payments.billingMonth, sponsored: payments.sponsored, branchId: payments.branchId })
     .from(payments)
     .where(eq(payments.voided, false));
-  const byStudent = new Map<string, typeof rows>();
-  for (const r of rows) byStudent.set(r.studentId, [...(byStudent.get(r.studentId) ?? []), r]);
-
-  const out: MonthRepair[] = [];
-  for (const s of studs) {
-    const list = (byStudent.get(s.id) ?? []).filter((r) => !r.sponsored);
-    if (s.sponsored || !s.start || list.length === 0) continue;
-    const expected = replayBillingMonths(
-      String(s.start),
-      list.map((r) => ({
-        id: r.id,
-        paidAt: r.createdAt,
-        settled: isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue)),
-      })),
-    );
-    // Months taken by this student's active payments (kept current as we move them).
-    const taken = new Set(list.map((r) => r.month));
-    // Earliest first, so moving Oct→Sep frees October for the Nov→Oct move.
-    for (const r of [...list].sort((a, b) => a.month.localeCompare(b.month) || a.createdAt.getTime() - b.createdAt.getTime())) {
-      const want = expected.get(r.id)!;
-      if (want >= r.month || taken.has(want)) continue;
-      out.push({ paymentId: r.id, studentId: s.id, studentName: s.fullName, from: r.month, to: want });
-      taken.delete(r.month);
-      taken.add(want);
-      if (!opts.apply) continue;
-      await db.update(payments).set({ billingMonth: want }).where(eq(payments.id, r.id));
-      await db.insert(auditLogs).values({
-        actorUserId: opts.actorUserId ?? null,
-        actorType: opts.actorUserId ? "user" : "system",
-        action: "payment.month_relabelled",
-        entityType: "payment",
-        entityId: r.id,
-        studentId: s.id,
-        branchId: r.branchId,
-        before: { billingMonth: r.month },
-        after: { billingMonth: want },
-        meta: { reason: "billing month was the calendar month, not the period paid for" },
-      });
-    }
+  const byId = new Map(active.map((p) => [p.id, p]));
+  const taken = new Map<string, Set<string>>(); // studentId → active months
+  for (const p of active) {
+    if (!taken.has(p.studentId)) taken.set(p.studentId, new Set());
+    taken.get(p.studentId)!.add(p.month);
   }
-  return out;
+
+  const move = async (p: (typeof active)[number], to: string, action: string, reason: string) => {
+    await db.update(payments).set({ billingMonth: to }).where(eq(payments.id, p.id));
+    await db.insert(auditLogs).values({
+      actorType: "system",
+      action,
+      entityType: "payment",
+      entityId: p.id,
+      studentId: p.studentId,
+      branchId: p.branchId,
+      before: { billingMonth: p.month },
+      after: { billingMonth: to },
+      meta: { reason },
+    });
+    const months = taken.get(p.studentId)!;
+    months.delete(p.month);
+    months.add(to);
+    p.month = to;
+  };
+
+  const logged = await db
+    .select({ entityId: auditLogs.entityId, before: auditLogs.before, after: auditLogs.after })
+    .from(auditLogs)
+    .where(and(eq(auditLogs.action, "payment.month_relabelled"), eq(auditLogs.actorType, "system")));
+  const moves = logged
+    .map((l) => ({
+      id: String(l.entityId),
+      from: String((l.after as { billingMonth?: string } | null)?.billingMonth ?? ""),
+      to: String((l.before as { billingMonth?: string } | null)?.billingMonth ?? ""),
+    }))
+    .filter((m) => m.from && m.to)
+    .sort((a, b) => b.to.localeCompare(a.to));
+  for (const m of moves) {
+    const p = byId.get(m.id);
+    if (!p || p.month !== m.from) continue; // voided, deleted or changed by hand since
+    const entry = { paymentId: p.id, studentId: p.studentId, from: m.from, to: m.to };
+    if (taken.get(p.studentId)!.has(m.to)) {
+      conflicts.push(entry);
+      continue;
+    }
+    await move(p, m.to, "payment.month_relabel_undone", "undo billing.month_repair_v1: restore the month it was recorded under");
+    restored.push(entry);
+  }
+
+  for (const p of active) {
+    if (p.sponsored || p.month >= BILLING_EPOCH) continue;
+    let to = BILLING_EPOCH;
+    while (taken.get(p.studentId)!.has(to)) to = shiftMonth(to, 1);
+    const entry = { paymentId: p.id, studentId: p.studentId, from: p.month, to };
+    await move(p, to, "payment.month_relabelled_epoch", "filed before the platform started (September 2026)");
+    lifted.push(entry);
+  }
+  return { restored, lifted, conflicts };
 }
 
-/** Run the repair once per database (marker in the audit log). */
-export async function repairBillingMonthsOnce(): Promise<number> {
-  const MARK = "billing.month_repair_v1";
+/** Run the undo once per database (marker in the audit log). */
+export async function undoBillingMonthRepairOnce(): Promise<number> {
+  const MARK = "billing.month_repair_undo_v1";
   const [done] = await db.select({ id: auditLogs.id }).from(auditLogs).where(eq(auditLogs.action, MARK)).limit(1);
   if (done) return 0;
-  const fixed = await repairBillingMonths({ apply: true });
+  const r = await undoBillingMonthRepair();
   await db.insert(auditLogs).values({
     actorType: "system",
     action: MARK,
     entityType: "payments",
-    meta: { relabelled: fixed.length, moves: fixed.slice(0, 500) },
+    meta: { restored: r.restored.length, lifted: r.lifted.length, conflicts: r.conflicts.slice(0, 500) },
   });
-  if (fixed.length) {
-    console.log(`[billing] relabelled ${fixed.length} payment(s) to the month they paid for:`);
-    for (const f of fixed.slice(0, 50)) console.log(`  ${f.studentName}: ${f.from.slice(0, 7)} -> ${f.to.slice(0, 7)}`);
-  }
-  return fixed.length;
+  console.log(`[billing] month repair undone: ${r.restored.length} restored, ${r.lifted.length} moved up to Sep 2026, ${r.conflicts.length} conflict(s)`);
+  for (const c of r.conflicts) console.log(`  conflict: payment ${c.paymentId} (student ${c.studentId}) wants ${c.to.slice(0, 7)} which is taken`);
+  return r.restored.length + r.lifted.length;
 }
 
 // The billing rules themselves live in @shared/billing (pure, DB-free); this

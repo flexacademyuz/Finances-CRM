@@ -4,7 +4,7 @@
  * overdue September student paying on 2 Oct was filed under October).
  */
 import { describe, it, expect } from "vitest";
-import { billingMonthFor, computePaidThrough, replayBillingMonths } from "@shared/billing";
+import { billingMonthFor, computePaidThrough } from "@shared/billing";
 
 const d = (iso: string) => new Date(`${iso}T09:00:00Z`);
 
@@ -43,15 +43,21 @@ describe("billingMonthFor", () => {
   });
 });
 
-describe("replayBillingMonths", () => {
-  it("re-derives the month of each past payment; partials don't advance", () => {
-    const m = replayBillingMonths("2026-09-04", [
-      { id: "a", paidAt: d("2026-10-02"), settled: true }, // was filed as Oct → Sep
-      { id: "b", paidAt: d("2026-10-10"), settled: false }, // partial for 4 Oct–4 Nov
-      { id: "c", paidAt: d("2026-11-06"), settled: true }, // a new period: the unpaid Oct balance stays as debt
-    ]);
-    expect(m.get("a")).toBe("2026-09-01");
-    expect(m.get("b")).toBe("2026-10-01");
-    expect(m.get("c")).toBe("2026-11-01");
+describe("late start days and the September 2026 floor", () => {
+  it("start 30 Aug, first paid 28 Sep: September, not August", () => {
+    expect(billingMonthFor({ startDate: "2026-08-30", paymentDates: [], today: d("2026-09-28") })).toBe("2026-09-01");
+    // ...and the next payment is October.
+    expect(billingMonthFor({ startDate: "2026-08-30", paymentDates: ["2026-09-28"], today: d("2026-10-01") })).toBe("2026-09-01");
+  });
+
+  it("a late-start window caught up in a later month is labelled by the month it mostly covers", () => {
+    // Paid to 20 Oct, lapsed, pays 2 Dec → window 20 Nov–20 Dec → December.
+    expect(billingMonthFor({ startDate: "2026-09-20", paymentDates: ["2026-09-20"], today: d("2026-12-02") })).toBe("2026-12-01");
+    // Early start day: 4 Nov–4 Dec stays November.
+    expect(billingMonthFor({ startDate: "2026-09-04", paymentDates: ["2026-09-04"], today: d("2026-12-02") })).toBe("2026-11-01");
+  });
+
+  it("nothing is ever filed before September 2026", () => {
+    expect(billingMonthFor({ startDate: "2026-08-05", paymentDates: [], today: d("2026-09-02") })).toBe("2026-09-01");
   });
 });

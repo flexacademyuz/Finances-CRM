@@ -4,7 +4,7 @@
  * long does a payment cover the student for".
  */
 
-import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey } from "./date";
+import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey, shiftMonth } from "./date";
 import type { StudentStatus } from "./schema";
 
 /**
@@ -128,32 +128,32 @@ export function computePaidThrough(args: {
  *
  * `paymentDates` = fully-paid months only, as for `computePaidThrough`. Freeze
  * days are left out on purpose: they extend the end date, not the period paid for.
+ * Never earlier than BILLING_EPOCH (September 2026).
  */
 export function billingMonthFor(args: { startDate: string; paymentDates: string[]; today: Date }): string {
-  const start = atMidnight(parseDate(args.startDate));
-  const paidThrough = computePaidThrough({ startDate: args.startDate, paymentDates: args.paymentDates });
-  const todayAnchor = anchorOnOrBefore(atMidnight(args.today), start.getUTCDate());
-  const base = todayAnchor.getTime() > paidThrough.getTime() ? todayAnchor : paidThrough;
-  return monthKey(base);
+  const m = periodMonthFor(args);
+  return m < BILLING_EPOCH ? BILLING_EPOCH : m;
 }
 
 /**
- * Replay a student's payments in the order they were made and return the
- * billing month each one actually paid for (see `billingMonthFor`). A partly
- * paid month doesn't advance coverage, so its top-ups stay on the same month.
- * Used to repair payments that were recorded under the wrong month.
+ * The academy started using the platform in September 2026. No payment is ever
+ * filed under an earlier month, even for students whose start date is in August
+ * (there is no August column anywhere, and payroll starts in September).
  */
-export function replayBillingMonths(
-  startDate: string,
-  payments: { id: string; paidAt: Date; settled: boolean }[],
-): Map<string, string> {
-  const out = new Map<string, string>();
-  const settledDates: string[] = [];
-  for (const p of [...payments].sort((a, b) => a.paidAt.getTime() - b.paidAt.getTime())) {
-    out.set(p.id, billingMonthFor({ startDate, paymentDates: settledDates, today: p.paidAt }));
-    if (p.settled) settledDates.push(p.paidAt.toISOString().slice(0, 10));
-  }
-  return out;
+export const BILLING_EPOCH = "2026-09-01";
+
+function periodMonthFor(args: { startDate: string; paymentDates: string[]; today: Date }): string {
+  const start = atMidnight(parseDate(args.startDate));
+  const paidThrough = computePaidThrough({ startDate: args.startDate, paymentDates: args.paymentDates });
+  const todayAnchor = anchorOnOrBefore(atMidnight(args.today), start.getUTCDate());
+  if (todayAnchor.getTime() <= paidThrough.getTime()) return monthKey(paidThrough);
+  // Catching up after a gap: the window starts on the anchor day of an earlier
+  // month. When that day is late in the month (16th+) the window lies mostly in
+  // the NEXT month, which is what the academy calls it — start 30 Aug, first
+  // paid 28 Sep → September, not August (filing it under August hid it from the
+  // group grid and from the teacher's September salary).
+  const m = monthKey(todayAnchor);
+  return m < monthKey(atMidnight(args.today)) && start.getUTCDate() >= 16 ? shiftMonth(m, 1) : m;
 }
 
 /**

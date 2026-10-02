@@ -75,23 +75,54 @@ describe("billing month of a new payment", () => {
   });
 });
 
-describe("repair of payments filed under the calendar month", () => {
-  it("moves them back to the month they paid for, once, with an audit trail", async () => {
-    // What the old code did: 2 Oct → "October", then 10 Oct → "November".
-    const [a] = await pay("2026-10-01", "2026-10-02T09:00:00Z");
-    const [b] = await pay("2026-11-01", "2026-10-10T09:00:00Z");
-    const preview = await M.billing.repairBillingMonths({ apply: false });
-    expect(preview.map((x: { from: string; to: string }) => `${x.from}>${x.to}`)).toEqual(["2026-10-01>2026-09-01", "2026-11-01>2026-10-01"]);
-    expect(await M.billing.repairBillingMonthsOnce()).toBe(2);
-    const rows = await M.db.select().from(M.schema.payments).where(M.eq(M.schema.payments.studentId, S.student));
-    expect(rows.find((r: { id: string }) => r.id === a.id).billingMonth).toBe("2026-09-01");
-    expect(rows.find((r: { id: string }) => r.id === b.id).billingMonth).toBe("2026-10-01");
-    const audits = await M.db.select().from(M.schema.auditLogs).where(M.eq(M.schema.auditLogs.action, "payment.month_relabelled"));
-    expect(audits).toHaveLength(2);
-    // Runs only once, and nothing is left to fix anyway.
-    expect(await M.billing.repairBillingMonthsOnce()).toBe(0);
-    expect(await M.billing.repairBillingMonths({ apply: false })).toEqual([]);
-    // Next payment after 4 Nov coverage: November.
-    expect(await M.storage.nextUnpaidBillingMonth(S.student, new Date("2026-11-01T09:00:00Z"))).toBe("2026-11-01");
+describe("undo of the 2026-10-02 billing month repair", () => {
+  it("puts every moved payment back, lifts pre-September months, flags conflicts, runs once", async () => {
+    // Late-August starter: the repair moved Sep → Aug and Oct → Sep.
+    const st = await M.storage.createStudent({ fullName: "Dilmurodjonov M", classId: S.class, branchId: S.branch, enrolledAt: "2026-08-30" });
+    const mk = (studentId: string, month: string, createdAt: string) =>
+      M.db
+        .insert(M.schema.payments)
+        .values({ studentId, classId: S.class, branchId: S.branch, teacherId: S.teacher, recordedBy: S.user, amount: "400000", amountDue: "400000", method: "cash", billingMonth: month, createdAt: new Date(createdAt) })
+        .returning()
+        .then((r: { id: string }[]) => r[0]);
+    const moved = (id: string, studentId: string, from: string, to: string) =>
+      M.db.insert(M.schema.auditLogs).values({ actorType: "system", action: "payment.month_relabelled", entityType: "payment", entityId: id, studentId, before: { billingMonth: from }, after: { billingMonth: to } });
+    // Applied in the repair's order: earliest first.
+    const sep = await mk(st.id, "2026-08-01", "2026-09-28T09:00:00Z");
+    await moved(sep.id, st.id, "2026-09-01", "2026-08-01");
+    const oct = await mk(st.id, "2026-09-01", "2026-10-01T09:00:00Z");
+    await moved(oct.id, st.id, "2026-10-01", "2026-09-01");
+
+    // Conflict: after the move staff re-recorded October → the move can't be undone.
+    const st2 = await M.storage.createStudent({ fullName: "Conflict Student", classId: S.class, branchId: S.branch, enrolledAt: "2026-09-20" });
+    const c1 = await mk(st2.id, "2026-09-01", "2026-10-01T09:00:00Z");
+    await moved(c1.id, st2.id, "2026-10-01", "2026-09-01");
+    await mk(st2.id, "2026-10-01", "2026-10-02T09:00:00Z");
+
+    // A stray August payment that the repair didn't log (e.g. recorded today by the new picker).
+    const st3 = await M.storage.createStudent({ fullName: "Stray August", classId: S.class, branchId: S.branch, enrolledAt: "2026-08-25" });
+    const stray = await mk(st3.id, "2026-08-01", "2026-10-02T09:00:00Z");
+
+    const r = await M.billing.undoBillingMonthRepair();
+    expect(r.restored).toHaveLength(2);
+    expect(r.conflicts.map((c: { paymentId: string }) => c.paymentId)).toEqual([c1.id]);
+    expect(r.lifted.map((c: { paymentId: string; to: string }) => [c.paymentId, c.to])).toEqual([[stray.id, "2026-09-01"]]);
+    const month = async (id: string) =>
+      (await M.db.select().from(M.schema.payments).where(M.eq(M.schema.payments.id, id)))[0].billingMonth;
+    expect(await month(sep.id)).toBe("2026-09-01");
+    expect(await month(oct.id)).toBe("2026-10-01");
+    expect(await month(c1.id)).toBe("2026-09-01");
+
+    // Once only.
+    await M.billing.undoBillingMonthRepairOnce();
+    const marks = await M.db.select().from(M.schema.auditLogs).where(M.eq(M.schema.auditLogs.action, "billing.month_repair_undo_v1"));
+    expect(marks).toHaveLength(1);
+    expect(await M.billing.undoBillingMonthRepairOnce()).toBe(0);
+    expect(await month(sep.id)).toBe("2026-09-01");
+  });
+
+  it("never files a new payment before September 2026", async () => {
+    const st = await M.storage.createStudent({ fullName: "August Starter", classId: S.class, branchId: S.branch, enrolledAt: "2026-08-10" });
+    expect(await M.storage.nextUnpaidBillingMonth(st.id, new Date("2026-09-05T09:00:00Z"))).toBe("2026-09-01");
   });
 });
