@@ -50,11 +50,8 @@ describe("late start days and the September 2026 floor", () => {
     expect(billingMonthFor({ startDate: "2026-08-30", paymentDates: ["2026-09-28"], today: d("2026-10-01") })).toBe("2026-09-01");
   });
 
-  it("a late-start window caught up in a later month is labelled by the month it mostly covers", () => {
-    // Paid to 20 Oct, lapsed, pays 2 Dec → window 20 Nov–20 Dec → December.
-    expect(billingMonthFor({ startDate: "2026-09-20", paymentDates: ["2026-09-20"], today: d("2026-12-02") })).toBe("2026-12-01");
-    // Early start day: 4 Nov–4 Dec stays November.
-    expect(billingMonthFor({ startDate: "2026-09-04", paymentDates: ["2026-09-04"], today: d("2026-12-02") })).toBe("2026-11-01");
+  it("start 16 Sep, pays 1 Oct for 16 Sep-16 Oct: September", () => {
+    expect(billingMonthFor({ startDate: "2026-09-16", paymentDates: [], today: d("2026-10-01") })).toBe("2026-09-01");
   });
 
   it("nothing is ever filed before September 2026", () => {

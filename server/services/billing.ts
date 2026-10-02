@@ -139,6 +139,100 @@ export async function undoBillingMonthRepairOnce(): Promise<number> {
   return r.restored.length + r.lifted.length;
 }
 
+/**
+ * Second correction (2026-10-02). The undo above was too broad: the morning
+ * repair was RIGHT for students who started in September — e.g. start 16 Sep,
+ * paid 1 Oct for 16 Sep–16 Oct: the old code filed it under October, the repair
+ * moved it to September, and the undo wrongly put it back in October. The
+ * repair was only wrong where it pushed a payment into a month before the
+ * platform started (August).
+ *
+ * So: for every student whose repair moved NOTHING before BILLING_EPOCH,
+ * re-apply the repair's moves that the undo reverted (earliest target first, so
+ * Oct→Sep frees October for Nov→Oct). Students the repair pushed into August
+ * keep the undo for their whole chain. Payments voided or edited since are left
+ * alone; a target month that now holds another payment is reported as a
+ * conflict (usually the same money recorded twice).
+ */
+export async function reapplySeptemberRepair(): Promise<{ reapplied: MonthMove[]; conflicts: MonthMove[] }> {
+  const reapplied: MonthMove[] = [];
+  const conflicts: MonthMove[] = [];
+  const monthOf = (j: unknown) => String((j as { billingMonth?: string } | null)?.billingMonth ?? "");
+
+  const repairMoves = await db
+    .select({ studentId: auditLogs.studentId, after: auditLogs.after })
+    .from(auditLogs)
+    .where(and(eq(auditLogs.action, "payment.month_relabelled"), eq(auditLogs.actorType, "system")));
+  const augustStudents = new Set(repairMoves.filter((m) => monthOf(m.after) < BILLING_EPOCH).map((m) => String(m.studentId)));
+
+  const undone = await db
+    .select({ entityId: auditLogs.entityId, studentId: auditLogs.studentId, before: auditLogs.before, after: auditLogs.after })
+    .from(auditLogs)
+    .where(and(eq(auditLogs.action, "payment.month_relabel_undone"), eq(auditLogs.actorType, "system")));
+  const todo = undone
+    .filter((u) => !augustStudents.has(String(u.studentId)))
+    .map((u) => ({ id: String(u.entityId), from: monthOf(u.after), to: monthOf(u.before) }))
+    .filter((m) => m.from && m.to && m.to >= BILLING_EPOCH)
+    .sort((a, b) => a.to.localeCompare(b.to));
+  if (todo.length === 0) return { reapplied, conflicts };
+
+  const active = await db
+    .select({ id: payments.id, studentId: payments.studentId, month: payments.billingMonth, branchId: payments.branchId })
+    .from(payments)
+    .where(eq(payments.voided, false));
+  const byId = new Map(active.map((p) => [p.id, p]));
+  const taken = new Map<string, Set<string>>();
+  for (const p of active) {
+    if (!taken.has(p.studentId)) taken.set(p.studentId, new Set());
+    taken.get(p.studentId)!.add(p.month);
+  }
+
+  for (const m of todo) {
+    const p = byId.get(m.id);
+    if (!p || p.month !== m.from) continue;
+    const entry = { paymentId: p.id, studentId: p.studentId, from: m.from, to: m.to };
+    const months = taken.get(p.studentId)!;
+    if (months.has(m.to)) {
+      conflicts.push(entry);
+      continue;
+    }
+    await db.update(payments).set({ billingMonth: m.to }).where(eq(payments.id, p.id));
+    await db.insert(auditLogs).values({
+      actorType: "system",
+      action: "payment.month_relabel_reapplied",
+      entityType: "payment",
+      entityId: p.id,
+      studentId: p.studentId,
+      branchId: p.branchId,
+      before: { billingMonth: m.from },
+      after: { billingMonth: m.to },
+      meta: { reason: "September starter: the payment pays for the period that began in this month" },
+    });
+    months.delete(m.from);
+    months.add(m.to);
+    p.month = m.to;
+    reapplied.push(entry);
+  }
+  return { reapplied, conflicts };
+}
+
+/** Run the re-apply once per database (marker in the audit log). */
+export async function reapplySeptemberRepairOnce(): Promise<number> {
+  const MARK = "billing.month_repair_reapply_v1";
+  const [done] = await db.select({ id: auditLogs.id }).from(auditLogs).where(eq(auditLogs.action, MARK)).limit(1);
+  if (done) return 0;
+  const r = await reapplySeptemberRepair();
+  await db.insert(auditLogs).values({
+    actorType: "system",
+    action: MARK,
+    entityType: "payments",
+    meta: { reapplied: r.reapplied.length, conflicts: r.conflicts.slice(0, 500) },
+  });
+  console.log(`[billing] September-starter months re-applied: ${r.reapplied.length}, ${r.conflicts.length} conflict(s)`);
+  for (const c of r.conflicts) console.log(`  conflict: payment ${c.paymentId} (student ${c.studentId}) wants ${c.to.slice(0, 7)} which is taken`);
+  return r.reapplied.length;
+}
+
 // The billing rules themselves live in @shared/billing (pure, DB-free); this
 // module is the database orchestration around them.
 export { computePaidThrough, decideStudentStatus, elapsedFrozenDays };

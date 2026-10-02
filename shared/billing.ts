@@ -4,7 +4,7 @@
  * long does a payment cover the student for".
  */
 
-import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey, shiftMonth } from "./date";
+import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey } from "./date";
 import type { StudentStatus } from "./schema";
 
 /**
@@ -146,14 +146,8 @@ function periodMonthFor(args: { startDate: string; paymentDates: string[]; today
   const start = atMidnight(parseDate(args.startDate));
   const paidThrough = computePaidThrough({ startDate: args.startDate, paymentDates: args.paymentDates });
   const todayAnchor = anchorOnOrBefore(atMidnight(args.today), start.getUTCDate());
-  if (todayAnchor.getTime() <= paidThrough.getTime()) return monthKey(paidThrough);
-  // Catching up after a gap: the window starts on the anchor day of an earlier
-  // month. When that day is late in the month (16th+) the window lies mostly in
-  // the NEXT month, which is what the academy calls it — start 30 Aug, first
-  // paid 28 Sep → September, not August (filing it under August hid it from the
-  // group grid and from the teacher's September salary).
-  const m = monthKey(todayAnchor);
-  return m < monthKey(atMidnight(args.today)) && start.getUTCDate() >= 16 ? shiftMonth(m, 1) : m;
+  const base = todayAnchor.getTime() > paidThrough.getTime() ? todayAnchor : paidThrough;
+  return monthKey(base);
 }
 
 /**
