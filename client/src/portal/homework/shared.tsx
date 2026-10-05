@@ -1,16 +1,19 @@
 /** Student-app homework (read-only): API, strings and the status pill. */
-import { CheckCircle2, Clock, AlertTriangle } from "lucide-react";
-import type { HomeworkState } from "@shared/homework";
+import { CheckCircle2, Clock, AlertTriangle, Check, X } from "lucide-react";
+import type { HomeworkState, PartMark } from "@shared/homework";
 import { papi } from "../api";
 import { useI18n } from "../../lib/i18n";
 
 export type HwListItem = {
   id: string;
   title: string;
+  parts: { id: string; text: string; mark: PartMark | null }[];
   instructions: string | null;
   dueAt: string;
   state: HomeworkState;
 };
+
+export type HwTable = { id: string; title: string; columns: { id: string; label: string; done: boolean }[] };
 
 export const hwApi = <T,>(path: string) => papi<T>(`/homework${path}`);
 
@@ -32,6 +35,14 @@ const D = {
   pendingN: { en: "{n} to do", uz: "{n} ta bajarish kerak" },
   nextDue: { en: "Next: {t} · {d}", uz: "Keyingisi: {t} · {d}" },
   allDone: { en: "All homework done", uz: "Barcha vazifalar bajarilgan" },
+  tables: { en: "Tasks", uz: "Topshiriqlar" },
+  tablesHint: {
+    en: "Your teacher ticks each task when you finish it. There is no deadline.",
+    uz: "Har bir topshiriqni bajarganingizda o'qituvchingiz belgilaydi. Muddat yo'q.",
+  },
+  markDone: { en: "Done", uz: "Bajarildi" },
+  markMissed: { en: "Not done", uz: "Bajarilmagan" },
+  markNone: { en: "Not checked yet", uz: "Hali tekshirilmagan" },
 } as const;
 
 export function useHT() {
@@ -65,4 +76,26 @@ export function timeLeft(dueAt: string, l: "en" | "uz"): string {
   if (h >= 1) return l === "uz" ? `${h} soat` : `${h} h`;
   const m = Math.max(1, Math.floor(ms / 60_000));
   return l === "uz" ? `${m} daq` : `${m} min`;
+}
+
+/** A read-only tick box: ticked (done), crossed (not done) or empty (not checked yet). */
+export function MarkBox({ mark, size = "md" }: { mark: PartMark | boolean | null; size?: "sm" | "md" }) {
+  const { t } = useHT();
+  const m = mark === true ? "done" : mark === false ? null : mark;
+  const dim = size === "sm" ? "h-5 w-5" : "h-6 w-6";
+  const cls =
+    m === "done"
+      ? "border-status-paid bg-status-paid text-white"
+      : m === "missed"
+        ? "border-danger bg-danger text-white"
+        : "border-dark/15 bg-surface text-transparent";
+  return (
+    <span
+      role="img"
+      aria-label={m === "done" ? t("markDone") : m === "missed" ? t("markMissed") : t("markNone")}
+      className={`grid ${dim} shrink-0 place-items-center rounded-md border-2 ${cls}`}
+    >
+      {m === "missed" ? <X size={13} strokeWidth={3.5} /> : <Check size={13} strokeWidth={3.5} />}
+    </span>
+  );
 }

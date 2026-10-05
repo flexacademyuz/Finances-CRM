@@ -1293,11 +1293,13 @@ export const learnerAchievements = pgTable(
 
 
 /**
- * Homework set for a whole group (a checklist item): the teacher or an
- * assistant ticks each student who did it (see homework_submissions). Students
- * don't hand anything in through the app. kind / link_url / resource_id /
- * unit_id / target_percent / max_score / due_report_sent_at are left over from
- * the first (hand-in) version and are no longer used.
+ * Homework set for a whole group. The teacher writes it as several lines in
+ * one box; each line is a part ({id, text}). Staff mark each part per student
+ * as done or not done (homework_marks). Students don't hand anything in
+ * through the app. title = the first part (for notifications / lists).
+ * kind / instructions / link_url / resource_id / unit_id / target_percent /
+ * max_score / due_report_sent_at are left over from earlier versions;
+ * instructions may still hold details of homework set before parts existed.
  */
 export const homework = pgTable(
   "homework",
@@ -1315,6 +1317,7 @@ export const homework = pgTable(
     kind: text("kind").notNull().default("task"),
     title: text("title").notNull(),
     instructions: text("instructions"),
+    parts: jsonb("parts").$type<{ id: string; text: string }[]>().notNull().default([]),
     linkUrl: text("link_url"),
     resourceId: uuid("resource_id").references(() => learningResources.id, { onDelete: "set null" }),
     unitId: uuid("unit_id").references(() => learningUnits.id, { onDelete: "set null" }),
@@ -1336,17 +1339,17 @@ export const homework = pgTable(
 );
 
 /**
- * A tick: this student did this homework (status "done"; unticking deletes
- * the row). checked_by / checked_at record who ticked it and when. The other
- * columns are left over from the first (hand-in) version and are unused.
+ * One part of one homework for one student: "done" (ticked) or "missed"
+ * (crossed: the student didn't do it). No row = not marked yet.
  */
-export const homeworkSubmissions = pgTable(
-  "homework_submissions",
+export const homeworkMarks = pgTable(
+  "homework_marks",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     homeworkId: uuid("homework_id")
       .notNull()
       .references(() => homework.id, { onDelete: "cascade" }),
+    partId: text("part_id").notNull(),
     studentId: uuid("student_id")
       .notNull()
       .references(() => students.id, { onDelete: "cascade" }),
@@ -1357,31 +1360,67 @@ export const homeworkSubmissions = pgTable(
       .notNull()
       .default(DEFAULT_BRANCH_ID)
       .references(() => branches.id, { onDelete: "restrict" }),
-    status: text("status").notNull().default("draft"),
-    answerText: text("answer_text"),
-    linkUrl: text("link_url"),
-    attempt: integer("attempt").notNull().default(0),
-    submittedAt: timestamp("submitted_at", { withTimezone: true }),
-    late: boolean("late").notNull().default(false),
-    auto: boolean("auto").notNull().default(false),
-    score: numeric("score", { precision: 8, scale: 2 }),
-    feedback: text("feedback"),
+    // done | missed
+    status: text("status").notNull(),
     checkedBy: uuid("checked_by").references(() => users.id, { onDelete: "set null" }),
-    checkedAt: timestamp("checked_at", { withTimezone: true }),
-    // The student_scores row this mark was written to (kept in sync on re-check).
-    scoreId: uuid("score_id").references(() => studentScores.id, { onDelete: "set null" }),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("homework_marks_uniq").on(t.homeworkId, t.partId, t.studentId),
+    byStudent: index("homework_marks_student_idx").on(t.studentId),
+  }),
+);
+
+/**
+ * A task table: a teacher-made grid of tasks with no deadline (e.g. ten
+ * speaking tasks). Columns are the tasks ({id, label}); staff tick each one
+ * for a student once it's done (homework_tracker_ticks).
+ */
+export const homeworkTrackers = pgTable(
+  "homework_trackers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    classId: uuid("class_id")
+      .notNull()
+      .references(() => classes.id, { onDelete: "cascade" }),
+    branchId: uuid("branch_id")
+      .notNull()
+      .default(DEFAULT_BRANCH_ID)
+      .references(() => branches.id, { onDelete: "restrict" }),
+    title: text("title").notNull(),
+    columns: jsonb("columns").$type<{ id: string; label: string }[]>().notNull().default([]),
+    // active | archived
+    status: text("status").notNull().default("active"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
+  (t) => ({ byClass: index("homework_trackers_class_idx").on(t.classId) }),
+);
+
+export const homeworkTrackerTicks = pgTable(
+  "homework_tracker_ticks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trackerId: uuid("tracker_id")
+      .notNull()
+      .references(() => homeworkTrackers.id, { onDelete: "cascade" }),
+    columnId: text("column_id").notNull(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    checkedBy: uuid("checked_by").references(() => users.id, { onDelete: "set null" }),
+    checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
   (t) => ({
-    uniqHwStudent: uniqueIndex("homework_submissions_hw_student_uniq").on(t.homeworkId, t.studentId),
-    byStatus: index("homework_submissions_status_idx").on(t.status, t.branchId),
-    byStudent: index("homework_submissions_student_idx").on(t.studentId),
+    uniq: uniqueIndex("homework_tracker_ticks_uniq").on(t.trackerId, t.columnId, t.studentId),
+    byStudent: index("homework_tracker_ticks_student_idx").on(t.studentId),
   }),
 );
 
 export type Homework = typeof homework.$inferSelect;
-export type HomeworkSubmission = typeof homeworkSubmissions.$inferSelect;
+export type HomeworkMark = typeof homeworkMarks.$inferSelect;
+export type HomeworkTracker = typeof homeworkTrackers.$inferSelect;
 
 export type LearningResource = typeof learningResources.$inferSelect;
 export type LearningUnit = typeof learningUnits.$inferSelect;

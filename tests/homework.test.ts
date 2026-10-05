@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { progressPercent, progressWeight, isLearned } from "@shared/learning/srs";
-import { homeworkState, fmtDue, createHomeworkSchema, markHomeworkSchema, tashkentDay } from "@shared/homework";
+import {
+  homeworkState,
+  fmtDue,
+  createHomeworkSchema,
+  createTrackerSchema,
+  markHomeworkSchema,
+  reconcileParts,
+  splitParts,
+  tashkentDay,
+  trackerColumns,
+} from "@shared/homework";
 import { can } from "@shared/permissions";
 
 describe("progress percent", () => {
@@ -24,12 +34,45 @@ describe("progress percent", () => {
   });
 });
 
-describe("homework state (checklist)", () => {
+describe("homework parts", () => {
+  it("one part per line; blanks and typed numbering / bullets dropped", () => {
+    expect(splitParts("1. Workbook p. 12\n\n2) Learn 20 words\r\n- Write 5 sentences\n   \n• Read text")).toEqual([
+      "Workbook p. 12",
+      "Learn 20 words",
+      "Write 5 sentences",
+      "Read text",
+    ]);
+    expect(splitParts("12 new words")).toEqual(["12 new words"]);
+    expect(splitParts(" \n ")).toEqual([]);
+  });
+  it("editing keeps the ids of parts that stayed (moved or retyped in place)", () => {
+    const old = reconcileParts([], ["A", "B", "C"]);
+    expect(old.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    // Reordered lines keep their ids; a retyped line keeps the id of the part in its place.
+    expect(reconcileParts(old, ["B", "A", "C"]).map((p) => p.id)).toEqual(["p2", "p1", "p3"]);
+    expect(reconcileParts(old, ["A", "B fixed", "C"])).toEqual([
+      { id: "p1", text: "A" },
+      { id: "p2", text: "B fixed" },
+      { id: "p3", text: "C" },
+    ]);
+    // A removed line takes its id (and marks) with it.
+    expect(reconcileParts(old, ["A", "C"]).map((p) => p.id)).toEqual(["p1", "p3"]);
+    expect(reconcileParts(old, ["A", "B", "C", "E"]).map((p) => p.id)).toEqual(["p1", "p2", "p3", "p4"]);
+  });
+});
+
+describe("homework state", () => {
   const now = new Date("2026-10-02T10:00:00Z");
-  it("ticked = done; unticked is to-do before the deadline, not done after", () => {
-    expect(homeworkState(true, "2026-10-01T10:00:00Z", now)).toBe("done");
-    expect(homeworkState(false, "2026-10-03T10:00:00Z", now)).toBe("todo");
-    expect(homeworkState(false, "2026-10-01T10:00:00Z", now)).toBe("missed");
+  const ahead = "2026-10-03T10:00:00Z";
+  const past = "2026-10-01T10:00:00Z";
+  it("done only when every part is ticked", () => {
+    expect(homeworkState({ done: 3, missed: 0, total: 3 }, past, now)).toBe("done");
+    expect(homeworkState({ done: 2, missed: 0, total: 3 }, ahead, now)).toBe("todo");
+    expect(homeworkState({ done: 2, missed: 0, total: 3 }, past, now)).toBe("missed");
+  });
+  it("a crossed part means not done, even before the deadline", () => {
+    expect(homeworkState({ done: 2, missed: 1, total: 3 }, ahead, now)).toBe("missed");
+    expect(homeworkState({ done: 0, missed: 0, total: 1 }, ahead, now)).toBe("todo");
   });
   it("formats deadlines in Tashkent time", () => {
     expect(fmtDue("2026-10-05T13:00:00Z", "en")).toBe("5 Oct, 18:00");
@@ -38,9 +81,28 @@ describe("homework state (checklist)", () => {
   });
   it("validates input", () => {
     const due = "2026-10-05T13:00:00Z";
-    expect(createHomeworkSchema.safeParse({ title: " ", dueAt: due }).success).toBe(false);
-    expect(createHomeworkSchema.parse({ title: "Workbook p. 12", dueAt: due, instructions: "" }).instructions).toBeNull();
-    expect(markHomeworkSchema.safeParse({ studentIds: [], done: true }).success).toBe(false);
+    expect(createHomeworkSchema.safeParse({ text: " \n ", dueAt: due }).success).toBe(false);
+    expect(createHomeworkSchema.parse({ text: "Workbook p. 12", dueAt: due }).notify).toBe(true);
+    expect(markHomeworkSchema.safeParse({ studentIds: [], status: "done" }).success).toBe(false);
+    expect(markHomeworkSchema.safeParse({ studentIds: ["00000000-0000-0000-0000-000000000001"], status: "late" }).success).toBe(false);
+    expect(markHomeworkSchema.parse({ studentIds: ["00000000-0000-0000-0000-000000000001"], status: null }).status).toBeNull();
+  });
+});
+
+describe("task tables", () => {
+  it("columns come from names (one per line) or a count", () => {
+    expect(createTrackerSchema.parse({ title: "Speaking", columns: { count: 3 } }).columns).toEqual(["1", "2", "3"]);
+    expect(createTrackerSchema.parse({ title: "Speaking", columns: { count: 3, labels: "Family\n\nHobbies" } }).columns).toEqual(["Family", "Hobbies"]);
+    expect(createTrackerSchema.safeParse({ title: "Speaking", columns: {} }).success).toBe(false);
+    expect(createTrackerSchema.safeParse({ title: "Speaking", columns: { count: 61 } }).success).toBe(false);
+  });
+  it("keeps column ids by position so renaming keeps the ticks", () => {
+    const cols = trackerColumns([], ["1", "2"]);
+    expect(trackerColumns(cols, ["Intro", "2", "3"])).toEqual([
+      { id: "c1", label: "Intro" },
+      { id: "c2", label: "2" },
+      { id: "c3", label: "3" },
+    ]);
   });
 });
 
