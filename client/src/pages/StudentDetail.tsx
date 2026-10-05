@@ -78,17 +78,11 @@ export function StudentDetail() {
 
       {/* Header */}
       <Card className="space-y-2">
+        {/* Name + status on top, details below, actions on their own row so a
+            long name never gets squeezed into a sliver on a phone. */}
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate text-lg font-bold">{student.fullName}</div>
-            <div className="text-sm text-tg-hint">{student.className}</div>
-            {student.phone && (
-              <div className="mt-1 inline-flex items-center gap-1 text-sm text-tg-hint">
-                <Phone size={13} /> {student.phone}
-              </div>
-            )}
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="min-w-0 text-lg font-bold leading-snug">{student.fullName}</div>
+          <div className="shrink-0 pt-0.5">
             {student.sponsored ? (
               <span className="rounded-full bg-status-discount/15 px-2.5 py-0.5 text-xs font-semibold text-status-discount">
                 Sponsored
@@ -96,20 +90,30 @@ export function StudentDetail() {
             ) : (
               <StatusBadge status={billing.status} balance={billing.balance} />
             )}
-            {canManage && (
-              <StudentActions
-                student={{
-                  id: student.id,
-                  classId: student.classId,
-                  fullName: student.fullName,
-                  effectiveFee: String(billing.effectiveFee),
-                }}
-                canEdit={canEdit}
-                canDiscount={canDiscount}
-                canDelete={canDelete}
-              />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
+            <div className="text-sm text-tg-hint">{student.className}</div>
+            {student.phone && (
+              <div className="mt-1 inline-flex items-center gap-1 whitespace-nowrap text-sm text-tg-hint">
+                <Phone size={13} /> {student.phone}
+              </div>
             )}
           </div>
+          {canManage && (
+            <StudentActions
+              student={{
+                id: student.id,
+                classId: student.classId,
+                fullName: student.fullName,
+                effectiveFee: String(billing.effectiveFee),
+              }}
+              canEdit={canEdit}
+              canDiscount={canDiscount}
+              canDelete={canDelete}
+            />
+          )}
         </div>
         {(discounts.length > 0 || freezes.length > 0) && (
           <div className="flex flex-wrap gap-2 pt-1">
@@ -137,7 +141,7 @@ export function StudentDetail() {
               </div>
               <div className="text-xs text-tg-hint">{t("remainingToComplete")}</div>
             </div>
-            <div className="text-lg font-bold text-status-overdue">
+            <div className="figure shrink-0 whitespace-nowrap text-lg font-bold text-status-overdue">
               {money(billing.balance, billing.currency)}
             </div>
           </div>
@@ -171,7 +175,7 @@ export function StudentDetail() {
                     <div className="font-semibold">
                       {money(p.amount, billing.currency)}
                       {partial && (
-                        <span className="text-tg-hint"> {t("ofDue")} {money(due!, billing.currency)}</span>
+                        <span className="whitespace-nowrap text-tg-hint"> {t("ofDue")} {money(due!, billing.currency)}</span>
                       )}
                       {refunded > 0 && (
                         <span className="text-status-discount"> · −{money(refunded, billing.currency)} {t("refunded")}</span>
@@ -187,7 +191,7 @@ export function StudentDetail() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <MethodTag method={p.method} />
                     {canVoidPayment && (
                       <button

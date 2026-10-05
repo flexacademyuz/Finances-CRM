@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
-import { money } from "../../lib/format";
+import { money, moneyShort } from "../../lib/format";
 import { Card, Empty, Spinner, Stat } from "../../components/ui";
 
 type Tab = "revenue" | "payments" | "students" | "groups" | "teachers" | "expenses";
@@ -371,8 +371,8 @@ function SummaryRow({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex gap-2">
-      <Stat label={totalLabel ?? t("revenue")} value={totalRaw != null ? totalRaw : money(total ?? 0)} />
+    <div className={`grid gap-2 ${extra ? "grid-cols-2" : ""}`}>
+      <Stat label={totalLabel ?? t("revenue")} value={totalRaw != null ? totalRaw : moneyShort(total ?? 0)} />
       {extra && <Stat label={extra.label} value={extra.value} />}
     </div>
   );

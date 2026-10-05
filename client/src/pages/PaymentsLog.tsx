@@ -69,14 +69,14 @@ export function PaymentsLog() {
                 className={`relative flex items-center gap-3 overflow-hidden rounded-card bg-surface p-3 pl-4 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover ${p.voided ? "opacity-60" : ""}`}
               >
                 <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: accent }} />
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(p.studentName) }}>
+                <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-full min-[400px]:grid text-sm font-bold text-white" style={{ background: avatarColor(p.studentName) }}>
                   {initials(p.studentName)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold">
+                  <div className="font-semibold leading-tight line-clamp-2">
                     {p.studentName} {p.voided && <span className="text-xs text-status-overdue">({t("void")})</span>}
                   </div>
-                  <div className="truncate text-xs text-muted">{p.className} · {formatDate(p.createdAt, locale)}</div>
+                  <div className="mt-0.5 text-xs text-muted line-clamp-2">{p.className} · {formatDate(p.createdAt, locale)}</div>
                 </div>
                 <div className="hidden w-20 shrink-0 sm:block"><MethodTag method={p.method} /></div>
                 <div className="shrink-0 text-right">

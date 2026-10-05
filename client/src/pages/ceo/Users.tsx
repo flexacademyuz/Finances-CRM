@@ -33,12 +33,12 @@ export function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-56">
           <h1 className="text-2xl font-extrabold">{t("users")}</h1>
           <p className="mt-0.5 text-sm text-muted">{t("usersSubtitle")}</p>
         </div>
-        <Button onClick={() => setInviting(true)}>
+        <Button className="shrink-0 whitespace-nowrap" onClick={() => setInviting(true)}>
           <Plus size={18} /> {t("invite")}
         </Button>
       </div>
@@ -506,7 +506,7 @@ function SalaryRuleModal({
 
   return (
     <Modal open onClose={onClose} title={`${t("salaryModel")} — ${user.fullName}`}>
-      <div className="max-h-[75vh] space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         <Field label={t("salaryModel")}>
           <Select value={salaryModel} onChange={(e) => setSalaryModel(e.target.value as SalaryModel)}>
             {MODELS.map((m) => (

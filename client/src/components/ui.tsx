@@ -1,7 +1,7 @@
 import { type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
 import { Link } from "wouter";
 import { twMerge } from "tailwind-merge";
-import { Clock, AlertTriangle, CheckCircle2, Snowflake, CircleDollarSign, ArrowUpRight } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, Snowflake, CircleDollarSign, ArrowUpRight, X } from "lucide-react";
 import type { StudentStatus, PaymentMethod } from "@shared/schema";
 import { statusColor, money } from "../lib/format";
 import { useI18n } from "../lib/i18n";
@@ -75,7 +75,9 @@ export function Segmented<T extends string>({
       className={twMerge(
         // LimeTalk segmented: a soft gray pill track; the active tab is a white
         // pill floating on a subtle shadow (rather than a solid-fill highlight).
-        "inline-flex rounded-pill bg-bg p-1",
+        // On a narrow phone the track scrolls sideways instead of pushing the
+        // page wider than the screen (which hid the last tabs).
+        "no-scrollbar inline-flex max-w-full overflow-x-auto rounded-pill bg-bg p-1",
         full && "flex w-full",
         className,
       )}
@@ -88,10 +90,13 @@ export function Segmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => onChange(o.value)}
+            onClick={(e) => {
+              onChange(o.value);
+              e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+            }}
             className={twMerge(
-              "rounded-pill px-3.5 py-1.5 text-sm font-semibold transition-colors",
-              full && "flex-1",
+              "shrink-0 whitespace-nowrap rounded-pill px-3.5 py-1.5 text-sm font-semibold transition-colors",
+              full && "flex-auto px-3",
               active
                 ? "bg-surface text-text shadow-[0_1px_3px_rgba(16,24,40,0.12),0_1px_2px_-1px_rgba(16,24,40,0.10)]"
                 : "text-muted hover:text-text",
@@ -171,7 +176,7 @@ export function Stat({
   const card = (
     <Card
       className={twMerge(
-        "h-full flex-1 !p-4",
+        "h-full min-w-0 flex-1 !p-3 sm:!p-4",
         accent && `border-l-4 ${ACCENTS[accent]}`,
         href && "cursor-pointer transition hover:border-primary/40 hover:shadow-card-hover",
       )}
@@ -180,7 +185,7 @@ export function Stat({
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
         {icon}
       </div>
-      <div className="figure mt-1 text-xl font-bold">{value}</div>
+      <div className="figure mt-1 text-lg font-bold sm:text-xl">{value}</div>
       {sub != null && <div className="mt-0.5 text-xs text-muted">{sub}</div>}
     </Card>
   );
@@ -332,11 +337,21 @@ export function Modal({
           forms stay fully reachable when the on-screen keyboard is open (the
           title stays pinned; fields scroll under it). */}
       <div
-        className="flex max-h-[90dvh] w-full max-w-md flex-col rounded-t-2xl bg-surface shadow-card-hover animate-scale-in sm:rounded-2xl"
+        className="modal-sheet flex w-full max-w-md flex-col rounded-t-2xl bg-surface shadow-card-hover animate-scale-in sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 px-5 pb-3 pt-5 text-lg font-bold">{title}</div>
-        <div className="overflow-y-auto px-5 pb-8">{children}</div>
+        <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5">
+          <div className="min-w-0 flex-1 text-lg font-bold leading-snug">{title}</div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="-mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition hover:bg-bg hover:text-text"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)]">{children}</div>
       </div>
     </div>
   );

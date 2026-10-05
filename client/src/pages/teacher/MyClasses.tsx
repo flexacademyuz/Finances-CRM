@@ -33,7 +33,7 @@ export function MyClasses() {
                   <Folder size={18} />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate font-semibold">{c.name}</span>
+                  <span className="block font-semibold leading-snug line-clamp-2">{c.name}</span>
                   <span className="block truncate text-xs text-tg-hint">
                     {money(c.defaultFee)}
                     {c.schedule ? ` · ${c.schedule}` : ""}

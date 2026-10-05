@@ -358,25 +358,26 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
 
       <div className={`transition-[padding] duration-200 ${collapsed ? "md:pl-[92px]" : "md:pl-[248px]"}`}>
         {/* Top bar — 64px, shows the section name only (no branding). */}
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur">
-          <button className="md:hidden" onClick={() => setDrawer(true)} aria-label="Menu">
+        {/* On phones the avatar lives in the drawer, leaving room for the title. */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface/90 px-3 backdrop-blur md:h-16 md:gap-3 md:px-4">
+          <button className="-ml-1 grid h-10 w-10 shrink-0 place-items-center md:hidden" onClick={() => setDrawer(true)} aria-label="Menu">
             <Menu size={22} />
           </button>
-          <h1 className="flex-1 truncate text-lg font-bold">{title}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-base font-bold md:text-lg">{title}</h1>
           <BranchSwitcher />
           <button
-            className="rounded-btn bg-bg px-2.5 py-1 text-xs font-semibold uppercase ring-1 ring-border"
+            className="shrink-0 rounded-btn bg-bg px-2.5 py-1 text-xs font-semibold uppercase ring-1 ring-border"
             onClick={() => setLocale(locale === "en" ? "uz" : "en")}
           >
             {locale === "en" ? "UZ" : "EN"}
           </button>
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-brand text-sm font-bold text-white shadow-brand">
+          <div className="hidden h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-sm font-bold text-white shadow-brand md:grid">
             {initials(user.fullName)}
           </div>
         </header>
 
         {impersonator && (
-          <div className="sticky top-16 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warning/40 bg-warning/15 px-4 py-2 text-sm">
+          <div className="sticky top-14 z-20 flex md:top-16 flex-wrap items-center gap-x-3 gap-y-1 border-b border-warning/40 bg-warning/15 px-4 py-2 text-sm">
             <Eye size={16} className="shrink-0 text-warning" />
             <span className="font-semibold">
               {t("viewingAs")} {user.fullName} · {t(user.role)}
@@ -394,7 +395,7 @@ export function Layout({ role, children }: { role: Role; children: ReactNode }) 
         {/* Extra bottom padding on mobile so the tab bar never covers content.
             A tighter max width keeps the content column contained and glamorous
             on large monitors instead of stretching cards edge-to-edge. */}
-        <main className="mx-auto max-w-[1080px] px-4 pb-28 pt-4 md:px-6 md:pb-16">{children}</main>
+        <main className="mx-auto max-w-[1080px] px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 md:px-6 md:pb-16">{children}</main>
       </div>
 
       {/* Mobile bottom tab bar — quick access alongside the sidebar drawer. */}
@@ -433,7 +434,7 @@ function BottomNav({ items, location, user }: { items: BottomItem[]; location: s
 
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-stretch border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {items.map((item) => {
           const active = bottomActive(item.href, location);
           if (item.center) {

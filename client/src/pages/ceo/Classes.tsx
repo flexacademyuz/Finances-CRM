@@ -54,7 +54,7 @@ export function ClassesPage() {
       {classes.isLoading ? (
         <Spinner />
       ) : classes.data?.length ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
           {classes.data.map((c) => (
             <Card key={c.id} className="relative flex flex-col gap-2 !p-3">
               {canEdit && (
@@ -71,13 +71,13 @@ export function ClassesPage() {
                   <Folder size={18} />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate font-semibold">{c.name}</span>
+                  <span className="block pr-6 font-semibold leading-snug line-clamp-2">{c.name}</span>
                   <span className="block truncate text-xs text-tg-hint">{teacherName(c.teacherId)}</span>
                 </span>
                 {c.learningLevel && <span className="badge-pill w-fit">{levelLabel(c.learningLevel, locale)}</span>}
                 <span className="flex items-center justify-between gap-1 text-xs">
-                  <span className="font-medium text-tg-text">{money(c.defaultFee)}</span>
-                  {c.room && <span className="text-tg-hint">{c.room}</span>}
+                  <span className="shrink-0 whitespace-nowrap font-medium text-tg-text">{money(c.defaultFee)}</span>
+                  {c.room && <span className="min-w-0 truncate text-tg-hint">{c.room}</span>}
                 </span>
               </Link>
             </Card>
@@ -164,7 +164,7 @@ function GroupModal({
 
   return (
     <Modal open onClose={onClose} title={`${editing ? t("edit") : t("add")} — ${t("groups")}`}>
-      <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         <Field label={t("groups")}>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>

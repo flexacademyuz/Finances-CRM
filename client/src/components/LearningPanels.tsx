@@ -221,7 +221,34 @@ export function GroupLearning({ classId }: { classId: string }) {
   return (
     <>
     {header}
-    <Card className="overflow-x-auto !p-0">
+    {/* Phones: one stacked row per student instead of a 6-column table. */}
+    <Card className="divide-y divide-border !p-0 sm:hidden">
+      {rows.map((r) => (
+        <Link key={r.studentId} href={`/student/${r.studentId}`} className="block px-4 py-3">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1 font-semibold leading-tight">{r.fullName}</div>
+            <b className="shrink-0">{r.percent}%</b>
+          </div>
+          {r.struggling && (
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-bold text-danger">
+              <AlertTriangle size={11} /> {l("struggling")}
+            </span>
+          )}
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+            <span>{r.learned ?? 0} {l("learned")} · {r.mastered ?? 0} {l("mastered")}</span>
+            <span className={(r.needPractice ?? 0) > 0 ? "font-bold text-danger" : ""}>
+              {l("needPractice")}: {r.needPractice ?? 0}
+            </span>
+            <span>{l("last30")}: {r.accuracy30 == null ? "—" : `${r.accuracy30}%`}</span>
+            <span>
+              {l("time7")}: {fmtMinutes(r.seconds7d ?? 0)}
+              {r.practisedDays7d ? ` · ${r.practisedDays7d}/7` : ""}
+            </span>
+          </div>
+        </Link>
+      ))}
+    </Card>
+    <Card className="hidden overflow-x-auto !p-0 sm:block">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs uppercase tracking-wide text-muted">

@@ -414,12 +414,12 @@ function SearchStep({
 
   if (selected) {
     return (
-      <Card className="flex items-center justify-between">
-        <div>
+      <Card className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="text-xs text-tg-hint">{title}</div>
           <div className="font-semibold">{selected}</div>
         </div>
-        <button className="text-sm text-tg-link" onClick={onClear}>
+        <button className="shrink-0 text-sm text-tg-link" onClick={onClear}>
           {t("edit")}
         </button>
       </Card>
@@ -441,7 +441,7 @@ function SearchStep({
       {loading ? (
         <Spinner />
       ) : cards ? (
-        <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+        <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto min-[400px]:grid-cols-2 sm:grid-cols-3">
           {filtered.map((i) => (
             <button
               key={i.id}

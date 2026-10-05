@@ -380,7 +380,7 @@ function HomeworkCard({
               <tr className="text-xs text-muted">
                 <th className="sticky left-0 z-10 border-r border-border bg-surface px-3 py-2 text-left font-semibold">{t("students")}</th>
                 {h.parts.map((p, i) => (
-                  <th key={p.id} className="px-2 py-2 text-center font-semibold" title={p.text}>
+                  <th key={p.id} className="px-1 py-2 text-center font-semibold sm:px-2" title={p.text}>
                     {multi ? i + 1 : t("homework")}
                   </th>
                 ))}
@@ -393,13 +393,13 @@ function HomeworkCard({
                 const allDone = h.parts.every((p) => m[p.id] === "done");
                 return (
                   <tr key={s.id} className="border-t border-border">
-                    <td className="sticky left-0 z-10 border-r border-border bg-surface px-3 py-1.5">
-                      <Link href={`/student/${s.id}`} className="block max-w-[8.5rem] truncate font-medium hover:text-primary md:max-w-[14rem]" title={s.fullName}>
+                    <td className="sticky left-0 z-10 border-r border-border bg-surface px-2 py-1.5 sm:px-3">
+                      <Link href={`/student/${s.id}`} className="block max-w-[7.5rem] sm:max-w-[8.5rem] truncate font-medium hover:text-primary md:max-w-[14rem]" title={s.fullName}>
                         {s.fullName}
                       </Link>
                     </td>
                     {h.parts.map((p) => (
-                      <td key={p.id} className="px-2 py-1.5">
+                      <td key={p.id} className="px-1 py-1.5 sm:px-2">
                         <MarkPair
                           mark={m[p.id]}
                           disabled={!canCheck}
@@ -409,7 +409,7 @@ function HomeworkCard({
                       </td>
                     ))}
                     {multi && canCheck && (
-                      <td className="px-2 py-1.5">
+                      <td className="px-1 py-1.5 sm:px-2">
                         <button
                           type="button"
                           disabled={allDone}

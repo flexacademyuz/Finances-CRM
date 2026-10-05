@@ -32,10 +32,10 @@ export function StudentActions({
 
   return (
     <>
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1.5">
         {canEdit && (
           <button
-            className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+            className="rounded-lg bg-tg-bg p-2 text-tg-link"
             title={t("editStudent")}
             onClick={() => setOpen("edit")}
           >
@@ -44,7 +44,7 @@ export function StudentActions({
         )}
         {canDiscount && (
           <button
-            className="rounded-lg bg-tg-bg p-1.5 text-status-frozen"
+            className="rounded-lg bg-tg-bg p-2 text-status-frozen"
             title={t("freezePayment")}
             onClick={() => setOpen("freeze")}
           >
@@ -53,7 +53,7 @@ export function StudentActions({
         )}
         {canDiscount && (
           <button
-            className="rounded-lg bg-tg-bg p-1.5 text-status-discount"
+            className="rounded-lg bg-tg-bg p-2 text-status-discount"
             title={t("addDiscount")}
             onClick={() => setOpen("discount")}
           >
@@ -62,7 +62,7 @@ export function StudentActions({
         )}
         {canEdit && (
           <button
-            className="rounded-lg bg-tg-bg p-1.5 text-tg-link"
+            className="rounded-lg bg-tg-bg p-2 text-tg-link"
             title={t("changeGroup")}
             onClick={() => setOpen("group")}
           >
@@ -71,7 +71,7 @@ export function StudentActions({
         )}
         {canEdit && (
           <button
-            className="rounded-lg bg-tg-bg p-1.5 text-status-overdue"
+            className="rounded-lg bg-tg-bg p-2 text-status-overdue"
             title={t("stopStudent")}
             onClick={() => setOpen("stop")}
           >
@@ -431,7 +431,7 @@ function DiscountModal({ student, onClose }: { student: ActionStudent; onClose: 
 
   return (
     <Modal open onClose={onClose} title={`${t("addDiscount")} — ${student.fullName}`}>
-      <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         {activeDiscounts.length > 0 && (
           <div className="space-y-1 rounded-lg bg-status-discount/10 p-2 text-xs">
             {activeDiscounts.map((d) => (

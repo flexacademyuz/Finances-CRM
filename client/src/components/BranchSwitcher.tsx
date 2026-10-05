@@ -15,7 +15,7 @@ export function BranchSwitcher({ className }: { className?: string }) {
   const { branches, allowedBranches, fullAccess, canSwitch, selectedBranchId, setBranch } = useBranch();
   const selectCls =
     className ??
-    "max-w-[9rem] truncate rounded-btn bg-bg px-2 py-1 text-xs font-semibold ring-1 ring-border";
+    "max-w-[7.5rem] shrink truncate rounded-btn md:max-w-[9rem] bg-bg px-2 py-1 text-xs font-semibold ring-1 ring-border";
 
   if (fullAccess) {
     if (branches.length <= 1) return null; // nothing to switch between

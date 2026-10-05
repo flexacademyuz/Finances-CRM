@@ -134,7 +134,7 @@ export function PortalApp() {
         )}
         {!immersive && <Header me={me.data} />}
         {!immersive && <GroupSwitcher me={me.data} />}
-        <main className={immersive ? "" : "pb-28 pt-2"}>
+        <main className={immersive ? "" : "pb-[calc(7rem+env(safe-area-inset-bottom))] pt-2"}>
           <Switch>
             <Route path="/" component={HomePage} />
             <Route path="/payments" component={PaymentsPage} />

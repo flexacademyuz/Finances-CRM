@@ -40,7 +40,7 @@ export function TodayLessons() {
                   {g.slot?.start ?? "—"}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-bold">{g.name}</div>
+                  <div className="font-bold leading-tight line-clamp-2">{g.name}</div>
                   <div className="truncate text-xs text-muted">
                     {g.room ? `${g.room} · ` : ""}
                     {cancelled ? (

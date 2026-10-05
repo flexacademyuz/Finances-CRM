@@ -168,9 +168,21 @@ export function StudentsPage() {
                   <div className="truncate font-semibold">{s.fullName}</div>
                   {s.phone && (
                     <div className="flex items-center gap-1 truncate text-xs text-muted">
-                      <Phone size={12} /> {s.phone}
+                      <Phone size={12} className="shrink-0" /> {s.phone}
                     </div>
                   )}
+                  {/* Phones: group + status stack under the name so the name
+                      keeps the full row width. */}
+                  <div className="truncate text-xs text-muted sm:hidden">{s.className}</div>
+                  <div className="mt-1 sm:hidden">
+                    {s.sponsored ? (
+                      <span className="rounded-full bg-status-discount/15 px-2.5 py-0.5 text-xs font-semibold text-status-discount">
+                        Sponsored
+                      </span>
+                    ) : (
+                      <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
+                    )}
+                  </div>
                 </div>
                 {/* Fixed-width columns so every row lines up. */}
                 <div className="hidden w-40 shrink-0 sm:block">
@@ -185,7 +197,7 @@ export function StudentsPage() {
                   <div className="text-[11px] text-muted">{t("startDate")}</div>
                   <div className="text-sm">{formatDate(s.enrolledAt)}</div>
                 </div>
-                <div className="flex w-[124px] shrink-0 justify-start">
+                <div className="hidden w-[124px] shrink-0 justify-start sm:flex">
                   {s.sponsored ? (
                     <span className="rounded-full bg-status-discount/15 px-2.5 py-0.5 text-xs font-semibold text-status-discount">
                       Sponsored
@@ -194,7 +206,7 @@ export function StudentsPage() {
                     <StatusPill status={s.status} balance={view === "active" ? s.balance : undefined} />
                   )}
                 </div>
-                <ChevronRight size={18} className="hidden shrink-0 text-muted sm:block" />
+                <ChevronRight size={18} className="shrink-0 text-muted" />
               </Link>
               {view === "archived" && (
                 <Button variant="ghost" className="shrink-0" onClick={() => setResuming(s)}>{t("resumeStudent")}</Button>

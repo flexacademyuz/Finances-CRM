@@ -32,7 +32,8 @@ import { usePT, type PKey } from "./i18n";
 /* ───────────────────────────── formatting ───────────────────────────── */
 
 export function money(n: number, currency = "UZS"): string {
-  return `${new Intl.NumberFormat("en-US").format(Math.round(n))} ${currency}`;
+  // Non-breaking space: an amount never splits across two lines.
+  return `${new Intl.NumberFormat("en-US").format(Math.round(n))}${String.fromCharCode(160)}${currency}`;
 }
 
 const WD = {

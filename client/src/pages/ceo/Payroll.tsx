@@ -70,12 +70,12 @@ export function PayrollPage() {
                   className="relative flex w-full items-center gap-3 overflow-hidden rounded-card bg-surface p-3 pl-4 text-left shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover"
                 >
                   <span className="absolute inset-y-0 left-0 w-1.5" style={{ background: tr.paid ? "#12b76a" : "#3457f5" }} />
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold text-white" style={{ background: avatarColor(tr.name) }}>
+                  <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-full text-sm font-bold text-white min-[400px]:grid" style={{ background: avatarColor(tr.name) }}>
                     {initials(tr.name)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">{tr.name}</div>
-                    <div className="truncate text-xs text-muted">
+                    <div className="font-semibold leading-tight line-clamp-2">{tr.name}</div>
+                    <div className="mt-0.5 text-xs text-muted line-clamp-2">
                       {t(tr.salaryModel)}
                       {tr.salaryModel === "percentage" ? ` (${tr.salaryValue}%)` : ` (${money(tr.salaryValue)})`}
                       {" · "}{tr.paidStudents} {t("paidStudents")}

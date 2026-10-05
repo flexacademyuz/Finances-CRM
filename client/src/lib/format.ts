@@ -1,8 +1,12 @@
 import type { StudentStatus } from "@shared/schema";
 
+// Number and currency are joined by a non-breaking space so an amount never
+// splits across two lines ("1,250,000 / UZS") in a narrow phone column.
+const NBSP = String.fromCharCode(160);
+
 export function money(value: number | string, currency = "UZS"): string {
   const n = typeof value === "string" ? Number(value) : value;
-  return `${new Intl.NumberFormat("en-US").format(Math.round(n))} ${currency}`;
+  return `${new Intl.NumberFormat("en-US").format(Math.round(n))}${NBSP}${currency}`;
 }
 
 /**
@@ -14,9 +18,9 @@ export function moneyShort(value: number | string, currency = "UZS"): string {
   const n = typeof value === "string" ? Number(value) : value;
   const abs = Math.abs(n);
   const trim = (x: number) => String(Math.round(x * 100) / 100);
-  if (abs >= 1_000_000) return `${trim(n / 1_000_000)}M ${currency}`;
-  if (abs >= 100_000) return `${trim(n / 1000)}K ${currency}`;
-  return `${new Intl.NumberFormat("en-US").format(Math.round(n))} ${currency}`;
+  if (abs >= 1_000_000) return `${trim(n / 1_000_000)}M${NBSP}${currency}`;
+  if (abs >= 100_000) return `${trim(n / 1000)}K${NBSP}${currency}`;
+  return `${new Intl.NumberFormat("en-US").format(Math.round(n))}${NBSP}${currency}`;
 }
 
 export const statusColor: Record<StudentStatus, string> = {

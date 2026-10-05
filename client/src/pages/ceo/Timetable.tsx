@@ -270,7 +270,7 @@ function AddSessionModal({
 
   return (
     <Modal open onClose={onClose} title="Add session">
-      <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         <Field label="Group">
           <Select value={classId} onChange={(e) => pick(e.target.value)}>
             <option value="">—</option>

@@ -137,9 +137,13 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
             {formatDate(date + "T00:00:00", locale)}
           </div>
           <div className="text-xs text-muted">
-            {data?.lesson?.startTime ?? data?.scheduled?.start ?? ""}
-            {data?.group.room ? ` · ${data.group.room}` : ""}
-            {!data?.scheduled && !data?.lesson ? t("noLessonScheduled") : ""}
+            {[
+              data?.lesson?.startTime ?? data?.scheduled?.start,
+              data?.group.room,
+              data && !data.scheduled && !data.lesson ? t("noLessonScheduled") : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </div>
         </div>
         <button
@@ -213,7 +217,7 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
               return (
                 <div key={s.id} className={`flex items-center gap-2 px-3 py-2.5 ${i ? "border-t border-border" : ""}`}>
                   <div className="min-w-0 flex-1">
-                    <div className={`truncate text-sm font-semibold ${!s.inGroup ? "text-muted line-through" : ""}`}>{s.fullName}</div>
+                    <div className={`line-clamp-2 text-sm font-semibold leading-tight ${!s.inGroup ? "text-muted line-through" : ""}`}>{s.fullName}</div>
                     {(m.note || m.status === "left_early") && (
                       <div className="truncate text-xs text-muted">
                         {m.status === "left_early" ? `${t("att_left_early")}${m.note ? " · " : ""}` : ""}
@@ -230,7 +234,7 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
                         title={t(qk.k)}
                         aria-label={`${s.fullName}: ${t(qk.k)}`}
                         aria-pressed={m.status === qk.s}
-                        className={`h-9 w-9 rounded-xl text-sm font-extrabold transition active:scale-90 disabled:opacity-60 ${
+                        className={`h-9 w-8 rounded-xl text-sm font-extrabold transition sm:w-9 active:scale-90 disabled:opacity-60 ${
                           m.status === qk.s ? qk.cls : "bg-bg text-muted"
                         }`}
                       >
@@ -241,7 +245,7 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
                       disabled={!editable}
                       onClick={() => setMenuFor(s.id)}
                       aria-label={`${s.fullName}: ${t("more")}`}
-                      className={`grid h-9 w-8 place-items-center rounded-xl disabled:opacity-60 ${
+                      className={`grid h-9 w-7 place-items-center rounded-xl disabled:opacity-60 sm:w-8 ${
                         m.status === "left_early" ? "bg-violet text-white" : "bg-bg text-muted"
                       }`}
                     >
@@ -274,7 +278,7 @@ export function GroupAttendance({ classId, initialDate }: { classId: string; ini
 
           {/* Sticky save bar */}
           {editable && (dirty || save.isPending) && (
-            <div className="sticky bottom-20 z-20 md:bottom-4">
+            <div className="sticky bottom-[calc(6rem+env(safe-area-inset-bottom))] z-20 md:bottom-4">
               <Button className="w-full !py-3 shadow-card-hover" disabled={save.isPending} onClick={() => save.mutate()}>
                 {save.isPending ? t("loading") : `${t("saveAttendance")}${unmarked ? ` · ${unmarked} ${t("unmarked")}` : ""}`}
               </Button>

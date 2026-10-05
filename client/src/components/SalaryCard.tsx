@@ -4,7 +4,7 @@ import { HandCoins, BadgeDollarSign, Check, ChevronRight, RefreshCw } from "luci
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { haptic } from "../lib/telegram";
-import { money, formatDate } from "../lib/format";
+import { money, moneyShort, formatDate } from "../lib/format";
 import type { MonthlySalary, SalaryMonthRow } from "../lib/types";
 import type { PaymentMethod } from "@shared/schema";
 import { Button, Card, Field, Input, MoneyHint, Modal, Segmented, Spinner, Stat } from "./ui";
@@ -58,9 +58,9 @@ export function SalaryCard({
   return (
     <div className="space-y-4">
       {/* Analytics */}
-      <div className="flex gap-3">
-        <Stat label={t("totalPaidSalary")} value={money(totalPaid)} accent="primary" />
-        <Stat label={t("avgMonthly")} value={money(avg)} />
+      <div className="grid grid-cols-3 gap-2">
+        <Stat label={t("totalPaidSalary")} value={moneyShort(totalPaid)} accent="primary" />
+        <Stat label={t("avgMonthly")} value={moneyShort(avg)} />
         <Stat label={t("unpaidMonths")} value={String(unpaid)} accent={unpaid ? "warning" : undefined} />
       </div>
 
@@ -93,25 +93,25 @@ export function SalaryCard({
               <button
                 key={r.month}
                 onClick={() => setMonth(r.month)}
-                className={`flex w-full items-center justify-between rounded-btn border px-3 py-2 text-left text-sm transition ${
+                className={`flex w-full items-center justify-between gap-2 rounded-btn border px-3 py-2 text-left text-sm transition ${
                   active ? "border-primary bg-primary-soft" : "border-border bg-surface hover:border-primary"
                 }`}
               >
-                <span className="font-medium">{r.label}</span>
-                <span className="flex items-center gap-2">
-                  <span className="figure font-semibold">
+                <span className="min-w-0 font-medium">{r.label}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="figure whitespace-nowrap font-semibold">
                     {money(r.paid ? (r.paidAmount ?? 0) : r.estimatedSalary)}
                   </span>
                   {r.paid && r.remaining > 0.5 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
                       +{money(r.remaining)}
                     </span>
                   ) : r.paid ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-status-paid/15 px-2 py-0.5 text-[11px] font-semibold text-status-paid">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-status-paid/15 px-2 py-0.5 text-[11px] font-semibold text-status-paid">
                       <Check size={11} /> {t("salaryPaid")}
                     </span>
                   ) : (
-                    <span className="rounded-full bg-bg px-2 py-0.5 text-[11px] font-semibold text-muted">
+                    <span className="whitespace-nowrap rounded-full bg-bg px-2 py-0.5 text-[11px] font-semibold text-muted">
                       {t("notPaid")}
                     </span>
                   )}
@@ -231,7 +231,7 @@ function MonthDetail({
                       <div className="font-medium">{st.studentName}</div>
                       <div className="text-xs text-tg-hint">{st.className}</div>
                     </td>
-                    <td className="figure px-3 py-1.5 text-right font-semibold">
+                    <td className="figure whitespace-nowrap px-3 py-1.5 text-right align-top font-semibold">
                       {money(s.salaryModel === "fixed" ? st.paid : st.credit)}
                     </td>
                   </tr>

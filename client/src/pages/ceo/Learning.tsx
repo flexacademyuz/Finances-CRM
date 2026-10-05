@@ -233,7 +233,7 @@ function SettingsCard({ resource, l }: { resource: Resource; l: Lf }) {
       <Field label={l("completion")}>
         <Input type="number" min={10} max={100} value={Math.round(f.completionThreshold * 100)} onChange={(e) => num("completionThreshold", String(Number(e.target.value) / 100))} />
       </Field>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 items-end gap-2">
         <Field label={l("dailyNew")}>
           <Input type="number" min={0} max={100} value={f.dailyNewWords} onChange={(e) => num("dailyNewWords", e.target.value)} />
         </Field>
@@ -325,18 +325,18 @@ function VocabularyManager({ resource, l }: { resource: Resource; l: Lf }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-muted">
-                <th className="py-2 pr-2">#</th>
+                <th className="hidden py-2 pr-2 sm:table-cell">#</th>
                 <th className="py-2 pr-2">{l("word")}</th>
                 <th className="py-2 pr-2">{l("translation")}</th>
                 <th className="hidden py-2 pr-2 md:table-cell">{l("pos")}</th>
-                <th className="py-2 pr-2">{l("stage")}</th>
+                <th className="hidden py-2 pr-2 sm:table-cell">{l("stage")}</th>
                 <th />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((it) => (
                 <tr key={it.id} className={it.active ? "" : "opacity-50"}>
-                  <td className="py-2 pr-2 text-muted">{it.position}</td>
+                  <td className="hidden py-2 pr-2 text-muted sm:table-cell">{it.position}</td>
                   <td className="py-2 pr-2">
                     <div className="font-bold">{it.word}</div>
                     {it.phonetic && <div className="text-xs text-muted">{it.phonetic}</div>}
@@ -348,7 +348,7 @@ function VocabularyManager({ resource, l }: { resource: Resource; l: Lf }) {
                     {it.note && <div className="text-xs text-warning">{it.note}</div>}
                   </td>
                   <td className="hidden py-2 pr-2 text-muted md:table-cell">{it.partOfSpeech ? POS_LABELS[it.partOfSpeech]?.en ?? it.partOfSpeech : ""}</td>
-                  <td className="py-2 pr-2">{it.stage}</td>
+                  <td className="hidden py-2 pr-2 sm:table-cell">{it.stage}</td>
                   <td className="whitespace-nowrap py-2 text-right">
                     <button className="btn btn-ghost !px-2 !py-1.5" aria-label={l("edit")} onClick={() => setEditing(it)}>
                       <Pencil size={14} />

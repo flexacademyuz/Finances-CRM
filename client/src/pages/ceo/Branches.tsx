@@ -22,12 +22,12 @@ export function BranchesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-56">
           <h1 className="text-2xl font-extrabold">{t("branches")}</h1>
           <p className="mt-0.5 text-sm text-muted">{t("branchesNote")}</p>
         </div>
-        <Button onClick={() => setCreating(true)}>
+        <Button className="shrink-0 whitespace-nowrap" onClick={() => setCreating(true)}>
           <Plus size={18} /> {t("addBranch")}
         </Button>
       </div>

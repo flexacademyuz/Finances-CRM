@@ -95,15 +95,15 @@ export function ExpensesPage() {
                 key={e.id}
                 className={`flex items-center gap-3 rounded-card bg-surface p-3 shadow-card ring-1 ring-dark/[0.04] transition hover:shadow-card-hover ${e.isDeleted ? "opacity-50" : ""}`}
               >
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ background: avatarColor(e.category) }}>
+                <span className="hidden h-11 w-11 shrink-0 place-items-center rounded-full min-[400px]:grid text-xs font-bold text-white" style={{ background: avatarColor(e.category) }}>
                   {initials(e.category)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold">
+                  <div className="font-semibold leading-tight line-clamp-2">
                     {e.category}{e.subCategory ? ` · ${e.subCategory}` : ""}
                     {e.isDeleted && <span className="text-xs text-status-overdue"> (deleted)</span>}
                   </div>
-                  <div className="truncate text-xs text-muted">
+                  <div className="mt-0.5 text-xs text-muted line-clamp-2">
                     {formatDate(e.expenseDate, locale)} · {t(e.paymentMethod as "cash" | "bank_transfer" | "card")}
                     {e.vendor ? ` · ${e.vendor}` : ""}
                   </div>
@@ -173,7 +173,7 @@ function AddExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 
   return (
     <Modal open onClose={onClose} title={t("addExpense")}>
-      <div className="max-h-[72vh] space-y-3 overflow-y-auto">
+      <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <Field label={t("category")}>
             <Select value={category} onChange={(e) => { setCategory(e.target.value); setSubCategory(""); }}>
@@ -206,7 +206,7 @@ function AddExpenseModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
               <button
                 key={m}
                 onClick={() => setPaymentMethod(m)}
-                className={`btn text-xs ${paymentMethod === m ? "btn-primary" : "btn-ghost"}`}
+                className={`btn !px-2 text-xs ${paymentMethod === m ? "btn-primary" : "btn-ghost"}`}
               >
                 {t(m as "cash" | "bank_transfer" | "card")}
               </button>

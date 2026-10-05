@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
-import { money } from "../../lib/format";
+import { money, moneyShort } from "../../lib/format";
 import { EXPENSE_CATEGORY_NAMES } from "@shared/expense-categories";
 import type { FinanceOverview } from "../../lib/types";
 import { Card, Select, Spinner, Stat } from "../../components/ui";
@@ -25,33 +25,33 @@ export function FinancesPage() {
   if (isLoading || !data) return <Spinner />;
 
   const short = (label: string) => label.split(" ")[0].slice(0, 3);
-  const fmt = (n: number) => (n === 0 ? "—" : money(n).replace(" UZS", ""));
+  const fmt = (n: number) => (n === 0 ? "—" : money(n).replace(/\s*UZS$/, ""));
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-extrabold">{t("finances")}</h1>
           <p className="mt-0.5 text-sm text-muted">{t("financesSubtitle")}</p>
         </div>
-        <Select className="w-36" value={String(year)} onChange={(e) => setYear(Number(e.target.value))}>
+        <Select className="w-36 shrink-0" value={String(year)} onChange={(e) => setYear(Number(e.target.value))}>
           {[defaultYear + 1, defaultYear, defaultYear - 1, defaultYear - 2].map((y) => (
             <option key={y} value={y}>{`${y}–${y + 1}`}</option>
           ))}
         </Select>
       </div>
 
-      <div className="flex gap-3">
-        <Stat label={t("revenue")} value={money(data.yearTotals.revenue)} />
-        <Stat label={t("totalExpenses")} value={money(data.yearTotals.expenses)} />
+      <div className="grid grid-cols-2 gap-3">
+        <Stat label={t("revenue")} value={moneyShort(data.yearTotals.revenue)} />
+        <Stat label={t("totalExpenses")} value={moneyShort(data.yearTotals.expenses)} />
       </div>
       <Card
-        className={`flex items-center justify-between ${
+        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 ${
           data.yearTotals.netProfit >= 0 ? "text-status-paid" : "text-status-overdue"
         }`}
       >
         <span className="font-semibold">{t("netProfit")} ({data.label})</span>
-        <span className="text-lg font-bold">{money(data.yearTotals.netProfit)}</span>
+        <span className="figure whitespace-nowrap text-lg font-bold">{money(data.yearTotals.netProfit)}</span>
       </Card>
 
       {/* Scrollable spreadsheet-style grid */}

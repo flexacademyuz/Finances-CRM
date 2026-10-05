@@ -160,7 +160,27 @@ export function AttendanceAnalyticsPage() {
           {/* Per group */}
           <div>
             <div className="mb-2 text-base font-bold">{t("byGroup")}</div>
-            <Card className="overflow-x-auto !p-0">
+            {/* Phones: one compact card per group instead of a 7-column table. */}
+            <Card className="divide-y divide-border !p-0 sm:hidden">
+              {d.byGroup.map((g) => (
+                <Link key={g.classId} href={`/class/${g.classId}?tab=attendance`} className="block px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 font-semibold leading-tight text-primary">{g.className}</div>
+                    <span className="shrink-0 font-bold">
+                      <RateBar rate={g.summary.rate} />
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                    <span>{t("lessons")}: {g.lessons}</span>
+                    <span>{t("students")}: {g.students}</span>
+                    <span>{t("att_present")}: {g.summary.present + g.summary.leftEarly}</span>
+                    <span>{t("att_absent")}: {g.summary.absent}</span>
+                    <span>{t("att_late")}: {g.summary.late}</span>
+                  </div>
+                </Link>
+              ))}
+            </Card>
+            <Card className="hidden overflow-x-auto !p-0 sm:block">
               <table className="w-full min-w-[560px] text-sm">
                 <thead className="text-xs text-muted">
                   <tr>
@@ -198,7 +218,7 @@ export function AttendanceAnalyticsPage() {
 
           {/* Warnings */}
           <div>
-            <div className="mb-2 flex items-center gap-2 text-base font-bold">
+            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base font-bold">
               <AlertTriangle size={17} className="text-warning" /> {t("warningStudents")}
               <span className="text-xs font-medium text-muted">
                 &lt; {d.warning.threshold}% · ≥ {d.warning.minLessons} {t("lessons").toLowerCase()}
@@ -212,12 +232,12 @@ export function AttendanceAnalyticsPage() {
                   <Link key={s.studentId} href={`/student/${s.studentId}`} className="block">
                     <Card className="flex items-center gap-3 !p-3.5 hover:shadow-card-hover">
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-semibold">{s.fullName}</div>
+                        <div className="font-semibold leading-tight line-clamp-2">{s.fullName}</div>
                         <div className="truncate text-xs text-muted">
                           {s.className} · {t("att_absent")} {s.summary.absent} · {t("att_late")} {s.summary.late}
                         </div>
                       </div>
-                      <span className="rounded-pill bg-status-overdue/15 px-2.5 py-1 text-sm font-extrabold text-status-overdue">{pct(s.summary.rate)}</span>
+                      <span className="shrink-0 rounded-pill bg-status-overdue/15 px-2.5 py-1 text-sm font-extrabold text-status-overdue">{pct(s.summary.rate)}</span>
                     </Card>
                   </Link>
                 ))}
@@ -232,7 +252,7 @@ export function AttendanceAnalyticsPage() {
               <div className="grid gap-2 md:grid-cols-3">
                 {d.byTeacher.map((tt) => (
                   <Card key={tt.teacherId ?? "none"} className="!p-3.5">
-                    <div className="truncate font-semibold">{tt.teacherName ?? "—"}</div>
+                    <div className="font-semibold leading-tight line-clamp-2">{tt.teacherName ?? "—"}</div>
                     <div className="mt-1 flex items-center justify-between text-xs text-muted">
                       <span>
                         {tt.lessons} {t("lessons").toLowerCase()}

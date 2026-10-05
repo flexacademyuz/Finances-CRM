@@ -256,7 +256,25 @@ export function CeoDashboard() {
         ) : recentPayments.length === 0 ? (
           <div className="px-5 pb-6 text-center text-sm text-muted">{t("noData")}</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: a compact list (a 6-column table can't fit the screen). */}
+          <div className="divide-y divide-border border-t border-border md:hidden">
+            {recentPayments.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{p.studentName}</div>
+                  <div className="truncate text-xs text-muted">
+                    {p.className} · {new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className={`figure text-sm font-bold ${p.voided ? "text-muted line-through" : ""}`}>{money(p.amount)}</div>
+                  <MethodTag method={p.method} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-y border-border text-left text-xs font-semibold uppercase tracking-wide text-muted">
@@ -297,6 +315,7 @@ export function CeoDashboard() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

@@ -51,6 +51,27 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Grid cells default to `min-width: auto`, so one wide child (a table in a
+   scroll box, a long unbroken name) silently stretches its whole column past a
+   phone's screen. Let cells shrink to the track; wide content scrolls or wraps
+   inside them instead. */
+.grid > * {
+  min-width: 0;
+}
+
+/* Bottom-sheet / dialog height cap. `dvh` tracks the on-screen keyboard and
+   Telegram's collapsible chrome; plain `vh` is the fallback for older
+   WebViews that don't know `dvh`. */
+.modal-sheet {
+  max-height: 90vh;
+  max-height: 90dvh;
+}
+
+/* Long unbroken strings (emails, URLs, ids) wrap instead of widening the page. */
+main {
+  overflow-wrap: break-word;
+}
+
 @layer components {
   /* Soft-UI card: borderless white, floating on a diffuse shadow over the grey
      ground, with a hairline ring so the top edge (where the shadow is faint)
