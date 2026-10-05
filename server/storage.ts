@@ -30,7 +30,7 @@ import {
   type ScheduleSlot,
 } from "@shared/schema";
 import { monthKey, shiftMonth, atMidnight, toIso } from "@shared/date";
-import { billingMonthFor, computePaidThrough, decideStudentStatus, isMonthSettled } from "@shared/billing";
+import { billingMonthFor, computePaidThrough, decideStudentStatus, firstBillableMonth, isMonthSettled, monthIsFrozen, monthToBill } from "@shared/billing";
 import { env } from "./env";
 
 /* ─────────────────────────────── Branches ──────────────────────────── */
@@ -665,15 +665,34 @@ export async function nextUnpaidBillingMonth(studentId: string, now: Date = new 
   const settledDates = rows
     .filter((r) => !r.voided && isMonthSettled(Number(r.amount), r.amountDue == null ? null : Number(r.amountDue)))
     .map((r) => r.createdAt.toISOString().slice(0, 10));
-  let m = st?.start ? billingMonthFor({ startDate: String(st.start), paymentDates: settledDates, today: now }) : monthKey(now);
-  for (;;) {
-    const s = byMonth.get(m);
-    // Target this month unless it already has a fully-settled ACTIVE payment. A
-    // free month, a voided-only month (re-billable — the active slot is free
-    // again after a void), or a partially-paid month to top up all land here.
-    if (!(s && s.hasLive && s.settled)) return m;
-    m = shiftMonth(m, 1); // fully settled → look at the next month
+  if (!st?.start) {
+    let m = monthKey(now);
+    while (byMonth.get(m)?.hasLive && byMonth.get(m)?.settled) m = shiftMonth(m, 1);
+    return m;
   }
+  const startDate = String(st.start);
+  // Oldest owed month first (a partial to top up, or an unpaid month the
+  // student skipped), else the period this payment pays for, stepping past
+  // fully-paid months. A voided-only month counts as unpaid again.
+  const months = new Map<string, "settled" | "partial">();
+  for (const [month, s] of byMonth) if (s.hasLive) months.set(month, s.settled ? "settled" : "partial");
+  const freezes = await studentFreezeWindows(studentId);
+  return monthToBill({
+    firstMonth: firstBillableMonth(startDate),
+    forward: billingMonthFor({ startDate, paymentDates: settledDates, today: now }),
+    months,
+    isFrozen: (m) => monthIsFrozen(m, freezes),
+  });
+}
+
+/** Every freeze window a student has had (active, lifted with an end, or expired). */
+async function studentFreezeWindows(studentId: string): Promise<{ from: string; to: string | null }[]> {
+  const rows = await db
+    .select({ from: paymentFreezes.freezeFrom, to: paymentFreezes.freezeTo, status: paymentFreezes.status })
+    .from(paymentFreezes)
+    .where(eq(paymentFreezes.studentId, studentId));
+  // A lifted freeze with no end date has no window left to excuse.
+  return rows.filter((f) => f.status !== "lifted" || f.to != null).map((f) => ({ from: f.from, to: f.to }));
 }
 
 /** Effective monthly fee for a student = override ?? class default. */

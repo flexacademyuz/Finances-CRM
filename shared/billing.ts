@@ -4,7 +4,7 @@
  * long does a payment cover the student for".
  */
 
-import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey } from "./date";
+import { parseDate, addMonths, addDays, atMidnight, daysBetween, anchorOnOrBefore, monthKey, shiftMonth } from "./date";
 import type { StudentStatus } from "./schema";
 
 /**
@@ -106,11 +106,30 @@ export function computePaidThrough(args: {
   const anchorDay = start.getUTCDate();
   let paidThrough = start;
   for (const iso of [...args.paymentDates].sort()) {
-    const paidAnchor = anchorOnOrBefore(atMidnight(parseDate(iso)), anchorDay);
+    const paidAnchor = writeOffLimit(anchorOnOrBefore(atMidnight(parseDate(iso)), anchorDay), anchorDay);
     const base = paidAnchor.getTime() > paidThrough.getTime() ? paidAnchor : paidThrough;
     paidThrough = addMonths(base, 1);
   }
   return args.frozenDays ? addDays(paidThrough, args.frozenDays) : paidThrough;
+}
+
+/**
+ * Missed months are written off only from BEFORE the platform started: a
+ * payment may skip forward over unpaid windows, but never past the student's
+ * first billing window in September 2026. From then on every window is owed, so
+ * an overdue student's next payment pays the overdue month — it is not
+ * silently dropped in favour of the current one (reported 2026-10-05: start
+ * 2 Sep, unpaid, paid on 5 Oct → was filed under October with September
+ * written off, and the following payment showed November).
+ *
+ * Breaks between enrolments are handled by Stop/Resume (a new start date) and
+ * freezes, not by writing months off.
+ */
+function writeOffLimit(anchor: Date, anchorDay: number): Date {
+  const epoch = parseDate(BILLING_EPOCH);
+  const lastDay = new Date(Date.UTC(epoch.getUTCFullYear(), epoch.getUTCMonth() + 1, 0)).getUTCDate();
+  const firstWindow = new Date(Date.UTC(epoch.getUTCFullYear(), epoch.getUTCMonth(), Math.min(anchorDay, lastDay)));
+  return anchor.getTime() > firstWindow.getTime() ? firstWindow : anchor;
 }
 
 /**
@@ -135,6 +154,66 @@ export function billingMonthFor(args: { startDate: string; paymentDates: string[
   return m < BILLING_EPOCH ? BILLING_EPOCH : m;
 }
 
+/** The first month a student can owe: their start month, never before September 2026. */
+export function firstBillableMonth(startDate: string): string {
+  const m = monthKey(parseDate(startDate));
+  return m < BILLING_EPOCH ? BILLING_EPOCH : m;
+}
+
+/**
+ * The month a new payment lands on. The oldest month still owed comes first —
+ * a partly-paid month to top up, or an unpaid (not frozen) month between the
+ * student's first billable month and `forward` — so a payment never skips an
+ * overdue month. Otherwise `forward` (see `billingMonthFor`), stepping past
+ * months that are already fully paid (paying ahead).
+ *
+ * `months`: the state of each month that has an active payment.
+ */
+export function monthToBill(args: {
+  firstMonth: string;
+  forward: string;
+  months: Map<string, "settled" | "partial">;
+  isFrozen: (month: string) => boolean;
+}): string {
+  for (let m = args.firstMonth; m < args.forward; m = shiftMonth(m, 1)) {
+    const s = args.months.get(m);
+    if (s === "partial") return m;
+    if (!s && !args.isFrozen(m)) return m;
+  }
+  let m = args.forward;
+  while (args.months.get(m) === "settled") m = shiftMonth(m, 1);
+  return m;
+}
+
+/**
+ * Payments filed under a later month while an earlier owed month was left
+ * empty (the write-off bug fixed 2026-10-05). Returns the relabels that close
+ * those gaps, oldest first: each payment slides back into the earliest empty,
+ * non-frozen month after the one before it. Months that already hold a
+ * payment (paid or partly paid) are never touched, so nothing is double-filed.
+ */
+export function closeMonthGaps(args: {
+  firstMonth: string;
+  payments: { id: string; month: string }[]; // active payments, any order
+  isFrozen: (month: string) => boolean;
+}): { id: string; from: string; to: string }[] {
+  const moves: { id: string; from: string; to: string }[] = [];
+  const sorted = args.payments.filter((p) => p.month >= args.firstMonth).sort((a, b) => a.month.localeCompare(b.month));
+  let expected = args.firstMonth;
+  for (const p of sorted) {
+    while (expected < p.month && args.isFrozen(expected)) expected = shiftMonth(expected, 1);
+    const to = p.month > expected ? expected : p.month;
+    if (to !== p.month) moves.push({ id: p.id, from: p.month, to });
+    expected = shiftMonth(to, 1);
+  }
+  return moves;
+}
+
+/** Whether a freeze (from/to as YYYY-MM-DD) marks a month as frozen — same rule as the group grid. */
+export function monthIsFrozen(month: string, freezes: { from: string; to: string | null }[]): boolean {
+  return freezes.some((f) => month >= f.from.slice(0, 7) + "-01" && (f.to == null || month <= f.to));
+}
+
 /**
  * The academy started using the platform in September 2026. No payment is ever
  * filed under an earlier month, even for students whose start date is in August
@@ -145,7 +224,7 @@ export const BILLING_EPOCH = "2026-09-01";
 function periodMonthFor(args: { startDate: string; paymentDates: string[]; today: Date }): string {
   const start = atMidnight(parseDate(args.startDate));
   const paidThrough = computePaidThrough({ startDate: args.startDate, paymentDates: args.paymentDates });
-  const todayAnchor = anchorOnOrBefore(atMidnight(args.today), start.getUTCDate());
+  const todayAnchor = writeOffLimit(anchorOnOrBefore(atMidnight(args.today), start.getUTCDate()), start.getUTCDate());
   const base = todayAnchor.getTime() > paidThrough.getTime() ? todayAnchor : paidThrough;
   return monthKey(base);
 }

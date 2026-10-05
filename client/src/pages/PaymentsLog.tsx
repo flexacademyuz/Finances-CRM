@@ -1,12 +1,81 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, Wallet, ClipboardList, Coins, Banknote } from "lucide-react";
+import { Download, Wallet, ClipboardList, Coins, Banknote, AlertTriangle } from "lucide-react";
+import { monthLabel } from "@shared/date";
 import { api, downloadCsv } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useSession } from "../lib/session";
 import { money, moneyShort, formatDate, initials, avatarColor } from "../lib/format";
 import type { PaymentRow, RefundPreview } from "../lib/types";
 import { Button, Card, Empty, Field, Input, Modal, Spinner, StatTile, MethodTag } from "../components/ui";
+
+type Misfiled = {
+  paymentId: string;
+  studentId: string;
+  studentName: string;
+  className: string;
+  amount: number;
+  from: string;
+  to: string;
+};
+
+/**
+ * CEO review: payments filed under a later month while the student left an
+ * earlier month unpaid. Shown only when there is something to fix.
+ */
+function MisfiledPayments() {
+  const { t, locale } = useI18n();
+  const qc = useQueryClient();
+  const list = useQuery({ queryKey: ["payments-misfiled"], queryFn: () => api<Misfiled[]>("/api/payments/misfiled") });
+  const fix = useMutation({
+    mutationFn: (studentIds?: string[]) =>
+      api<{ fixed: Misfiled[] }>("/api/payments/misfiled/fix", { method: "POST", body: { studentIds } }),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+  const rows = list.data ?? [];
+  if (!rows.length) {
+    return fix.data ? (
+      <div className="rounded-btn bg-status-paid/10 px-3 py-2 text-sm font-semibold text-status-paid">
+        {t("misfiledDone").replace("{n}", String(fix.data.fixed.length))}
+      </div>
+    ) : null;
+  }
+  const label = (m: string) => monthLabel(m, locale);
+  return (
+    <Card className="space-y-3 border-l-4 border-l-warning">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 basis-56">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertTriangle size={17} className="shrink-0 text-warning" /> {t("misfiledTitle")} ({rows.length})
+          </div>
+          <p className="mt-1 text-xs text-muted">{t("misfiledNote")}</p>
+        </div>
+        <Button className="shrink-0" disabled={fix.isPending} onClick={() => fix.mutate(undefined)}>
+          {t("misfiledFixAll")}
+        </Button>
+      </div>
+      <div className="divide-y divide-border">
+        {rows.map((r) => (
+          <div key={r.paymentId} className="flex items-center gap-3 py-2">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold leading-tight">{r.studentName}</div>
+              <div className="text-xs text-muted">
+                {r.className} · {money(r.amount)}
+              </div>
+              <div className="mt-0.5 text-sm">
+                <span className="text-muted line-through">{label(r.from)}</span> → <b>{label(r.to)}</b>
+              </div>
+            </div>
+            <Button variant="ghost" className="shrink-0 !py-1.5" disabled={fix.isPending} onClick={() => fix.mutate([r.studentId])}>
+              {t("misfiledFix")}
+            </Button>
+          </div>
+        ))}
+      </div>
+      {fix.isError && <div className="text-sm text-status-overdue">{(fix.error as Error).message}</div>}
+    </Card>
+  );
+}
 
 /** Payments log. CEO sees all + can void/refund; Accountant sees own entries. */
 export function PaymentsLog() {
@@ -45,6 +114,8 @@ export function PaymentsLog() {
           </Button>
         )}
       </div>
+
+      {isCeo && <MisfiledPayments />}
 
       {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

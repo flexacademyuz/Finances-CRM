@@ -1,8 +1,8 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { students, payments, paymentFreezes, type PaymentEdit } from "@shared/schema";
+import { students, classes, payments, paymentFreezes, type PaymentEdit } from "@shared/schema";
 import { monthKey, parseDate, atMidnight, toIso, shiftMonth } from "@shared/date";
-import { BILLING_EPOCH, computePaidThrough, decideStudentStatus, elapsedFrozenDays, isMonthSettled } from "@shared/billing";
+import { BILLING_EPOCH, closeMonthGaps, computePaidThrough, decideStudentStatus, elapsedFrozenDays, firstBillableMonth, isMonthSettled, monthIsFrozen } from "@shared/billing";
 import { auditLogs } from "@shared/schema";
 import { getSettings, setStudentsStatus, setStudentsPaidThrough } from "../storage";
 import { freshMonthPricing, proratedTeacherCredit } from "./payment-context";
@@ -231,6 +231,110 @@ export async function reapplySeptemberRepairOnce(): Promise<number> {
   console.log(`[billing] September-starter months re-applied: ${r.reapplied.length}, ${r.conflicts.length} conflict(s)`);
   for (const c of r.conflicts) console.log(`  conflict: payment ${c.paymentId} (student ${c.studentId}) wants ${c.to.slice(0, 7)} which is taken`);
   return r.reapplied.length;
+}
+
+export type MisfiledPayment = MonthMove & { studentName: string; className: string; amount: number };
+
+/**
+ * Payments filed under a later month while an earlier month the student owed
+ * was left empty — the write-off bug fixed 2026-10-05 (start 2 Sep, unpaid,
+ * paid on 5 Oct → filed under October; the next payment then showed November).
+ * Each proposed move slides a payment back into the empty month it actually
+ * paid for (see `closeMonthGaps`). Only active, non-sponsored students; only
+ * months from September 2026; frozen months are never filled; months that
+ * already hold a payment are never touched.
+ *
+ * Nothing is changed here — the CEO reviews the list and applies it.
+ */
+export async function findMisfiledPayments(): Promise<MisfiledPayment[]> {
+  const roster = await db
+    .select({
+      id: students.id,
+      fullName: students.fullName,
+      className: classes.name,
+      startDate: sql<string>`coalesce(${students.billingStartDate}, ${students.enrolledAt})`,
+    })
+    .from(students)
+    .innerJoin(classes, eq(students.classId, classes.id))
+    .where(and(eq(students.active, true), eq(students.sponsored, false)));
+  const live = await db
+    .select({ id: payments.id, studentId: payments.studentId, month: payments.billingMonth, amount: payments.amount })
+    .from(payments)
+    .where(eq(payments.voided, false));
+  const freezeRows = await db
+    .select({ studentId: paymentFreezes.studentId, from: paymentFreezes.freezeFrom, to: paymentFreezes.freezeTo, status: paymentFreezes.status })
+    .from(paymentFreezes);
+
+  const byStudent = new Map<string, typeof live>();
+  for (const p of live) (byStudent.get(p.studentId) ?? byStudent.set(p.studentId, []).get(p.studentId)!).push(p);
+  const freezesBy = new Map<string, { from: string; to: string | null }[]>();
+  for (const f of freezeRows) {
+    if (f.status === "lifted" && f.to == null) continue;
+    (freezesBy.get(f.studentId) ?? freezesBy.set(f.studentId, []).get(f.studentId)!).push({ from: f.from, to: f.to });
+  }
+
+  const out: MisfiledPayment[] = [];
+  for (const s of roster) {
+    const rows = byStudent.get(s.id);
+    if (!rows?.length || !s.startDate) continue;
+    const freezes = freezesBy.get(s.id) ?? [];
+    const moves = closeMonthGaps({
+      firstMonth: firstBillableMonth(String(s.startDate)),
+      payments: rows,
+      isFrozen: (m) => monthIsFrozen(m, freezes),
+    });
+    for (const m of moves) {
+      out.push({
+        paymentId: m.id,
+        studentId: s.id,
+        from: m.from,
+        to: m.to,
+        studentName: s.fullName,
+        className: s.className,
+        amount: Number(rows.find((r) => r.id === m.id)!.amount),
+      });
+    }
+  }
+  return out.sort((a, b) => a.studentName.localeCompare(b.studentName) || a.to.localeCompare(b.to));
+}
+
+/**
+ * Apply the moves `findMisfiledPayments` proposes (all, or only for the given
+ * students), recomputed fresh so a stale screen can't move the wrong row. Each
+ * move only changes the payment's month label — amount, date and teacher credit
+ * are untouched, so salary cycles don't change. Audited per payment.
+ */
+export async function fixMisfiledPayments(actorUserId: string, studentIds?: string[]): Promise<MisfiledPayment[]> {
+  const only = studentIds ? new Set(studentIds) : null;
+  const todo = (await findMisfiledPayments())
+    .filter((m) => !only || only.has(m.studentId))
+    .sort((a, b) => a.to.localeCompare(b.to)); // fill the oldest month first
+  const done: MisfiledPayment[] = [];
+  for (const m of todo) {
+    const [p] = await db.select().from(payments).where(eq(payments.id, m.paymentId));
+    if (!p || p.voided || p.billingMonth !== m.from) continue;
+    const [clash] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(and(eq(payments.studentId, m.studentId), eq(payments.billingMonth, m.to), eq(payments.voided, false)));
+    if (clash) continue;
+    await db.update(payments).set({ billingMonth: m.to }).where(eq(payments.id, p.id));
+    await db.insert(auditLogs).values({
+      actorUserId,
+      actorType: "user",
+      action: "payment.month_gap_fixed",
+      entityType: "payment",
+      entityId: p.id,
+      studentId: p.studentId,
+      branchId: p.branchId,
+      before: { billingMonth: m.from },
+      after: { billingMonth: m.to },
+      meta: { reason: "Filed under a later month while this owed month was left unpaid" },
+    });
+    done.push(m);
+  }
+  if (done.length) await recomputeStatuses();
+  return done;
 }
 
 // The billing rules themselves live in @shared/billing (pure, DB-free); this

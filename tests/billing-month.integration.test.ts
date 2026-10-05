@@ -158,3 +158,42 @@ describe("undo of the 2026-10-02 billing month repair", () => {
     expect(await M.storage.nextUnpaidBillingMonth(st.id, new Date("2026-09-05T09:00:00Z"))).toBe("2026-09-01");
   });
 });
+
+describe("payments filed past an unpaid month (reported 2026-10-05)", () => {
+  it("lists the misfiled payment, moves it into the overdue month, and the next payment lands on October", async () => {
+    const { storage, db, schema, billing, eq } = M;
+    const st = await storage.createStudent({ fullName: "Ochildiyeva Test", classId: S.class, branchId: S.branch, enrolledAt: "2026-09-02" });
+    // The bug: unpaid since 2 Sep, paid on 5 Oct → filed under October.
+    const [p] = await db
+      .insert(schema.payments)
+      .values({
+        studentId: st.id, classId: S.class, branchId: S.branch, teacherId: S.teacher, recordedBy: S.user,
+        amount: "400000", amountDue: "400000", method: "cash", billingMonth: "2026-10-01",
+        createdAt: new Date("2026-10-05T10:00:00Z"),
+      })
+      .returning();
+
+    const found = (await billing.findMisfiledPayments()).filter((m: { studentId: string }) => m.studentId === st.id);
+    expect(found).toEqual([expect.objectContaining({ paymentId: p.id, from: "2026-10-01", to: "2026-09-01" })]);
+
+    const fixed = await billing.fixMisfiledPayments(S.user, [st.id]);
+    expect(fixed).toHaveLength(1);
+    const [after] = await db.select().from(schema.payments).where(eq(schema.payments.id, p.id));
+    expect(after.billingMonth).toBe("2026-09-01");
+    expect(after.amount).toBe("400000.00");
+    expect(await storage.nextUnpaidBillingMonth(st.id, new Date("2026-10-06T10:00:00Z"))).toBe("2026-10-01");
+    // Nothing left to fix for her.
+    expect((await billing.findMisfiledPayments()).some((m: { studentId: string }) => m.studentId === st.id)).toBe(false);
+  });
+
+  it("a partly-paid September is topped up before October", async () => {
+    const { storage, db, schema } = M;
+    const st = await storage.createStudent({ fullName: "Partial Test", classId: S.class, branchId: S.branch, enrolledAt: "2026-09-02" });
+    await db.insert(schema.payments).values({
+      studentId: st.id, classId: S.class, branchId: S.branch, teacherId: S.teacher, recordedBy: S.user,
+      amount: "200000", amountDue: "400000", method: "cash", billingMonth: "2026-09-01",
+      createdAt: new Date("2026-09-03T10:00:00Z"),
+    });
+    expect(await storage.nextUnpaidBillingMonth(st.id, new Date("2026-10-05T10:00:00Z"))).toBe("2026-09-01");
+  });
+});

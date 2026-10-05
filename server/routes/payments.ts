@@ -27,7 +27,7 @@ import { refundSuggestion, paymentCoverWindow, isMonthSettled } from "@shared/bi
 import { notifyPaymentRecorded } from "../bot/notifications";
 import { notifyPaymentReceipt } from "../sms/service";
 import { buildPaymentContext, freshMonthPricing, proratedTeacherCredit } from "../services/payment-context";
-import { recomputeStatuses } from "../services/billing";
+import { findMisfiledPayments, fixMisfiledPayments, recomputeStatuses } from "../services/billing";
 import { audit } from "../services/audit";
 import { emit } from "../events";
 
@@ -46,6 +46,27 @@ async function teacherOwnsStudentClass(
   const cls = await getClassById(classId);
   return !!cls && cls.teacherId === req.teacherId;
 }
+
+/**
+ * Payments filed under a later month while an earlier owed month was left
+ * empty (CEO review list), and applying the proposed moves.
+ */
+router.get(
+  "/payments/misfiled",
+  requireRole("ceo"),
+  asyncHandler(async (_req, res) => {
+    res.json(await findMisfiledPayments());
+  }),
+);
+
+router.post(
+  "/payments/misfiled/fix",
+  requireRole("ceo"),
+  asyncHandler(async (req, res) => {
+    const ids = Array.isArray(req.body?.studentIds) ? req.body.studentIds.map(String) : undefined;
+    res.json({ fixed: await fixMisfiledPayments(req.authUser!.id, ids) });
+  }),
+);
 
 /**
  * GET /api/payments — history / log.
