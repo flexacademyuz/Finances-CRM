@@ -33,6 +33,9 @@ import { WordsPage } from "./learn/WordsPage";
 import { FlashcardsPage } from "./learn/Flashcards";
 import { PracticePage } from "./learn/Practice";
 import { BookmarksPage } from "./learn/Bookmarks";
+import { GrammarTopicsPage, GrammarTopicPage } from "./learn/grammar/GrammarPages";
+import { GrammarBuildPage } from "./learn/grammar/BuildRound";
+import { GrammarTestPage } from "./learn/grammar/TestRound";
 import { AnalyticsPage } from "./stats/AnalyticsPage";
 import { useAppTime } from "./stats/useAppTime";
 import { HomeworkListPage } from "./homework/HomeworkPages";
@@ -57,7 +60,8 @@ export function PortalApp() {
   const me = useMeQuery();
   const [loc] = useLocation();
   // Flashcard / exercise players run full-screen: no header, tabs or group switcher.
-  const immersive = loc.startsWith("/learn/cards") || loc.startsWith("/learn/practice");
+  const immersive =
+    loc.startsWith("/learn/cards") || loc.startsWith("/learn/practice") || /^\/learn\/grammar\/[^/]+\/(build|test)$/.test(loc);
   const langSynced = useRef(false);
   // Count time in the app (not for staff previews, which are read-only).
   useAppTime(!!me.data && !me.data.preview);
@@ -148,6 +152,10 @@ export function PortalApp() {
             <Route path="/learn/cards" component={FlashcardsPage} />
             <Route path="/learn/practice" component={PracticePage} />
             <Route path="/learn/bookmarks" component={BookmarksPage} />
+            <Route path="/learn/grammar" component={GrammarTopicsPage} />
+            <Route path="/learn/grammar/:slug" component={GrammarTopicPage} />
+            <Route path="/learn/grammar/:slug/build" component={GrammarBuildPage} />
+            <Route path="/learn/grammar/:slug/test" component={GrammarTestPage} />
             <Route path="/learn/stats">
               <Redirect to="/stats" />
             </Route>

@@ -403,7 +403,7 @@ function stateOf(p: LearnerVocabProgress | undefined): ProgressState {
 }
 
 /** Add to today's activity row (creating it). */
-async function bumpActivity(
+export async function bumpActivity(
   ex: Exec,
   learnerId: string,
   d: { xp?: number; cards?: number; exercises?: number; correct?: number; newWords?: number },

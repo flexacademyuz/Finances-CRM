@@ -10,11 +10,12 @@ import { BookOpen, Users, Activity, Target, Plus, Pencil, Trash2, Save, Search, 
 import { POS_LABELS, levelLabel, type VocabSettings } from "@shared/learning/types";
 import { api, type ApiError } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
-import { Button, Card, Field, Input, Select, StatTile, Modal, Spinner, Empty } from "../../components/ui";
+import { Button, Card, Field, Input, Select, StatTile, Modal, Spinner, Empty, Segmented } from "../../components/ui";
+import { GrammarAdmin } from "./GrammarAdmin";
 
 const L = {
   title: { en: "Learning", uz: "Ta'lim" },
-  subtitle: { en: "Vocabulary content, stages and how students are doing.", uz: "Lug'at, bosqichlar va o'quvchilar natijalari." },
+  subtitle: { en: "Vocabulary, grammar and how students are doing.", uz: "Lug'at, grammatika va o'quvchilar natijalari." },
   words: { en: "Words", uz: "So'zlar" },
   stages: { en: "stages", uz: "bosqich" },
   learners: { en: "Learners", uz: "O'rganuvchilar" },
@@ -32,6 +33,7 @@ const L = {
   save: { en: "Save", uz: "Saqlash" },
   saved: { en: "Saved", uz: "Saqlandi" },
   vocabulary: { en: "Vocabulary", uz: "Lug'at" },
+  grammar: { en: "Grammar", uz: "Grammatika" },
   allStages: { en: "All stages", uz: "Barcha bosqichlar" },
   stage: { en: "Stage", uz: "Bosqich" },
   search: { en: "Search word or meaning", uz: "So'z yoki ma'no qidirish" },
@@ -109,6 +111,9 @@ export function LearningPage() {
   const qc = useQueryClient();
   const resources = useQuery({ queryKey: ["learning", "resources"], queryFn: () => api<Resource[]>("/api/learning/resources") });
   const [selected, setSelected] = useState<string | null>(null);
+  const [section, setSection] = useState<"vocab" | "grammar">(() =>
+    new URLSearchParams(window.location.search).get("section") === "grammar" ? "grammar" : "vocab",
+  );
   const r = resources.data?.find((x) => x.id === selected) ?? resources.data?.[0];
   const overview = useQuery({
     queryKey: ["learning", "overview", r?.id],
@@ -121,17 +126,45 @@ export function LearningPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["learning"] }),
   });
 
+  const heading = (
+    <>
+      <div>
+        <h1 className="text-2xl font-extrabold">{l("title")}</h1>
+        <p className="text-sm text-muted">{l("subtitle")}</p>
+      </div>
+      <Segmented
+        value={section}
+        onChange={setSection}
+        options={[
+          { value: "vocab", label: l("vocabulary") },
+          { value: "grammar", label: l("grammar") },
+        ]}
+      />
+    </>
+  );
+
+  if (section === "grammar") {
+    return (
+      <div className="space-y-5">
+        {heading}
+        <GrammarAdmin />
+      </div>
+    );
+  }
   if (resources.isLoading) return <Spinner />;
-  if (!r) return <Empty>{l("noContent")}</Empty>;
+  if (!r)
+    return (
+      <div className="space-y-5">
+        {heading}
+        <Empty>{l("noContent")}</Empty>
+      </div>
+    );
   const o = overview.data;
   const draft = r.status !== "published";
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-extrabold">{l("title")}</h1>
-        <p className="text-sm text-muted">{l("subtitle")}</p>
-      </div>
+      {heading}
 
       {/* One tab per vocabulary set (course level). */}
       <div className="flex flex-wrap gap-2">

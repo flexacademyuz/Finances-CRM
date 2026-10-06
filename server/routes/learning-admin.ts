@@ -31,6 +31,7 @@ import {
   stageSummaries,
 } from "../learning/service";
 import { audit } from "../services/audit";
+import * as grammar from "../learning/grammar/service";
 
 const router = Router();
 const manage = requirePermission("manage_learning");
@@ -455,6 +456,95 @@ router.get(
         };
       }),
     });
+  }),
+);
+
+/* ─────────────────────────────── grammar ─────────────────────────────── */
+
+router.get(
+  "/learning/grammar/topics",
+  manage,
+  asyncHandler(async (_req, res) => {
+    res.json(await grammar.adminTopics());
+  }),
+);
+
+router.get(
+  "/learning/grammar/topics/:id",
+  manage,
+  asyncHandler(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw httpError(404, "not_found", "Topic not found.");
+    res.json(await grammar.adminTopicDetail(req.params.id));
+  }),
+);
+
+/** Publish / unpublish a topic (new topics arrive as drafts for review). */
+router.patch(
+  "/learning/grammar/topics/:id",
+  manage,
+  asyncHandler(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw httpError(404, "not_found", "Topic not found.");
+    const { status } = z.object({ status: z.enum(["draft", "published"]) }).parse(req.body);
+    const { before, topic } = await grammar.setTopicStatus(req.params.id, status);
+    await audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: before !== status ? `learning.grammar_topic_${status}` : "learning.grammar_topic_updated",
+      entityType: "grammar_topic",
+      entityId: topic.id,
+      before: { status: before },
+      after: { status },
+    });
+    res.json(topic);
+  }),
+);
+
+/** Edit one sentence; the shared content checks reject a broken edit (400 invalid + problems). */
+router.patch(
+  "/learning/grammar/items/:id",
+  manage,
+  asyncHandler(async (req, res) => {
+    if (!UUID_RE.test(req.params.id)) throw httpError(404, "not_found", "Sentence not found.");
+    const sentence = z.string().trim().min(1).max(300);
+    const patch = z
+      .object({
+        uz: sentence,
+        en: sentence,
+        alt: z.array(sentence).max(10),
+        traps: z.array(z.string().trim().min(1).max(40)).max(4),
+        active: z.boolean(),
+      })
+      .partial()
+      .parse(req.body);
+    const r = await grammar.patchItem(req.params.id, patch);
+    if (r.problems) return res.status(400).json({ error: "invalid", problems: r.problems });
+    await audit({
+      actorUserId: req.authUser!.id,
+      actorType: "user",
+      action: "learning.grammar_item_updated",
+      entityType: "grammar_item",
+      entityId: r.item.id,
+      before: Object.fromEntries(Object.keys(patch).map((k) => [k, (r.before as Record<string, unknown>)[k]])),
+      after: patch,
+    });
+    res.json(r.item);
+  }),
+);
+
+/** A group's grammar progress — same access as the vocabulary group panel (anyone who may view the group). */
+router.get(
+  "/learning/grammar/class/:classId",
+  asyncHandler(async (req, res) => {
+    if (!UUID_RE.test(req.params.classId)) throw httpError(404, "not_found", "Group not found.");
+    const cls = await loadGroup(req, req.params.classId, "view");
+    const roster = await db
+      .select()
+      .from(students)
+      .where(and(eq(students.classId, cls.id), eq(students.active, true)))
+      .orderBy(asc(students.fullName));
+    const rows = [];
+    for (const s of roster) rows.push({ studentId: s.id, fullName: s.fullName, learnerId: await learnerIdFor(s) });
+    res.json(await grammar.classProgress(cls.learningLevel, rows));
   }),
 );
 

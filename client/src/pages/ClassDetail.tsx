@@ -14,6 +14,7 @@ import { Button, Card, Empty, Field, Input, Modal, Segmented, Spinner, StatusBad
 import { GroupAttendance } from "../components/GroupAttendance";
 import { GroupScores } from "../components/GroupScores";
 import { GroupLearning } from "../components/LearningPanels";
+import { GroupGrammar } from "../components/GrammarPanels";
 import { LeaderboardTable } from "../components/LeaderboardTable";
 import { GroupHomework } from "./Homework";
 
@@ -50,9 +51,9 @@ export function ClassDetail() {
   // Tick a month paid/unpaid straight from the grid (records or voids a payment).
   const canRecord = can(user, "record_payment");
   // Attendance & scores tabs (the server enforces own-group / permission access).
-  const [tab, setTab] = useState<"students" | "attendance" | "scores" | "homework" | "vocabulary" | "rating">(() => {
+  const [tab, setTab] = useState<"students" | "attendance" | "scores" | "homework" | "vocabulary" | "grammar" | "rating">(() => {
     const q = new URLSearchParams(window.location.search).get("tab");
-    return q === "attendance" || q === "scores" || q === "homework" || q === "vocabulary" || q === "rating" ? q : "students";
+    return q === "attendance" || q === "scores" || q === "homework" || q === "vocabulary" || q === "grammar" || q === "rating" ? q : "students";
   });
 
   if (isLoading || !data) return <Spinner />;
@@ -90,12 +91,14 @@ export function ClassDetail() {
           { value: "scores", label: t("scores") },
           { value: "homework", label: t("homework") },
           { value: "vocabulary", label: locale === "uz" ? "Lug'at" : "Vocabulary" },
+          { value: "grammar", label: locale === "uz" ? "Grammatika" : "Grammar" },
           { value: "rating", label: locale === "uz" ? "Reyting" : "Rating" },
         ]}
       />
 
       {tab === "attendance" && <GroupAttendance classId={cls.id} />}
       {tab === "vocabulary" && <GroupLearning classId={cls.id} />}
+      {tab === "grammar" && <GroupGrammar classId={cls.id} />}
       {tab === "homework" && <GroupHomework classId={cls.id} />}
       {tab === "rating" && <LeaderboardTable classId={cls.id} />}
       {tab === "scores" && (

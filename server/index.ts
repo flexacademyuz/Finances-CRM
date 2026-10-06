@@ -9,6 +9,7 @@ import { waitForDatabase } from "./db";
 import { runMigrations } from "./migrate";
 import { bootstrap } from "./bootstrap";
 import { ensureLearningContent } from "./learning/import";
+import { ensureGrammarContent } from "./learning/grammar/import";
 import { configureBot, configureMenuButton } from "./bot/bot";
 import { bot } from "./bot/client";
 import { registerNotificationListeners } from "./notifications/listeners";
@@ -62,6 +63,17 @@ async function main() {
     }
   } catch (err) {
     console.error("[learning] vocabulary import failed:", (err as Error).message);
+  }
+  // Grammar topics: same rule (new topics arrive as drafts; staff edits kept).
+  try {
+    const g = await ensureGrammarContent();
+    if (g) {
+      console.log(
+        `[learning] grammar synced: ${g.topics} topics (+${g.topicsInserted} new), items +${g.itemsInserted} ~${g.itemsUpdated} -${g.itemsDeactivated}.`,
+      );
+    }
+  } catch (err) {
+    console.error("[learning] grammar import failed:", (err as Error).message);
   }
 
   startJobs();

@@ -7,6 +7,9 @@ import "dotenv/config";
 import { runMigrations } from "../migrate";
 import { VOCAB_SETS, importVocabSet } from "./import";
 import { pool } from "../db";
+import { importGrammarTopics } from "./grammar/import";
+import { validateTopics } from "@shared/grammar/validate";
+import { GRAMMAR_TOPICS } from "./grammar/content";
 
 async function main() {
   await runMigrations();
@@ -20,6 +23,12 @@ async function main() {
       }
     }
   }
+  const problems = validateTopics(GRAMMAR_TOPICS);
+  if (problems.length) console.log(`[learning] grammar content problems:\n  ${problems.join("\n  ")}`);
+  const g = await importGrammarTopics();
+  console.log(
+    `[learning] grammar: ${g.topics} topics (+${g.topicsInserted} new, as drafts), items +${g.itemsInserted} ~${g.itemsUpdated} -${g.itemsDeactivated}`,
+  );
 }
 
 main()

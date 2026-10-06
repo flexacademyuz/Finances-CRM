@@ -25,6 +25,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    /** The parsed JSON error body, for endpoints that return extra detail (e.g. validation problems). */
+    public data?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -68,8 +70,10 @@ export async function api<T = unknown>(
   if (!res.ok) {
     let code = "error";
     let message = res.statusText;
+    let body: Record<string, unknown> | undefined;
     try {
       const data = await res.json();
+      body = data && typeof data === "object" ? data : undefined;
       code = data.error ?? code;
       message = data.message ?? message;
     } catch {
@@ -79,7 +83,7 @@ export async function api<T = unknown>(
     if (code === "impersonation_invalid") {
       stopImpersonating();
     }
-    throw new ApiError(res.status, code, message);
+    throw new ApiError(res.status, code, message, body);
   }
 
   if (res.status === 204) return undefined as T;

@@ -37,6 +37,7 @@ import {
 import { EXERCISE_TYPES, PRACTICE_SOURCES } from "@shared/learning/types";
 import { studentHomeworkSummary } from "../services/homework";
 import { personRecordIds } from "../learning/learner";
+import grammarRouter from "./learn-grammar";
 
 // Student analytics include their homework record (see /analytics).
 
@@ -215,6 +216,9 @@ router.get(
     res.json({ ...a, homework: hw });
   }),
 );
+
+/** Grammar sentence building (see learn-grammar.ts). */
+router.use("/grammar", grammarRouter);
 
 /**
  * Heartbeat while the app is open and in use (about every 30 s). The server

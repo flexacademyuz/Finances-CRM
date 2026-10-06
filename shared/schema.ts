@@ -1429,6 +1429,130 @@ export type LearnerVocabProgress = typeof learnerVocabProgress.$inferSelect;
 export type LearningSession = typeof learningSessions.$inferSelect;
 export type LearningAttempt = typeof learningAttempts.$inferSelect;
 
+/* ─────────────────────── Grammar (sentence building) ─────────────────────── */
+
+/**
+ * A grammar topic ("To be"), one level's step in strict order. Imported from
+ * server/learning/grammar/content (new topics arrive as DRAFTS; the import
+ * never changes `status` afterwards — publishing is a staff decision).
+ * `contentVersion` = the bundled GRAMMAR_CONTENT_VERSION last synced.
+ */
+export const grammarTopics = pgTable(
+  "grammar_topics",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull().unique(),
+    level: text("level").notNull(),
+    position: integer("position").notNull(),
+    titleEn: text("title_en").notNull(),
+    titleUz: text("title_uz").notNull(),
+    explanation: jsonb("explanation")
+      .$type<{ uz: string; pattern: string; examples: { en: string; uz: string }[] }>()
+      .notNull(),
+    // draft | published
+    status: text("status").notNull().default("draft"),
+    contentVersion: integer("content_version").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byLevelPos: index("grammar_topics_level_pos_idx").on(t.level, t.position) }),
+);
+
+/**
+ * One sentence of a topic: a bubble "build" item or a typed "test" item.
+ * Upserted by (topic, kind, position); fields in `editedFields` (a staff edit)
+ * are never overwritten by a re-import. Items dropped from the content become
+ * inactive, never deleted (progress/sessions reference them).
+ */
+export const grammarItems = pgTable(
+  "grammar_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    topicId: uuid("topic_id")
+      .notNull()
+      .references(() => grammarTopics.id, { onDelete: "cascade" }),
+    // build | test
+    kind: text("kind").notNull(),
+    position: integer("position").notNull(),
+    uz: text("uz").notNull(),
+    en: text("en").notNull(),
+    alt: jsonb("alt").$type<string[]>().notNull().default([]),
+    traps: jsonb("traps").$type<string[]>().notNull().default([]),
+    active: boolean("active").notNull().default(true),
+    editedFields: jsonb("edited_fields").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ uniq: uniqueIndex("grammar_items_topic_kind_pos_uniq").on(t.topicId, t.kind, t.position) }),
+);
+
+/**
+ * One learner's state in one topic (learner = canonical student record, see
+ * server/learning/learner.ts). Locked/open is derived from the previous topic;
+ * only "learning" | "passed" is stored, and passed stays passed.
+ */
+export const learnerGrammarProgress = pgTable(
+  "learner_grammar_progress",
+  {
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    topicId: uuid("topic_id")
+      .notNull()
+      .references(() => grammarTopics.id, { onDelete: "cascade" }),
+    // Build items answered correctly at least once.
+    builtItemIds: jsonb("built_item_ids").$type<string[]>().notNull().default([]),
+    // learning | passed
+    status: text("status").notNull().default("learning"),
+    bestScore: numeric("best_score", { precision: 4, scale: 1 }),
+    attempts: integer("attempts").notNull().default(0),
+    // Test items missed in the last failed test, still to rebuild as bubbles.
+    reviewItemIds: jsonb("review_item_ids").$type<string[]>().notNull().default([]),
+    passedAt: timestamp("passed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: uniqueIndex("learner_grammar_progress_pk").on(t.studentId, t.topicId),
+    byTopic: index("learner_grammar_progress_topic_idx").on(t.topicId),
+  }),
+);
+
+/**
+ * A bubble round (build | review) or a gate test. `items` holds the answer key
+ * and the stored bubbles (stable across reloads) — the client only ever sees
+ * prompts and bubbles. `state` tracks which indices were answered correctly.
+ */
+export const grammarSessions = pgTable(
+  "grammar_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studentId: uuid("student_id")
+      .notNull()
+      .references(() => students.id, { onDelete: "cascade" }),
+    topicId: uuid("topic_id")
+      .notNull()
+      .references(() => grammarTopics.id, { onDelete: "cascade" }),
+    // build | review | test
+    kind: text("kind").notNull(),
+    items: jsonb("items")
+      .$type<{ itemId: string; uz: string; en: string; alt: string[]; bubbles?: string[] }[]>()
+      .notNull()
+      .default([]),
+    state: jsonb("state").$type<{ correct?: number[]; wrong?: number; answers?: unknown[] }>().notNull().default({}),
+    score: numeric("score", { precision: 4, scale: 1 }),
+    xp: integer("xp").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => ({ byStudentTopic: index("grammar_sessions_student_topic_idx").on(t.studentId, t.topicId, t.createdAt) }),
+);
+
+export type GrammarTopic = typeof grammarTopics.$inferSelect;
+export type GrammarItem = typeof grammarItems.$inferSelect;
+export type LearnerGrammarProgress = typeof learnerGrammarProgress.$inferSelect;
+export type GrammarSession = typeof grammarSessions.$inferSelect;
+
 /* ──────────────────────────── Relations ──────────────────────────── */
 
 export const branchesRelations = relations(branches, ({ many }) => ({

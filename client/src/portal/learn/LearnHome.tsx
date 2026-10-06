@@ -6,12 +6,20 @@ import { PCard, PageSkeleton, ErrorState, SectionTitle, EmptyState } from "../ui
 import { useLT } from "./i18n";
 import { LevelBar, TodayCard, StageBar, useLearnHome } from "./ui";
 import type { ApiError } from "../../lib/api";
+import { GrammarCard } from "./grammar/GrammarPages";
 
 export function LearnHomePage() {
   const { t } = useLT();
   const q = useLearnHome();
   if (q.isLoading) return <PageSkeleton />;
-  if ((q.error as ApiError | null)?.code === "no_content") return <EmptyState icon={<Layers size={24} />} title={t("notAvailable")} />;
+  // Grammar stands on its own: show it even when there is no vocabulary for this level.
+  if ((q.error as ApiError | null)?.code === "no_content")
+    return (
+      <div className="space-y-3 animate-slide-up">
+        <GrammarCard />
+        <EmptyState icon={<Layers size={24} />} title={t("notAvailable")} />
+      </div>
+    );
   if (q.error || !q.data) return <ErrorState onRetry={() => q.refetch()} />;
   const d = q.data;
   const cur = d.currentStage;
@@ -20,6 +28,7 @@ export function LearnHomePage() {
     <div className="space-y-3 animate-slide-up">
       <LevelBar />
       <TodayCard />
+      <GrammarCard />
 
       {/* Overall progress */}
       <Link href="/stats" className="block">
