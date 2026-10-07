@@ -37,6 +37,32 @@ describe("grammar content", () => {
     ]);
   });
 
+  it("has the 20 A2 (Elementary) topics in the agreed order", () => {
+    const a2 = GRAMMAR_TOPICS.filter((t) => t.level === "A2").sort((a, b) => a.position - b.position);
+    expect(a2.map((t) => t.slug)).toEqual([
+      "a2-past-continuous",
+      "a2-past-simple-vs-continuous",
+      "a2-present-perfect-for-since",
+      "a2-present-perfect-vs-past-simple",
+      "a2-used-to",
+      "a2-going-to",
+      "a2-present-continuous-future",
+      "a2-will-vs-going-to",
+      "a2-could-able-to",
+      "a2-might-may",
+      "a2-quantifiers",
+      "a2-too-enough",
+      "a2-zero-conditional",
+      "a2-first-conditional",
+      "a2-reflexive-pronouns",
+      "a2-passive",
+      "a2-relative-clauses",
+      "a2-subject-object-questions",
+      "a2-so-neither",
+      "a2-verb-patterns",
+    ]);
+  });
+
   it("gives each topic >= 30 build and >= 20 test items", () => {
     for (const t of GRAMMAR_TOPICS) {
       expect(t.build.length, t.slug).toBeGreaterThanOrEqual(30);
