@@ -10,12 +10,30 @@ describe("grammar content", () => {
     expect(problems, problems.join("\n")).toEqual([]);
   });
 
-  it("has the 3 A1 pilot topics in positions 1-3", () => {
+  it("has the 21 A1 (Beginner) topics in the agreed order", () => {
     const a1 = GRAMMAR_TOPICS.filter((t) => t.level === "A1").sort((a, b) => a.position - b.position);
-    expect(a1.map((t) => [t.position, t.slug])).toEqual([
-      [1, "a1-to-be"],
-      [2, "a1-have-got"],
-      [3, "a1-can"],
+    expect(a1.map((t) => t.slug)).toEqual([
+      "a1-to-be",
+      "a1-have-got",
+      "a1-can",
+      "a1-possessives",
+      "a1-pronouns",
+      "a1-there-is-are",
+      "a1-present-simple",
+      "a1-present-continuous",
+      "a1-modals",
+      "a1-infinitive-gerund",
+      "a1-past-simple",
+      "a1-prepositions",
+      "a1-future-simple",
+      "a1-question-words",
+      "a1-linkers",
+      "a1-present-perfect",
+      "a1-plurals-countables",
+      "a1-some-any",
+      "a1-articles",
+      "a1-adjectives-adverbs",
+      "a1-adjective-degrees",
     ]);
   });
 
