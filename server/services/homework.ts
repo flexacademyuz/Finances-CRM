@@ -249,12 +249,13 @@ export async function pruneTrackerTicks(t: HomeworkTracker): Promise<void> {
 
 /* ─────────────────────────────── students ─────────────────────────────── */
 
-/** The homework of the group record the student is viewing (read-only), with their marks per part. */
+/** The homework of the group record the student is viewing (read-only), with their marks per part.
+ *  Includes homework set before they joined if it was still open then; older work stays hidden so it never counts as missed. */
 export async function listForStudent(student: Student, now = new Date()) {
   const list = await db
     .select()
     .from(homework)
-    .where(and(eq(homework.classId, student.classId), eq(homework.status, "active"), gte(homework.createdAt, student.createdAt)))
+    .where(and(eq(homework.classId, student.classId), eq(homework.status, "active"), gte(homework.dueAt, student.createdAt)))
     .orderBy(desc(homework.dueAt))
     .limit(100);
   const marks = await marksFor(list.map((h) => h.id));
@@ -299,7 +300,7 @@ export async function studentHomeworkSummary(studentIds: string[], now = new Dat
       from ${homework} h
       join ${students} st on st.class_id = h.class_id and st.id = any(${sql.param(studentIds)}::uuid[])
       left join ${homeworkMarks} m on m.homework_id = h.id and m.student_id = st.id
-      where h.status = 'active' and h.created_at >= st.created_at
+      where h.status = 'active' and h.due_at >= st.created_at
       group by h.id, st.id`),
   );
   const out = { ...empty, assigned: rows.length };

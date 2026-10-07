@@ -329,7 +329,9 @@ describe("homework (parts, tick / X)", () => {
   });
 
   it("after the deadline a student who didn't do every part shows as not done", async () => {
-    await M.db.update(M.schema.homework).set({ dueAt: new Date(Date.now() - 60_000) }).where(M.eq(M.schema.homework.id, hwId));
+    // Past due, but after Bob joined (his record was made moments ago by the seed).
+    const [bob] = await M.db.select().from(M.schema.students).where(M.eq(M.schema.students.id, S.bob));
+    await M.db.update(M.schema.homework).set({ dueAt: new Date(bob.createdAt.getTime() + 1) }).where(M.eq(M.schema.homework.id, hwId));
     const b = await call("/api/student/homework", { auth: BOB });
     expect(b.body.find((h: Json) => h.id === hwId).state).toBe("missed");
     const prof = await call(`/api/students/${S.bob}/homework`, { auth: S.teacher1 });
@@ -349,6 +351,26 @@ describe("homework (parts, tick / X)", () => {
     const first = await M.hw.runHomeworkJobs();
     expect(first.dueSoon).toBe(1); // Bob only
     expect((await M.hw.runHomeworkJobs()).dueSoon).toBe(0);
+  });
+
+  it("a student who joined after homework was set still sees it while it's open, but not work already past due", async () => {
+    const yearAgo = new Date(Date.now() - 365 * 24 * 3600_000);
+    const set = async (text: string, dueAt: Date) => {
+      const r = await call(`/api/groups/${S.classA}/homework`, {
+        auth: S.teacher1,
+        method: "POST",
+        body: { text, dueAt: new Date(Date.now() + 3 * 24 * 3600_000).toISOString(), notify: false },
+      });
+      // Set long before Bob's student record existed.
+      await M.db.update(M.schema.homework).set({ createdAt: yearAgo, dueAt }).where(M.eq(M.schema.homework.id, r.body.id));
+      return r.body.id as string;
+    };
+    const open = await set("Still open", new Date(Date.now() + 3 * 24 * 3600_000));
+    const stale = await set("Long gone", new Date(yearAgo.getTime() + 24 * 3600_000));
+    const ids = (await call("/api/student/homework", { auth: BOB })).body.map((h: Json) => h.id);
+    expect(ids).toContain(open);
+    expect(ids).not.toContain(stale);
+    for (const id of [open, stale]) await call(`/api/homework/${id}`, { auth: S.teacher1, method: "DELETE" });
   });
 
   it("archive hides it from the current view; delete removes it", async () => {
